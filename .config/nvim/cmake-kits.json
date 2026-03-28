@@ -1,0 +1,31 @@
+{
+  "clang-ninja": {
+    "compilers": {
+      "C": "/usr/bin/clang",
+      "CXX": "/usr/bin/clang++"
+    },
+    "query_driver": "/usr/bin/clang++",
+    "generator": "Ninja"
+  },
+  "gcc-ninja": {
+    "compilers": {
+      "C": "/usr/bin/gcc",
+      "CXX": "/usr/bin/g++"
+    },
+    "query_driver": "/usr/bin/g++",
+    "generator": "Ninja"
+  },
+  "clang-asan-ubsan": {
+    "compilers": {
+      "C": "/usr/bin/clang",
+      "CXX": "/usr/bin/clang++"
+    },
+    "query_driver": "/usr/bin/clang++",
+    "generator": "Ninja",
+    "cmake_usr_args": {
+      "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+      "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+      "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
+    }
+  }
+}
