@@ -1,0 +1,285 @@
+import { useState } from "react";
+import type { Race } from "../../lib/types";
+import EscEditBox from "../EscEditBox";
+import GlueDropdown from "../GlueDropdown";
+import GlueSmallButton from "../GlueSmallButton";
+import GlueBorderedButton from "../GlueBorderedButton";
+import { importBuilds } from "../../state/buildOrders";
+
+const RACES: Race[] = ["Human", "Orc", "NightElf", "Undead"];
+const RACE_LABELS: Record<Race, string> = {
+  Human: "Human",
+  Orc: "Orc",
+  NightElf: "Night Elf",
+  Undead: "Undead",
+};
+const DIFFICULTIES = ["Beginner", "Intermediate", "Advanced"] as const;
+type Difficulty = (typeof DIFFICULTIES)[number];
+
+interface StepRow {
+  time: string;
+  instruction: string;
+  food: string;
+}
+
+interface SkillRow {
+  level: string;
+  skill: string;
+  icon: string;
+}
+
+export default function BuildOrderInputSection() {
+  const [name, setName] = useState("");
+  const [race, setRace] = useState<Race>("Human");
+  const [vs, setVs] = useState("");
+  const [difficulty, setDifficulty] = useState<Difficulty>("Beginner");
+  const [description, setDescription] = useState("");
+  const [note, setNote] = useState("");
+  const [keyTimingMinute, setKeyTimingMinute] = useState("");
+  const [keyTimingNote, setKeyTimingNote] = useState("");
+  const [steps, setSteps] = useState<StepRow[]>([
+    { time: "0:00", instruction: "", food: "" },
+  ]);
+  const [skills, setSkills] = useState<SkillRow[]>([]);
+  const [status, setStatus] = useState("");
+
+  function updateStep(index: number, field: keyof StepRow, value: string) {
+    setSteps((prev) =>
+      prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)),
+    );
+  }
+
+  function addStep() {
+    setSteps((prev) => [...prev, { time: "", instruction: "", food: "" }]);
+  }
+
+  function removeStep(index: number) {
+    setSteps((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateSkill(index: number, field: keyof SkillRow, value: string) {
+    setSkills((prev) =>
+      prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)),
+    );
+  }
+
+  function addSkill() {
+    setSkills((prev) => [
+      ...prev,
+      { level: String(prev.length + 1), skill: "", icon: "" },
+    ]);
+  }
+
+  function removeSkill(index: number) {
+    setSkills((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function handleSubmit() {
+    const keyTimingMin = Number(keyTimingMinute);
+    const build = {
+      name,
+      race,
+      vs: vs || undefined,
+      difficulty,
+      description,
+      note: note || undefined,
+      keyTiming:
+        keyTimingMinute && keyTimingNote
+          ? { minute: keyTimingMin, note: keyTimingNote }
+          : undefined,
+      steps: steps.map((s, i) => ({
+        order: i + 1,
+        time: s.time,
+        instruction: s.instruction,
+        food: s.food,
+      })),
+      skillOrder:
+        skills.length > 0
+          ? skills.map((s) => ({
+              level: Number(s.level),
+              skill: s.skill,
+              icon: s.icon || undefined,
+            }))
+          : undefined,
+    };
+
+    const count = importBuilds([build]);
+    if (count > 0) {
+      setStatus("Build order added!");
+      setName("");
+      setVs("");
+      setDescription("");
+      setNote("");
+      setKeyTimingMinute("");
+      setKeyTimingNote("");
+      setSteps([{ time: "0:00", instruction: "", food: "" }]);
+      setSkills([]);
+    } else {
+      setStatus("Please fill in Name and at least one step with all fields.");
+    }
+    setTimeout(() => setStatus(""), 4000);
+  }
+
+  return (
+    <section className="section-card build-order-input-section">
+      <h4 className="skill-order-title">Add Build Order</h4>
+
+      <div className="build-order-input-fields">
+        <div className="build-order-input-row">
+          <span className="build-order-input-label">Name</span>
+          <EscEditBox value={name} placeholder="Build order name" onChange={setName} />
+        </div>
+
+        <div className="build-order-input-row">
+          <span className="build-order-input-label">Race</span>
+          <GlueDropdown
+            options={RACES}
+            value={race}
+            onChange={(v) => setRace(v as Race)}
+            label={(v) => RACE_LABELS[v as Race] ?? v}
+          />
+        </div>
+
+        <div className="build-order-input-row">
+          <span className="build-order-input-label">vs</span>
+          <EscEditBox value={vs} placeholder="e.g. Human, all" onChange={setVs} />
+        </div>
+
+        <div className="build-order-input-row">
+          <span className="build-order-input-label">Difficulty</span>
+          <GlueDropdown
+            options={DIFFICULTIES}
+            value={difficulty}
+            onChange={(v) => setDifficulty(v as Difficulty)}
+          />
+        </div>
+
+        <div className="build-order-input-row">
+          <span className="build-order-input-label">Description</span>
+          <EscEditBox value={description} placeholder="Short description" onChange={setDescription} />
+        </div>
+
+        <div className="build-order-input-row">
+          <span className="build-order-input-label">Note</span>
+          <EscEditBox value={note} placeholder="Optional note" onChange={setNote} />
+        </div>
+
+        <div className="build-order-input-row">
+          <span className="build-order-input-label">Key Timing</span>
+          <div className="build-order-input-key-timing">
+            <EscEditBox value={keyTimingMinute} placeholder="Minute" onChange={setKeyTimingMinute} />
+            <EscEditBox value={keyTimingNote} placeholder="Timing note" onChange={setKeyTimingNote} />
+          </div>
+        </div>
+      </div>
+
+      <div className="build-order-input-steps">
+        <h5 className="build-order-input-steps-title">Steps</h5>
+        <table className="build-steps-table build-order-input-steps-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Time</th>
+              <th>Instruction</th>
+              <th>Food</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {steps.map((step, i) => (
+              <tr key={i} className="build-order-input-step-row">
+                <td className="build-step-order">{i + 1}</td>
+                <td>
+                  <EscEditBox
+                    value={step.time}
+                    placeholder="0:00"
+                    onChange={(v) => updateStep(i, "time", v)}
+                  />
+                </td>
+                <td>
+                  <EscEditBox
+                    value={step.instruction}
+                    placeholder="Instruction"
+                    onChange={(v) => updateStep(i, "instruction", v)}
+                  />
+                </td>
+                <td>
+                  <EscEditBox
+                    value={step.food}
+                    placeholder="5/10"
+                    onChange={(v) => updateStep(i, "food", v)}
+                  />
+                </td>
+                <td>
+                  {steps.length > 1 && (
+                    <GlueSmallButton onClick={() => removeStep(i)}>
+                      ✕
+                    </GlueSmallButton>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="build-order-input-step-actions">
+          <GlueSmallButton onClick={addStep}>+ Add Step</GlueSmallButton>
+        </div>
+      </div>
+
+      <div className="build-order-input-steps">
+        <h5 className="build-order-input-steps-title">Skill Order</h5>
+        <table className="build-steps-table build-order-input-steps-table">
+          <thead>
+            <tr>
+              <th>Level</th>
+              <th>Skill</th>
+              <th>Icon Path</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {skills.map((skill, i) => (
+              <tr key={i} className="build-order-input-step-row">
+                <td>
+                  <EscEditBox
+                    value={skill.level}
+                    placeholder="1"
+                    onChange={(v) => updateSkill(i, "level", v)}
+                  />
+                </td>
+                <td>
+                  <EscEditBox
+                    value={skill.skill}
+                    placeholder="Skill name"
+                    onChange={(v) => updateSkill(i, "skill", v)}
+                  />
+                </td>
+                <td>
+                  <EscEditBox
+                    value={skill.icon}
+                    placeholder="/buttons/command/BTN..."
+                    onChange={(v) => updateSkill(i, "icon", v)}
+                  />
+                </td>
+                <td>
+                  <GlueSmallButton onClick={() => removeSkill(i)}>
+                    ✕
+                  </GlueSmallButton>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="build-order-input-step-actions">
+          <GlueSmallButton onClick={addSkill}>+ Add Skill</GlueSmallButton>
+        </div>
+      </div>
+
+      <div className="build-order-input-submit">
+        <GlueBorderedButton onClick={handleSubmit}>Add Build</GlueBorderedButton>
+      </div>
+
+      {status && <div className="build-import-status">{status}</div>}
+    </section>
+  );
+}

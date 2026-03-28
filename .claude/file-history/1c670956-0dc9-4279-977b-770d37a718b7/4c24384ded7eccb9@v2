@@ -1,0 +1,44 @@
+#version 330 core
+
+in vec3 v_frag_pos;
+in vec3 v_normal;
+in vec2 v_uv;
+
+uniform sampler2D u_splat_map;
+uniform sampler2D u_texture_r;
+uniform sampler2D u_texture_g;
+uniform sampler2D u_texture_b;
+uniform sampler2D u_texture_a;
+
+uniform vec3  u_light_dir;
+uniform vec3  u_light_color;
+uniform vec3  u_ambient;
+uniform float u_tile_scale;
+
+out vec4 frag_color;
+
+void main() {
+    vec3  norm    = normalize(v_normal);
+    vec3  light   = normalize(-u_light_dir);
+    float diff    = max(dot(norm, light), 0.0);
+    vec3  diffuse = diff * u_light_color;
+
+    vec4 splat    = texture(u_splat_map, v_uv);
+    vec2 tiled_uv = v_uv * u_tile_scale;
+
+    vec3 color_r = texture(u_texture_r, tiled_uv).rgb;
+    vec3 color_g = texture(u_texture_g, tiled_uv).rgb;
+    vec3 color_b = texture(u_texture_b, tiled_uv).rgb;
+    vec3 color_a = texture(u_texture_a, tiled_uv).rgb;
+
+    vec3 terrain_color = color_r * splat.r + color_g * splat.g
+                       + color_b * splat.b + color_a * splat.a;
+
+    // Fallback: se nenhuma textura de splat estiver bind (todos zero), usa cinza baixo
+    if (dot(splat, vec4(1.0)) < 0.001) {
+        terrain_color = vec3(0.35, 0.50, 0.25);
+    }
+
+    vec3 result = (u_ambient + diffuse) * terrain_color;
+    frag_color  = vec4(result, 1.0);
+}

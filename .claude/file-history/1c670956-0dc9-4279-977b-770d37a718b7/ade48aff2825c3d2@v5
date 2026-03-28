@@ -1,0 +1,376 @@
+#include <rts/core/logger.hpp>
+#include <rts/platform/window.hpp>
+#include <rts/platform/input.hpp>
+#include <rts/platform/time.hpp>
+#include <rts/renderer/renderer.hpp>
+#include <rts/renderer/shader.hpp>
+#include <rts/renderer/mesh.hpp>
+#include <rts/renderer/texture.hpp>
+#include <rts/assets/asset_manager.hpp>
+#include <rts/assets/stb_loader.hpp>
+#include <rts/assets/blp_loader.hpp>
+#include <rts/assets/gltf_loader.hpp>
+#include <rts/assets/mdx_loader.hpp>
+#include <rts/terrain/terrain.hpp>
+#include <rts/camera/camera.hpp>
+
+#include <imgui.h>
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+#include <GLFW/glfw3.h>
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <filesystem>
+#include <string>
+#include <vector>
+#include <memory>
+#include <algorithm>
+#include <cmath>
+
+namespace fs = std::filesystem;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+static std::string file_stem(const std::string& path) {
+    return fs::path(path).stem().string();
+}
+
+static std::vector<std::string> scan_dir(const std::string& dir,
+                                          const std::vector<std::string>& exts) {
+    std::vector<std::string> result;
+    if (!fs::exists(dir) || !fs::is_directory(dir)) return result;
+    for (const auto& entry : fs::directory_iterator(dir)) {
+        if (!entry.is_regular_file()) continue;
+        std::string ext = entry.path().extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        for (const auto& e : exts)
+            if (ext == e) { result.push_back(entry.path().string()); break; }
+    }
+    std::sort(result.begin(), result.end());
+    return result;
+}
+
+static std::string find_matching_texture(const std::string& model_path,
+                                          const std::vector<std::string>& textures) {
+    std::string ms = file_stem(model_path);
+    for (const auto& tex : textures)
+        if (file_stem(tex) == ms) return tex;
+    return {};
+}
+
+static std::unique_ptr<rts::Mesh> load_mesh(rts::AssetManager& assets,
+                                              const std::string& path) {
+    try {
+        auto models = assets.load_model(path);
+        if (models.empty() || models[0].vertices.empty()) return nullptr;
+        return std::make_unique<rts::Mesh>(models[0].vertices, models[0].indices);
+    } catch (const std::exception& e) {
+        RTS_LOG_WARN("Falha ao carregar modelo '{}': {}", path, e.what());
+        return nullptr;
+    }
+}
+
+static std::unique_ptr<rts::Texture> load_tex(rts::AssetManager& assets,
+                                               const std::string& path) {
+    if (path.empty()) return nullptr;
+    try {
+        auto td = assets.load_texture(path);
+        if (td.pixels.empty()) return nullptr;
+        return std::make_unique<rts::Texture>(
+            td.pixels.data(), td.width, td.height, td.channels);
+    } catch (const std::exception& e) {
+        RTS_LOG_WARN("Falha ao carregar textura '{}': {}", path, e.what());
+        return nullptr;
+    }
+}
+
+// Gera heightmap procedural com colinas suaves
+static std::vector<float> generate_hills(rts::u32 w, rts::u32 h, float max_height) {
+    std::vector<float> heights(w * h);
+    for (rts::u32 z = 0; z < h; ++z) {
+        for (rts::u32 x = 0; x < w; ++x) {
+            float fx = static_cast<float>(x) / static_cast<float>(w);
+            float fz = static_cast<float>(z) / static_cast<float>(h);
+
+            float h1 = std::sin(fx * 3.14159f * 2.0f) * std::cos(fz * 3.14159f * 2.0f);
+            float h2 = std::sin(fx * 3.14159f * 4.0f + 1.0f) * 0.5f;
+            float h3 = std::cos(fz * 3.14159f * 3.0f + 2.0f) * 0.3f;
+
+            // Borda mais baixa para evitar cortes visuais
+            float edge_x = std::min(fx, 1.0f - fx) * 4.0f;
+            float edge_z = std::min(fz, 1.0f - fz) * 4.0f;
+            float edge   = std::min(std::min(edge_x, edge_z), 1.0f);
+
+            heights[z * w + x] = (h1 + h2 + h3) * max_height * edge * 0.3f
+                                  + max_height * 0.1f;
+        }
+    }
+    return heights;
+}
+
+// ---------------------------------------------------------------------------
+// main
+// ---------------------------------------------------------------------------
+
+int main() {
+    rts::Logger::init();
+    RTS_LOG_INFO("RTS Engine Editor iniciando...");
+
+    rts::WindowConfig win_cfg;
+    win_cfg.title  = "RTS Engine Editor";
+    win_cfg.width  = 1600;
+    win_cfg.height = 900;
+
+    rts::GlfwWindow window(win_cfg);
+    rts::Input      input(window.native_handle());
+    rts::Time       time;
+
+    rts::Renderer renderer;
+    renderer.init();
+
+    rts::RtsCamera camera;
+    camera.set_target(rts::Vec3(32.0f, 0.0f, 32.0f));
+    camera.set_aspect_ratio(static_cast<float>(window.width()) /
+                             static_cast<float>(window.height()));
+
+    // ---- Asset Manager ----
+    rts::AssetManager assets;
+    assets.register_texture_loader(".png",  std::make_unique<rts::StbLoader>());
+    assets.register_texture_loader(".jpg",  std::make_unique<rts::StbLoader>());
+    assets.register_texture_loader(".jpeg", std::make_unique<rts::StbLoader>());
+    assets.register_texture_loader(".bmp",  std::make_unique<rts::StbLoader>());
+    assets.register_texture_loader(".blp",  std::make_unique<rts::BlpLoader>());
+    assets.register_model_loader(".gltf",   std::make_unique<rts::GltfLoader>());
+    assets.register_model_loader(".glb",    std::make_unique<rts::GltfLoader>());
+    assets.register_model_loader(".mdx",    std::make_unique<rts::MdxLoader>());
+
+    // ---- Terreno procedural 128x128 com colinas ----
+    constexpr rts::u32 terrain_size = 128;
+    auto heights      = generate_hills(terrain_size, terrain_size, 3.0f);
+    auto terrain_data = rts::Terrain::generate(heights, terrain_size, terrain_size, 0.5f);
+    rts::Mesh terrain_mesh(terrain_data.vertices, terrain_data.indices);
+
+    auto terrain_shader = rts::ShaderProgram::from_files(
+        "assets/shaders/terrain.vert", "assets/shaders/terrain.frag");
+    auto model_shader = rts::ShaderProgram::from_files(
+        "assets/shaders/model.vert",   "assets/shaders/model.frag");
+
+    // ---- Scan de assets ----
+    const std::vector<std::string> model_exts   = {".mdx", ".gltf", ".glb"};
+    const std::vector<std::string> texture_exts = {".blp", ".png", ".jpg", ".jpeg", ".bmp"};
+
+    auto model_paths   = scan_dir("assets/models",   model_exts);
+    auto texture_paths = scan_dir("assets/textures", texture_exts);
+
+    // Encontrar indice do Wolfrider como modelo inicial
+    int current_model = 0;
+    for (int i = 0; i < static_cast<int>(model_paths.size()); ++i) {
+        if (file_stem(model_paths[i]) == "Wolfrider") { current_model = i; break; }
+    }
+
+    // Estado do objeto na cena
+    std::unique_ptr<rts::Mesh>    obj_mesh;
+    std::unique_ptr<rts::Texture> obj_texture;
+    std::string obj_texture_path;
+    rts::Vec3   obj_position = rts::Vec3(32.0f, 0.0f, 32.0f);
+    float       obj_scale    = 0.02f;
+
+    // Funcao para (re)carregar o modelo selecionado
+    auto reload_model = [&](int idx) {
+        if (idx < 0 || idx >= static_cast<int>(model_paths.size())) return;
+        current_model = idx;
+        obj_mesh = load_mesh(assets, model_paths[idx]);
+        obj_texture_path = find_matching_texture(model_paths[idx], texture_paths);
+        obj_texture = load_tex(assets, obj_texture_path);
+
+        // Posicionar no terreno
+        float h = rts::Terrain::height_at(terrain_data, obj_position.x, obj_position.z);
+        obj_position.y = h;
+
+        RTS_LOG_INFO("Modelo carregado: {}", file_stem(model_paths[idx]));
+    };
+
+    reload_model(current_model);
+
+    // ---- ImGui setup ----
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    ImGui::StyleColorsDark();
+    ImGui_ImplGlfw_InitForOpenGL(window.native_handle(), true);
+    ImGui_ImplOpenGL3_Init("#version 330");
+
+    // Iluminacao
+    rts::Vec3 light_dir   = glm::normalize(rts::Vec3(-0.5f, -1.0f, -0.3f));
+    rts::Vec3 light_color = rts::Vec3(1.0f, 0.95f, 0.9f);
+    rts::Vec3 ambient     = rts::Vec3(0.2f, 0.2f, 0.25f);
+    float     tile_scale  = 16.0f;
+
+    RTS_LOG_INFO("Editor pronto.");
+
+    // ====================================================================
+    // Loop principal
+    // ====================================================================
+    while (!window.should_close()) {
+        window.poll_events();
+        input.update();
+        time.update();
+
+        float dt = time.delta_time();
+
+        rts::Vec2 mouse_pos   = input.mouse_position();
+        rts::Vec2 screen_size = {static_cast<float>(window.width()),
+                                  static_cast<float>(window.height())};
+
+        if (!io.WantCaptureKeyboard && !io.WantCaptureMouse) {
+            camera.update(dt, mouse_pos, screen_size,
+                          input.is_key_pressed(GLFW_KEY_W),
+                          input.is_key_pressed(GLFW_KEY_A),
+                          input.is_key_pressed(GLFW_KEY_S),
+                          input.is_key_pressed(GLFW_KEY_D),
+                          input.scroll_delta());
+        }
+
+        camera.set_aspect_ratio(screen_size.x / std::max(screen_size.y, 1.0f));
+
+        // Manter modelo no chao
+        float ground_h = rts::Terrain::height_at(terrain_data, obj_position.x, obj_position.z);
+        obj_position.y = ground_h;
+
+        // ---- Render ------------------------------------------------
+        renderer.begin_frame();
+
+        // Terreno
+        terrain_shader.bind();
+        terrain_shader.set_mat4("u_view",        camera.view_matrix());
+        terrain_shader.set_mat4("u_projection",  camera.projection_matrix());
+        terrain_shader.set_mat4("u_model",       rts::Mat4(1.0f));
+        terrain_shader.set_vec3("u_light_dir",   light_dir);
+        terrain_shader.set_vec3("u_light_color", light_color);
+        terrain_shader.set_vec3("u_ambient",     ambient);
+        terrain_shader.set_float("u_tile_scale", tile_scale);
+
+        rts::RenderCommand terrain_cmd;
+        terrain_cmd.mesh      = &terrain_mesh;
+        terrain_cmd.shader    = &terrain_shader;
+        terrain_cmd.transform = rts::Mat4(1.0f);
+        renderer.submit(terrain_cmd);
+
+        // Modelo
+        if (obj_mesh) {
+            model_shader.bind();
+            model_shader.set_mat4("u_view",        camera.view_matrix());
+            model_shader.set_mat4("u_projection",  camera.projection_matrix());
+            model_shader.set_vec3("u_light_dir",   light_dir);
+            model_shader.set_vec3("u_light_color", light_color);
+            model_shader.set_vec3("u_ambient",     ambient);
+
+            rts::Mat4 transform = glm::translate(rts::Mat4(1.0f), obj_position);
+            transform = glm::scale(transform, rts::Vec3(obj_scale));
+
+            rts::RenderCommand cmd;
+            cmd.mesh      = obj_mesh.get();
+            cmd.texture   = obj_texture.get();
+            cmd.shader    = &model_shader;
+            cmd.transform = transform;
+            renderer.submit(cmd);
+        }
+
+        renderer.flush();
+
+        // ---- ImGui -------------------------------------------------
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        // -- Painel principal --
+        {
+            ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(300, 0), ImGuiCond_FirstUseEver);
+            ImGui::Begin("Editor");
+
+            // Info
+            ImGui::Text("FPS: %.0f", 1.0f / std::max(dt, 0.0001f));
+            ImGui::TextDisabled("WASD: Pan | Scroll: Zoom | ESC: Sair");
+            ImGui::Separator();
+
+            // Seletor de modelo
+            ImGui::Text("Modelo");
+            std::string current_name = (current_model >= 0 &&
+                                         current_model < static_cast<int>(model_paths.size()))
+                                           ? file_stem(model_paths[current_model])
+                                           : "(nenhum)";
+            if (ImGui::BeginCombo("##modelo", current_name.c_str())) {
+                for (int i = 0; i < static_cast<int>(model_paths.size()); ++i) {
+                    bool is_sel = (i == current_model);
+                    if (ImGui::Selectable(file_stem(model_paths[i]).c_str(), is_sel)) {
+                        if (i != current_model) reload_model(i);
+                    }
+                    if (is_sel) ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+
+            // Status
+            if (!obj_mesh)
+                ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Mesh nao carregada");
+            if (obj_texture)
+                ImGui::TextDisabled("Textura: %s", file_stem(obj_texture_path).c_str());
+            else
+                ImGui::TextColored(ImVec4(1, 0.7f, 0.3f, 1), "Sem textura");
+
+            ImGui::Separator();
+
+            // Transform
+            ImGui::Text("Transform");
+            if (ImGui::DragFloat2("Posicao XZ", &obj_position.x, 0.5f)) {
+                obj_position.y = rts::Terrain::height_at(
+                    terrain_data, obj_position.x, obj_position.z);
+            }
+            ImGui::Text("Altura: %.2f", obj_position.y);
+            ImGui::DragFloat("Escala", &obj_scale, 0.001f, 0.001f, 10.0f, "%.3f");
+
+            // Textura
+            ImGui::Separator();
+            ImGui::Text("Textura");
+            std::string tex_preview = obj_texture_path.empty()
+                                          ? "(nenhuma)"
+                                          : file_stem(obj_texture_path);
+            if (ImGui::BeginCombo("##tex", tex_preview.c_str())) {
+                if (ImGui::Selectable("(nenhuma)", obj_texture_path.empty())) {
+                    obj_texture_path.clear();
+                    obj_texture.reset();
+                }
+                for (const auto& tp : texture_paths) {
+                    bool is_sel = (tp == obj_texture_path);
+                    if (ImGui::Selectable(file_stem(tp).c_str(), is_sel)) {
+                        if (tp != obj_texture_path) {
+                            obj_texture_path = tp;
+                            obj_texture = load_tex(assets, tp);
+                        }
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            ImGui::End();
+        }
+
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        window.swap_buffers();
+
+        if (input.is_key_pressed(GLFW_KEY_ESCAPE)) break;
+    }
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
+    RTS_LOG_INFO("Editor encerrado.");
+    return 0;
+}

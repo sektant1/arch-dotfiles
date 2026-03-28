@@ -1,0 +1,86 @@
+import React, { useRef, useEffect, useState, useCallback } from "react";
+import { loadBlpImage } from "../utils/blp";
+import { getEscButtonAssets } from "../utils/assets";
+import type { Race } from "../types";
+
+export interface EscOptionButtonProps {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  race?: Race;
+  className?: string;
+}
+
+/**
+ * Race-themed button from the in-game options/escape menu.
+ * Each faction has unique background, border, and hover textures.
+ */
+export function EscOptionButton({
+  children,
+  onClick,
+  disabled = false,
+  race = "Human",
+  className,
+}: EscOptionButtonProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const imagesRef = useRef<Record<string, HTMLImageElement>>({});
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.imageSmoothingEnabled = false;
+
+    const imgs = imagesRef.current;
+    const bgKey = disabled ? "disabledBg" : pressed ? "bgDown" : "bg";
+    if (imgs[bgKey]) ctx.drawImage(imgs[bgKey], 0, 0, w, h);
+    if (imgs.borderUp && !pressed) ctx.drawImage(imgs.borderUp, 0, 0, w, h);
+    if (imgs.borderDown && pressed) ctx.drawImage(imgs.borderDown, 0, 0, w, h);
+
+    if (hovered && !disabled && !pressed && imgs.highlight) {
+      ctx.globalCompositeOperation = "screen";
+      ctx.drawImage(imgs.highlight, 0, 0, w, h);
+      ctx.globalCompositeOperation = "source-over";
+    }
+  }, [hovered, pressed, disabled]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const assets = getEscButtonAssets(race);
+    Promise.all(
+      Object.entries(assets).map(async ([key, url]) => {
+        try {
+          const img = await loadBlpImage(url);
+          if (!cancelled) imagesRef.current[key] = img;
+        } catch {}
+      }),
+    ).then(() => { if (!cancelled) draw(); });
+    return () => { cancelled = true; };
+  }, [race, draw]);
+
+  useEffect(() => { draw(); }, [draw]);
+
+  return (
+    <button
+      type="button"
+      className={`esc-option-preview ${className ?? ""}`}
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setPressed(false); }}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+    >
+      <canvas ref={canvasRef} className="esc-option-canvas" width={416} height={80} />
+      <span className={`esc-option-label${disabled ? " esc-option-label-disabled" : ""}`}>
+        {children}
+      </span>
+    </button>
+  );
+}

@@ -1,0 +1,574 @@
+import type { Race, TextureEntry } from '../lib/types';
+import { GLContext } from './GLContext';
+import { TextureManager } from './TextureManager';
+import { QuadBatcher } from './QuadBatcher';
+import { BlendManager } from './BlendManager';
+import { drawNineSlice } from './NineSlice';
+import { loadRaceTextures, preloadAllRaces, type RaceTextures } from './textures';
+import { RACE_PREFIXES } from '../state/race';
+
+// ─── Element Registry Types ─────────────────────────────────
+export interface CheckboxReg {
+  ref: () => HTMLElement;
+  visualRef: () => HTMLElement;
+  checked: () => boolean;
+}
+
+export interface RadioReg {
+  ref: () => HTMLElement;
+  visualRef: () => HTMLElement;
+  selected: () => boolean;
+}
+
+export interface SliderReg {
+  ref: () => HTMLElement;
+  value: () => number;
+}
+
+export interface EditBoxReg {
+  ref: () => HTMLElement;
+}
+
+export interface GlueButtonReg {
+  ref: () => HTMLElement;
+  hovered: () => boolean;
+  pressed: () => boolean;
+  disabled: boolean;
+  bgPath: string;
+  borderPath: string;
+  bgDownPath?: string;
+  borderDownPath?: string;
+  hoverPath?: string;
+}
+
+export interface GlueMenuFrameReg {
+  ref: () => HTMLElement;
+  imgSrc: string;
+}
+
+export interface OptionButtonReg {
+  ref: () => HTMLElement;
+  hovered: () => boolean;
+}
+
+export interface TooltipReg {
+  ref: () => HTMLElement;
+}
+
+export interface StatBarReg {
+  ref: () => HTMLElement;
+  fillPercent: () => number;
+  type: 'health' | 'mana' | 'xp' | 'build';
+  hasBorder: boolean;
+}
+
+export interface LoadingBarReg {
+  ref: () => HTMLElement;
+  fillRef: () => HTMLElement;
+  fillPercent: () => number;
+}
+
+export interface MenuPanelReg {
+  ref: () => HTMLElement;
+}
+
+export interface UpperButtonReg {
+  ref: () => HTMLElement;
+  race: Race;
+  hovered: () => boolean;
+  pressed: () => boolean;
+}
+
+export interface ResourceIconReg {
+  ref: () => HTMLElement;
+  type: 'gold' | 'lumber' | 'supply';
+}
+
+export class Renderer {
+  ctx = new GLContext();
+  texManager = new TextureManager();
+  batcher = new QuadBatcher();
+  blend = new BlendManager();
+
+  raceTex!: RaceTextures;
+  private skyScrollTime = 0;
+  private rafId = 0;
+  private viewportRef: (() => HTMLElement) | null = null;
+
+  // Element registries
+  checkboxes: CheckboxReg[] = [];
+  radios: RadioReg[] = [];
+  sliders: SliderReg[] = [];
+  editBoxes: EditBoxReg[] = [];
+  glueButtons: GlueButtonReg[] = [];
+  glueMenuFrames: GlueMenuFrameReg[] = [];
+  optionButtons: OptionButtonReg[] = [];
+  tooltips: TooltipReg[] = [];
+  statBars: StatBarReg[] = [];
+  loadingBars: LoadingBarReg[] = [];
+  menuPanels: MenuPanelReg[] = [];
+  upperButtons: UpperButtonReg[] = [];
+  resourceIcons: ResourceIconReg[] = [];
+
+  init(canvas: HTMLCanvasElement) {
+    this.ctx.init(canvas);
+    this.texManager.init(this.ctx.gl);
+    this.batcher.init(this.ctx);
+    this.blend.init(this.ctx, this.batcher);
+    // Wire texManager into ctx for QuadBatcher's whiteTex access
+    (this.ctx as any)._texManager = this.texManager;
+  }
+
+  setViewportRef(ref: () => HTMLElement) {
+    this.viewportRef = ref;
+  }
+
+  loadRace(race: Race) {
+    this.raceTex = loadRaceTextures(race, this.texManager);
+  }
+
+  preloadAll() {
+    preloadAllRaces(this.texManager);
+  }
+
+  start() {
+    const loop = (_timestamp: number) => {
+      this.rafId = requestAnimationFrame(loop);
+      this.renderFrame();
+    };
+    this.rafId = requestAnimationFrame(loop);
+  }
+
+  destroy() {
+    cancelAnimationFrame(this.rafId);
+    this.ctx.destroy();
+  }
+
+  private renderFrame() {
+    const { ctx, batcher, blend } = this;
+    const gl = ctx.gl;
+    if (ctx.canvasW === 0 || ctx.canvasH === 0) return;
+    if (!this.raceTex) return;
+
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+
+    blend.useProgram(ctx.quadProg);
+    gl.uniform2f(ctx.quadLocs.resolution, ctx.canvasW * ctx.dpr, ctx.canvasH * ctx.dpr);
+    gl.uniform1i(ctx.quadLocs.tex, 0);
+    gl.uniform1i(ctx.quadLocs.alphaMode, 0);
+    blend.setBlend('BLEND');
+    batcher.batchTex = null;
+
+    const vw = ctx.canvasW / 100;
+    const topHudH = 4 * vw;
+    const hudBarH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hud-height')) || 240;
+
+    this.renderTopHud(vw, topHudH);
+    this.renderBottomHud(hudBarH);
+    this.renderUpperButtons();
+    this.renderResourceIcons();
+
+    // Viewport scissor
+    if (this.viewportRef) {
+      const vp = this.viewportRef();
+      if (vp) {
+        const vpRect = vp.getBoundingClientRect();
+        gl.enable(gl.SCISSOR_TEST);
+        gl.scissor(
+          vpRect.left * ctx.dpr,
+          (ctx.canvasH - vpRect.bottom) * ctx.dpr,
+          vpRect.width * ctx.dpr,
+          vpRect.height * ctx.dpr
+        );
+        this.renderViewportComponents(vpRect);
+        gl.disable(gl.SCISSOR_TEST);
+      }
+    }
+
+    batcher.flush();
+  }
+
+  private renderTopHud(vw: number, topHudH: number) {
+    const { ctx, batcher, blend, raceTex } = this;
+    const gl = ctx.gl;
+
+    const t1w = 32 * vw;
+    batcher.drawQuad(0, 0, t1w, topHudH, raceTex.topTile1, 0, 0, 1, 1);
+    const t2w = 10.875 * vw;
+    batcher.drawQuad(t1w, 0, t2w, topHudH, raceTex.topTile2, 0, 0, 0.34, 1);
+    const centerGap = ctx.canvasW - (32 + 10.875 + 6.625 + 32 + 4) * vw;
+    const rightStart = (32 + 10.875) * vw + centerGap;
+    const t3w = 6.625 * vw;
+    batcher.drawQuad(rightStart, 0, t3w, topHudH, raceTex.topTile2, 0.793, 0, 1, 1);
+    const t4w = 32 * vw;
+    batcher.drawQuad(rightStart + t3w, 0, t4w, topHudH, raceTex.topTile3, 0, 0, 1, 1);
+    const t5w = 4 * vw;
+    batcher.drawQuad(rightStart + t3w + t4w, 0, t5w, topHudH, raceTex.topTile4, 0, 0, 1, 1);
+
+    // Time indicator is rendered by the dedicated MDX clock component.
+  }
+
+  private renderBottomHud(hudBarH: number) {
+    const { ctx, batcher, raceTex } = this;
+    const y = ctx.canvasH - hudBarH;
+    const total = 1600;
+    const w1 = (512 / total) * ctx.canvasW;
+    const w2 = (512 / total) * ctx.canvasW;
+    const w3 = (512 / total) * ctx.canvasW;
+    const w4 = (64 / total) * ctx.canvasW;
+    batcher.drawQuad(0, y, w1, hudBarH, raceTex.hudTile1, 0, 0, 1, 1);
+    batcher.drawQuad(w1, y, w2, hudBarH, raceTex.hudTile2, 0, 0, 1, 1);
+    batcher.drawQuad(w1 + w2, y, w3, hudBarH, raceTex.hudTile3, 0, 0, 1, 1);
+    batcher.drawQuad(w1 + w2 + w3, y, w4, hudBarH, raceTex.hudTile4, 0, 0, 1, 1);
+  }
+
+  private renderUpperButtons() {
+    const { batcher, blend, ctx, raceTex } = this;
+    const gl = ctx.gl;
+
+    for (const btn of this.upperButtons) {
+      const el = btn.ref();
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0) continue;
+
+      const atlasPath = `war3/Widgets/Console/${btn.race}/${RACE_PREFIXES[btn.race].lower}-console-buttonstates2.png`;
+      const atlasEntry = this.texManager.load(atlasPath);
+
+      const u0 = 0, u1 = 0.664;
+      let v0 = 0, v1 = 0.172;
+      if (btn.pressed()) { v0 = 0.25; v1 = 0.422; }
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, atlasEntry, u0, v0, u1, v1);
+
+      if (btn.hovered() && !btn.pressed()) {
+        batcher.flush();
+        blend.setBlend('ADD');
+        batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, atlasEntry, u0, 0.75, u1, 0.922);
+        batcher.flush();
+        blend.setBlend('BLEND');
+        batcher.batchTex = null;
+      }
+    }
+  }
+
+  private renderResourceIcons() {
+    const { batcher, raceTex } = this;
+    for (const icon of this.resourceIcons) {
+      const el = icon.ref();
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0) continue;
+      let texEntry: TextureEntry;
+      if (icon.type === 'gold') texEntry = raceTex.gold;
+      else if (icon.type === 'lumber') texEntry = raceTex.lumber;
+      else texEntry = raceTex.supply;
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, texEntry, 0, 0, 1, 1);
+    }
+  }
+
+  private renderViewportComponents(vpRect: DOMRect) {
+    const { ctx, batcher, blend } = this;
+    const gl = ctx.gl;
+
+    blend.useProgram(ctx.quadProg);
+    gl.uniform2f(ctx.quadLocs.resolution, ctx.canvasW * ctx.dpr, ctx.canvasH * ctx.dpr);
+    gl.uniform1i(ctx.quadLocs.tex, 0);
+    gl.uniform1i(ctx.quadLocs.alphaMode, 0);
+    batcher.batchTex = null;
+
+    this.renderGlueButtons(vpRect);
+    this.renderEscMenuComponents(vpRect);
+    this.renderTooltips(vpRect);
+    this.renderBars(vpRect);
+    this.renderLoadingBars(vpRect);
+    this.renderMenuPanels(vpRect);
+  }
+
+  private isVisible(rect: DOMRect, vpRect: DOMRect): boolean {
+    return rect.width > 0 && rect.bottom >= vpRect.top && rect.top <= vpRect.bottom;
+  }
+
+  private renderGlueButtons(vpRect: DOMRect) {
+    const { ctx, batcher, blend, raceTex, texManager } = this;
+    const gl = ctx.gl;
+
+    for (const btn of this.glueButtons) {
+      const el = btn.ref();
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (!this.isVisible(rect, vpRect)) continue;
+
+      let bgPath: string, borderPath: string;
+      if (btn.disabled) {
+        bgPath = btn.bgPath;
+        borderPath = btn.borderPath;
+      } else if (btn.pressed() && btn.bgDownPath) {
+        bgPath = btn.bgDownPath;
+        borderPath = btn.borderDownPath || btn.borderPath;
+      } else {
+        bgPath = btn.bgPath;
+        borderPath = btn.borderPath;
+      }
+
+      const bgEntry = texManager.loadRepeat(bgPath);
+      const borderEntry = borderPath ? texManager.load(borderPath) : null;
+      const corner = borderEntry && borderEntry.loaded
+        ? Math.floor(Math.min(borderEntry.width / 8, rect.height * 0.35))
+        : Math.floor(rect.height * 0.35);
+      const inset = Math.round(corner * 0.25);
+
+      drawNineSlice(ctx, batcher, blend, rect.left, rect.top, rect.width, rect.height,
+        borderEntry, corner, bgEntry, 32, inset);
+
+      if (btn.hovered() && !btn.pressed() && btn.hoverPath) {
+        batcher.flush();
+        blend.setBlend('ADD');
+        const hoverEntry = texManager.load(btn.hoverPath);
+        batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, hoverEntry, 0, 0, 1, 1);
+        batcher.flush();
+        blend.setBlend('BLEND');
+        batcher.batchTex = null;
+        blend.useProgram(ctx.quadProg);
+        gl.uniform2f(ctx.quadLocs.resolution, ctx.canvasW * ctx.dpr, ctx.canvasH * ctx.dpr);
+        gl.uniform1i(ctx.quadLocs.tex, 0);
+        gl.uniform1i(ctx.quadLocs.alphaMode, 0);
+      }
+    }
+
+    // Menu frames
+    for (const frame of this.glueMenuFrames) {
+      const el = frame.ref();
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (!this.isVisible(rect, vpRect)) continue;
+      const entry = this.texManager.load(frame.imgSrc);
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, entry, 0, 0, 1, 1);
+    }
+  }
+
+  private renderEscMenuComponents(vpRect: DOMRect) {
+    const { ctx, batcher, blend, raceTex } = this;
+    const gl = ctx.gl;
+
+    // Option buttons
+    for (const btn of this.optionButtons) {
+      const el = btn.ref();
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (!this.isVisible(rect, vpRect)) continue;
+
+      batcher.flush();
+      blend.useProgram(ctx.tiledProg);
+      gl.uniform2f(ctx.tiledLocs.resolution, ctx.canvasW * ctx.dpr, ctx.canvasH * ctx.dpr);
+      gl.uniform1i(ctx.tiledLocs.tex, 0);
+      gl.uniform2f(ctx.tiledLocs.quadSize, rect.width, rect.height);
+      gl.uniform2f(ctx.tiledLocs.tileSize, 256, 256);
+      gl.uniform1i(ctx.tiledLocs.alphaMode, 0);
+      batcher.batchTex = null;
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.escBtnBgTiled, 0, 0, 1, 1);
+      batcher.flush();
+
+      blend.useProgram(ctx.quadProg);
+      gl.uniform2f(ctx.quadLocs.resolution, ctx.canvasW * ctx.dpr, ctx.canvasH * ctx.dpr);
+      gl.uniform1i(ctx.quadLocs.tex, 0);
+      gl.uniform1i(ctx.quadLocs.alphaMode, 0);
+      batcher.batchTex = null;
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.escBtnBorder, 0, 0, 1, 1);
+
+      if (btn.hovered()) {
+        batcher.flush();
+        blend.setBlend('ADD');
+        batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.escBtnHighlight, 0, 0, 1, 1);
+        batcher.flush();
+        blend.setBlend('BLEND');
+        batcher.batchTex = null;
+      }
+    }
+
+    // Checkboxes
+    for (const cb of this.checkboxes) {
+      const vis = cb.visualRef();
+      if (!vis) continue;
+      const rect = vis.getBoundingClientRect();
+      if (!this.isVisible(rect, vpRect)) continue;
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.cbBg, 0, 0, 1, 1);
+      if (cb.checked()) {
+        batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.cbCheck, 0, 0, 1, 1);
+      }
+    }
+
+    // Radios
+    for (const rb of this.radios) {
+      const vis = rb.visualRef();
+      if (!vis) continue;
+      const rect = vis.getBoundingClientRect();
+      if (!this.isVisible(rect, vpRect)) continue;
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.rbBg, 0, 0, 1, 1);
+      if (rb.selected()) {
+        batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.rbDot, 0, 0, 1, 1);
+      }
+    }
+
+    // Sliders
+    for (const slider of this.sliders) {
+      const el = slider.ref();
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (!this.isVisible(rect, vpRect)) continue;
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.sliderBg, 0, 0, 1, 1);
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.sliderBorder, 0, 0, 1, 1);
+      const val = slider.value();
+      const knobW = 20, knobH = 28;
+      const knobX = rect.left + val * rect.width - knobW / 2;
+      const knobY = rect.top + rect.height / 2 - knobH / 2;
+      batcher.drawQuad(knobX, knobY, knobW, knobH, raceTex.sliderKnob, 0, 0, 1, 1);
+    }
+
+    // Edit boxes
+    for (const eb of this.editBoxes) {
+      const el = eb.ref();
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (!this.isVisible(rect, vpRect)) continue;
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.ebBg, 0, 0, 1, 1);
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.ebBorder, 0, 0, 1, 1);
+    }
+  }
+
+  private renderTooltips(vpRect: DOMRect) {
+    const { ctx, batcher, blend, raceTex } = this;
+    const gl = ctx.gl;
+
+    for (const tt of this.tooltips) {
+      const el = tt.ref();
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (!this.isVisible(rect, vpRect)) continue;
+
+      batcher.flush();
+      blend.useProgram(ctx.tiledProg);
+      gl.uniform2f(ctx.tiledLocs.resolution, ctx.canvasW * ctx.dpr, ctx.canvasH * ctx.dpr);
+      gl.uniform1i(ctx.tiledLocs.tex, 0);
+      gl.uniform2f(ctx.tiledLocs.quadSize, rect.width, rect.height);
+      gl.uniform2f(ctx.tiledLocs.tileSize, 64, 64);
+      gl.uniform1i(ctx.tiledLocs.alphaMode, 0);
+      batcher.batchTex = null;
+      blend.setBlend('BLEND');
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.tooltipBgTiled, 0, 0, 1, 1);
+      batcher.flush();
+
+      blend.useProgram(ctx.quadProg);
+      gl.uniform2f(ctx.quadLocs.resolution, ctx.canvasW * ctx.dpr, ctx.canvasH * ctx.dpr);
+      gl.uniform1i(ctx.quadLocs.tex, 0);
+      gl.uniform1i(ctx.quadLocs.alphaMode, 0);
+      batcher.batchTex = null;
+
+      const bw = 2;
+      const br = 0.784, bg = 0.659, bb = 0.306;
+      batcher.drawQuad(rect.left, rect.top, rect.width, bw, null, 0,0,1,1, br, bg, bb, 1);
+      batcher.drawQuad(rect.left, rect.bottom - bw, rect.width, bw, null, 0,0,1,1, br, bg, bb, 1);
+      batcher.drawQuad(rect.left, rect.top, bw, rect.height, null, 0,0,1,1, br, bg, bb, 1);
+      batcher.drawQuad(rect.right - bw, rect.top, bw, rect.height, null, 0,0,1,1, br, bg, bb, 1);
+    }
+  }
+
+  private renderBars(vpRect: DOMRect) {
+    const { batcher, raceTex } = this;
+
+    for (const bar of this.statBars) {
+      const el = bar.ref();
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (!this.isVisible(rect, vpRect)) continue;
+
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, null, 0,0,1,1, 0.067, 0.067, 0.067, 1);
+
+      const pct = bar.fillPercent();
+      const fillPx = rect.width * pct / 100;
+      if (fillPx > 0) {
+        let fillTex: TextureEntry | null = null;
+        if (bar.type === 'health') fillTex = raceTex.healthFill;
+        else if (bar.type === 'mana') fillTex = raceTex.manaFill;
+        else if (bar.type === 'xp') fillTex = raceTex.xpFill;
+        else if (bar.type === 'build') fillTex = raceTex.buildFill;
+        if (fillTex) {
+          batcher.drawQuad(rect.left, rect.top, fillPx, rect.height, fillTex, 0, 0, fillPx / rect.height, 1);
+        }
+      }
+
+      if (bar.hasBorder) {
+        let borderTex: TextureEntry | null = null;
+        if (bar.type === 'xp') borderTex = raceTex.xpBorder;
+        else if (bar.type === 'build') borderTex = raceTex.buildBorder;
+        if (borderTex) {
+          batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, borderTex, 0, 0, 1, 1);
+        }
+      }
+    }
+  }
+
+  private renderLoadingBars(vpRect: DOMRect) {
+    const { ctx, batcher, blend, raceTex } = this;
+
+    for (const lb of this.loadingBars) {
+      const el = lb.ref();
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (!this.isVisible(rect, vpRect)) continue;
+
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.loadBg, 0, 0, 1, 1);
+
+      const fillPct = lb.fillPercent();
+      const fillPx = (rect.width - 8) * fillPct / 100;
+      if (fillPx > 0) {
+        batcher.drawQuad(rect.left + 4, rect.top + 4, fillPx, rect.height - 8, raceTex.loadFill, 0, 0, fillPx / 64, 1);
+      }
+
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.loadBorder, 0, 0, 1, 1);
+
+      batcher.flush();
+      blend.setBlend('ADD');
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.loadGlass, 0, 0, 1, 1, 1, 1, 1, 0.6);
+      batcher.flush();
+      blend.setBlend('BLEND');
+      batcher.batchTex = null;
+    }
+  }
+
+  private renderMenuPanels(vpRect: DOMRect) {
+    const { ctx, batcher, blend, raceTex } = this;
+    const gl = ctx.gl;
+
+    for (const panel of this.menuPanels) {
+      const el = panel.ref();
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (!this.isVisible(rect, vpRect)) continue;
+
+      batcher.flush();
+      blend.useProgram(ctx.tiledProg);
+      gl.uniform2f(ctx.tiledLocs.resolution, ctx.canvasW * ctx.dpr, ctx.canvasH * ctx.dpr);
+      gl.uniform1i(ctx.tiledLocs.tex, 0);
+      gl.uniform2f(ctx.tiledLocs.quadSize, rect.width, rect.height);
+      gl.uniform2f(ctx.tiledLocs.tileSize, 256, 256);
+      gl.uniform1i(ctx.tiledLocs.alphaMode, 0);
+      batcher.batchTex = null;
+      blend.setBlend('BLEND');
+      batcher.drawQuad(rect.left, rect.top, rect.width, rect.height, raceTex.escMenuBgTiled, 0, 0, 1, 1);
+      batcher.flush();
+
+      blend.useProgram(ctx.quadProg);
+      gl.uniform2f(ctx.quadLocs.resolution, ctx.canvasW * ctx.dpr, ctx.canvasH * ctx.dpr);
+      gl.uniform1i(ctx.quadLocs.tex, 0);
+      gl.uniform1i(ctx.quadLocs.alphaMode, 0);
+      batcher.batchTex = null;
+      const bw = 3;
+      const br = 0.541, bg = 0.478, bb = 0.353;
+      batcher.drawQuad(rect.left, rect.top, rect.width, bw, null, 0,0,1,1, br, bg, bb, 1);
+      batcher.drawQuad(rect.left, rect.bottom - bw, rect.width, bw, null, 0,0,1,1, br, bg, bb, 1);
+      batcher.drawQuad(rect.left, rect.top, bw, rect.height, null, 0,0,1,1, br, bg, bb, 1);
+      batcher.drawQuad(rect.right - bw, rect.top, bw, rect.height, null, 0,0,1,1, br, bg, bb, 1);
+    }
+  }
+}

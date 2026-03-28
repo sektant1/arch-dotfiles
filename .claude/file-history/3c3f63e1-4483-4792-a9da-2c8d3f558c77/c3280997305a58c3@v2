@@ -1,0 +1,28 @@
+import React from "react";
+
+export interface ShowcaseItemProps {
+  title: string;
+  description?: string;
+  children?: React.ReactNode;
+  className?: string;
+}
+
+/**
+ * Individual showcase display with title and description, used within section cards.
+ */
+export function ShowcaseItem({
+  title,
+  description,
+  children,
+  className,
+}: ShowcaseItemProps) {
+  return (
+    <div className={className}>
+      <h4 className="button-showcase-title">{title}</h4>
+      {description && (
+        <p className="button-showcase-desc">{description}</p>
+      )}
+      <div className="button-preview-row">{children}</div>
+    </div>
+  );
+}

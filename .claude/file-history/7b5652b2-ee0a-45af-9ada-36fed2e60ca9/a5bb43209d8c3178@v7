@@ -1,0 +1,302 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useTimerRunning,
+  useElapsedSeconds,
+  startTimer,
+  pauseTimer,
+  resetTimer,
+} from "../../state/timer";
+import { useCurrentRace } from "../../state/race";
+import type { Race } from "../../lib/types";
+import GlueSmallButton from "../GlueSmallButton";
+import GlueDropdown from "../GlueDropdown";
+import { useBuildOrders, importBuilds } from "../../state/buildOrders";
+import type { BuildOrder } from "../../data/buildOrders";
+import {
+  loadBlpDataUrl,
+  loadDataUrlImage,
+  composeBorderImageFromAtlas,
+} from "../../utils/glueButton";
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function parseStepTime(time: string): number {
+  const [m, s] = time.split(":").map(Number);
+  return m * 60 + (s ?? 0);
+}
+
+function getCardBorderPath(race: Race | null): string {
+  if (race === "Orc") return "/buttons/esc/orc/orc-options-menu-border.blp";
+  if (race === "NightElf")
+    return "/buttons/esc/nightelf/nightelf-options-menu-border.blp";
+  if (race === "Undead")
+    return "/buttons/esc/undead/undead-options-menu-border.blp";
+  return "/buttons/esc/human/human-options-menu-border.blp";
+}
+
+function useCardBorderImage(race: Race | null): string {
+  const [borderImageUrl, setBorderImageUrl] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    const path = getCardBorderPath(race);
+    void loadBlpDataUrl(path)
+      .then((url) => loadDataUrlImage(url))
+      .then((img) => {
+        if (cancelled) return;
+        setBorderImageUrl(composeBorderImageFromAtlas(img));
+      })
+      .catch((err) => console.error(err));
+    return () => {
+      cancelled = true;
+    };
+  }, [race]);
+
+  return borderImageUrl;
+}
+
+const DIFFICULTY_CLASS: Record<string, string> = {
+  Beginner: "build-card-difficulty--beginner",
+  Intermediate: "build-card-difficulty--intermediate",
+  Advanced: "build-card-difficulty--advanced",
+};
+
+interface BuildCardProps {
+  build: BuildOrder;
+  elapsed: number;
+  running: boolean;
+  borderImageUrl: string;
+}
+
+function BuildCard({ build, elapsed, running, borderImageUrl }: BuildCardProps) {
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  const activeStepIndex = (() => {
+    let idx = -1;
+    for (let i = 0; i < build.steps.length; i++) {
+      if (parseStepTime(build.steps[i].time) <= elapsed) idx = i;
+    }
+    return idx;
+  })();
+
+  // Auto-scroll the active step into view
+  useEffect(() => {
+    if (activeStepIndex < 0 || !tableRef.current) return;
+    const row = tableRef.current.querySelectorAll(".build-step-row")[
+      activeStepIndex
+    ] as HTMLElement | undefined;
+    if (row) {
+      row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [activeStepIndex]);
+
+  // border-image applied only to the active row; all rows already reserve
+  // 6px transparent border space in CSS so nothing shifts.
+  const activeBorderStyle: React.CSSProperties | undefined = borderImageUrl
+    ? {
+        borderImageSource: `url("${borderImageUrl}")`,
+        borderImageSlice: 64,
+        borderImageWidth: 1,
+        borderImageRepeat: "round",
+      }
+    : undefined;
+
+  return (
+    <div className="build-card">
+      {/* Left column */}
+      <div className="build-card-info">
+        <div className="build-card-header">
+          <h4 className="build-card-title">{build.name}</h4>
+          <div className="build-card-subtitle">
+            {build.vs && (
+              <span className="build-card-matchup">vs {build.vs}</span>
+            )}
+            {build.difficulty && (
+              <span
+                className={`build-card-difficulty ${DIFFICULTY_CLASS[build.difficulty] ?? ""}`}
+              >
+                {build.difficulty}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="build-card-body">
+          {build.description && (
+            <p className="build-card-desc">{build.description}</p>
+          )}
+          {build.note && <p className="build-card-note">{build.note}</p>}
+          {build.keyTiming && (
+            <div className="build-card-key-timing">
+              <span className="build-card-key-timing-label">Key timing</span>{" "}
+              {formatTime(build.keyTiming.minute * 60)} –{" "}
+              {build.keyTiming.note}
+            </div>
+          )}
+        </div>
+
+        <div className="build-card-timer">
+          <span className="build-card-elapsed">{formatTime(elapsed)}</span>
+          <div className="build-card-controls">
+            <GlueSmallButton onClick={running ? pauseTimer : startTimer}>
+              {running ? "Pause" : "Start"}
+            </GlueSmallButton>
+            <GlueSmallButton
+              onClick={resetTimer}
+              disabled={elapsed === 0 && !running}
+            >
+              Reset
+            </GlueSmallButton>
+          </div>
+        </div>
+      </div>
+
+      {/* Right column */}
+      <div className="build-card-steps" ref={tableRef}>
+        <table className="build-steps-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Time</th>
+              <th>Instruction</th>
+              <th>Food</th>
+            </tr>
+          </thead>
+          <tbody>
+            {build.steps.map((step, j) => {
+              const isActive = j === activeStepIndex;
+              const isPast = j < activeStepIndex;
+              return (
+                <tr
+                  key={j}
+                  className={`build-step-row${isPast ? " build-step-row--past" : ""}${isActive ? " build-step-row--active" : ""}`}
+                  style={isActive ? activeBorderStyle : undefined}
+                >
+                  <td className="build-step-order">{step.order}</td>
+                  <td className="build-step-time">{step.time}</td>
+                  <td className="build-step-instruction">{step.instruction}</td>
+                  <td className="build-step-food">{step.food}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export default function BuildOrdersSection() {
+  const running = useTimerRunning();
+  const elapsed = useElapsedSeconds();
+  const currentRace = useCurrentRace();
+  const borderImageUrl = useCardBorderImage(currentRace);
+  const allBuilds = useBuildOrders();
+
+  const relevantBuilds = allBuilds.filter(
+    (b) => !currentRace || b.race === currentRace,
+  );
+
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [importStatus, setImportStatus] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset selection and timer when race changes
+  useEffect(() => {
+    setSelectedIndex(0);
+    resetTimer();
+  }, [currentRace]);
+
+  const selectedBuild =
+    relevantBuilds.length > 0
+      ? relevantBuilds[Math.min(selectedIndex, relevantBuilds.length - 1)]
+      : null;
+
+  // Build dropdown option keys — use indices as stable identifiers
+  const optionKeys = relevantBuilds.map((_, i) => String(i));
+
+  const handleImport = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const json = JSON.parse(reader.result as string);
+          const count = importBuilds(json);
+          if (count > 0) {
+            setImportStatus(`Imported ${count} build${count > 1 ? "s" : ""}`);
+          } else {
+            setImportStatus("No valid builds found in file");
+          }
+        } catch {
+          setImportStatus("Invalid JSON file");
+        }
+        // Clear so the same file can be re-imported
+        e.target.value = "";
+        setTimeout(() => setImportStatus(""), 4000);
+      };
+      reader.readAsText(file);
+    },
+    [],
+  );
+
+  return (
+    <div className="tab-content">
+      <section className="section-card build-orders-section">
+        <div className="build-orders-toolbar">
+          <h3>{currentRace ? `${currentRace} ` : ""}Build Orders</h3>
+          <div className="build-orders-toolbar-actions">
+            {relevantBuilds.length > 1 && (
+              <GlueDropdown
+                options={optionKeys}
+                value={String(
+                  Math.min(selectedIndex, relevantBuilds.length - 1),
+                )}
+                onChange={(v) => {
+                  setSelectedIndex(Number(v));
+                  resetTimer();
+                }}
+                label={(v) => relevantBuilds[Number(v)]?.name ?? ""}
+              />
+            )}
+            <GlueSmallButton onClick={handleImport}>Import</GlueSmallButton>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              className="build-import-input"
+              onChange={handleFileChange}
+            />
+          </div>
+        </div>
+        {importStatus && (
+          <div className="build-import-status">{importStatus}</div>
+        )}
+
+        {!selectedBuild ? (
+          <p className="build-card-empty">
+            Select a race in the top HUD to see build orders.
+          </p>
+        ) : (
+          <BuildCard
+            key={`${currentRace}-${selectedIndex}`}
+            build={selectedBuild}
+            elapsed={elapsed}
+            running={running}
+            borderImageUrl={borderImageUrl}
+          />
+        )}
+      </section>
+    </div>
+  );
+}

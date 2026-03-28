@@ -1,0 +1,36 @@
+import { useEffect } from 'react';
+import type { Renderer } from '@wc3-ui/core';
+import { useWC3Renderer } from '../context/WC3RendererContext';
+
+/**
+ * Registers an object with a renderer array on mount, removes it on unmount.
+ *
+ * @param registryKey - The key on Renderer that holds the registry array (e.g. 'checkboxes')
+ * @param buildReg - Factory called once on mount; returns the registration object.
+ *   The factory receives the renderer so it can access race textures etc. if needed.
+ *   The object is captured by reference — use `useRef`-backed callbacks inside it
+ *   so the renderer's RAF loop always reads the latest values without re-registering.
+ */
+export function useRendererRegistration<
+  K extends {
+    [P in keyof Renderer]: Renderer[P] extends unknown[] ? P : never;
+  }[keyof Renderer],
+>(
+  registryKey: K,
+  buildReg: (renderer: Renderer) => Renderer[K] extends (infer T)[] ? T : never,
+): void {
+  const renderer = useWC3Renderer();
+
+  useEffect(() => {
+    const reg = buildReg(renderer);
+    const arr = renderer[registryKey] as unknown[];
+    arr.push(reg);
+
+    return () => {
+      const idx = arr.indexOf(reg);
+      if (idx !== -1) arr.splice(idx, 1);
+    };
+    // buildReg is intentionally excluded — it should be a stable factory (use useCallback if needed)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renderer, registryKey]);
+}

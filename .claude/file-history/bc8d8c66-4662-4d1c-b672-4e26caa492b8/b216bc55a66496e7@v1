@@ -1,0 +1,57 @@
+import { createSignal } from 'solid-js';
+
+// Bar animation state
+export function createAnimatedBars() {
+  const [healthPct, setHealthPct] = createSignal(75);
+  const [manaPct, setManaPct] = createSignal(60);
+  const [xpPct, setXpPct] = createSignal(40);
+  const [buildPct, setBuildPct] = createSignal(55);
+
+  function animateBars() {
+    setHealthPct(Math.floor(Math.random() * 60 + 20));
+    setManaPct(Math.floor(Math.random() * 60 + 20));
+    setXpPct(Math.floor(Math.random() * 60 + 20));
+    setBuildPct(Math.floor(Math.random() * 60 + 20));
+  }
+
+  return {
+    healthPct, manaPct, xpPct, buildPct,
+    setHealthPct, setManaPct, setXpPct, setBuildPct,
+    animateBars,
+  };
+}
+
+// Loading bar state
+export function createLoadingBar() {
+  const [progress, setProgress] = createSignal(0);
+  let interval: ReturnType<typeof setInterval> | null = null;
+
+  function start() {
+    setProgress(0);
+    if (interval) clearInterval(interval);
+    interval = setInterval(() => {
+      setProgress(prev => {
+        const next = prev + Math.random() * 8 + 2;
+        if (next >= 100) {
+          clearInterval(interval!);
+          interval = null;
+          setTimeout(() => {
+            setProgress(0);
+            setTimeout(() => start(), 100);
+          }, 1500);
+          return 100;
+        }
+        return next;
+      });
+    }, 400);
+  }
+
+  function stop() {
+    if (interval) {
+      clearInterval(interval);
+      interval = null;
+    }
+  }
+
+  return { progress, start, stop };
+}

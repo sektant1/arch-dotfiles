@@ -1,0 +1,16 @@
+add_executable(editor 
+    src/main.cpp 
+    src/imgui_impl_glfw.cpp
+    src/imgui_impl_opengl3.cpp
+)                                                                             
+
+target_link_libraries(editor PRIVATE
+    rts::core
+    rts::platform
+    rts::renderer
+    rts::assets
+    rts::terrain
+    rts::camera
+    imgui::imgui
+    glad
+)

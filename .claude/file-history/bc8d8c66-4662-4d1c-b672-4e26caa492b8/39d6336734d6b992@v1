@@ -1,0 +1,38 @@
+import { onMount } from 'solid-js';
+import type { Renderer } from '../renderer/Renderer';
+import type { Accessor } from 'solid-js';
+
+interface Props {
+  label: string;
+  selected: Accessor<boolean>;
+  onSelect: () => void;
+  renderer: Renderer;
+}
+
+export default function RadioButton(props: Props) {
+  let ref!: HTMLDivElement;
+  let visualRef!: HTMLDivElement;
+
+  onMount(() => {
+    props.renderer.radios.push({
+      ref: () => ref,
+      visualRef: () => visualRef,
+      selected: props.selected,
+    });
+  });
+
+  return (
+    <div
+      ref={ref}
+      class="wc3-radio"
+      classList={{ selected: props.selected() }}
+      onClick={props.onSelect}
+    >
+      <div ref={visualRef} class="rb-visual">
+        <img class="rb-bg" src="" alt="" />
+        <img class="rb-dot" src="" alt="" />
+      </div>
+      <span class="cb-label">{props.label}</span>
+    </div>
+  );
+}

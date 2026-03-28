@@ -1,0 +1,16 @@
+#pragma once
+
+#include <rts/renderer/mesh.hpp>
+#include <rts/assets/skeleton.hpp>
+#include <string>
+
+namespace rts {
+
+struct ModelData {
+    std::vector<Vertex> vertices;
+    std::vector<u32>    indices;
+    Skeleton            skeleton;
+    std::string         texture_path;
+};
+
+}  // namespace rts

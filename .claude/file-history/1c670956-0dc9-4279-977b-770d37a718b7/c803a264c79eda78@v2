@@ -1,0 +1,20 @@
+#pragma once
+
+#include <rts/core/types.hpp>
+
+namespace rts {
+
+class Time {
+public:
+    void update();
+
+    f32 delta_time() const { return m_delta_time; }
+    f64 elapsed()    const { return m_elapsed; }
+
+private:
+    f64 m_last_time  = 0.0;
+    f32 m_delta_time = 0.0f;
+    f64 m_elapsed    = 0.0;
+};
+
+}  // namespace rts

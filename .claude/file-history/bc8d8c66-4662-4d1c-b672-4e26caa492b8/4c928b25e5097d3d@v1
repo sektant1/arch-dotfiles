@@ -1,0 +1,21 @@
+import { onMount, type JSX } from 'solid-js';
+import type { Renderer } from '../renderer/Renderer';
+
+interface Props {
+  children: JSX.Element;
+  renderer: Renderer;
+}
+
+export default function Tooltip(props: Props) {
+  let ref!: HTMLDivElement;
+
+  onMount(() => {
+    props.renderer.tooltips.push({ ref: () => ref });
+  });
+
+  return (
+    <div ref={ref} class="wc3-tooltip">
+      <div class="tt-content">{props.children}</div>
+    </div>
+  );
+}

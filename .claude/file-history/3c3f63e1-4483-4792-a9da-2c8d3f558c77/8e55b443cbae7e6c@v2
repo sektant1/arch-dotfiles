@@ -1,0 +1,44 @@
+import React, { useRef, useEffect } from "react";
+
+export interface BundleChartRow {
+  label: string;
+  sizeKb: number;
+}
+
+export interface BundleChartProps {
+  rows: BundleChartRow[];
+  /** Max bar width in kb for scaling */
+  maxKb?: number;
+  className?: string;
+}
+
+/**
+ * Horizontal bar chart showing component bundle sizes.
+ */
+export function BundleChart({
+  rows,
+  maxKb,
+  className,
+}: BundleChartProps) {
+  const effectiveMax = maxKb ?? Math.max(...rows.map((r) => r.sizeKb), 1);
+
+  return (
+    <div className={`bundle-chart ${className ?? ""}`}>
+      {rows.map((row, i) => {
+        const widthPercent = (row.sizeKb / effectiveMax) * 100;
+        return (
+          <div key={i} className="bundle-chart-row">
+            <span className="bundle-chart-label">{row.label}</span>
+            <div className="bundle-chart-bar-track">
+              <canvas
+                className="bundle-chart-bar-canvas"
+                style={{ width: `${widthPercent}%` }}
+              />
+            </div>
+            <span className="bundle-chart-size">{row.sizeKb}kb</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

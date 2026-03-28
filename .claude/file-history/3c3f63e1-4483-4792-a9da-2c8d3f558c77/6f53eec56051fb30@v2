@@ -1,0 +1,83 @@
+import React, { useRef, useEffect, useState, useCallback } from "react";
+import { loadBlpImage } from "../utils/blp";
+import { CAMPAIGN_BUTTON_ASSETS } from "../utils/assets";
+
+export interface CampaignButtonProps {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  hotkey?: string;
+  className?: string;
+}
+
+/**
+ * Campaign menu button with unique backdrop and border textures.
+ */
+export function CampaignButton({
+  children,
+  onClick,
+  disabled = false,
+  hotkey,
+  className,
+}: CampaignButtonProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const imagesRef = useRef<Record<string, HTMLImageElement>>({});
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.imageSmoothingEnabled = false;
+
+    const imgs = imagesRef.current;
+    const bgKey = disabled ? "bgDisabled" : pressed ? "bgDown" : "bg";
+    const borderKey = disabled
+      ? "borderDisabled"
+      : pressed
+        ? "borderDown"
+        : "border";
+
+    if (imgs[bgKey]) ctx.drawImage(imgs[bgKey], 0, 0, w, h);
+    if (imgs[borderKey]) ctx.drawImage(imgs[borderKey], 0, 0, w, h);
+  }, [hovered, pressed, disabled]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(
+      Object.entries(CAMPAIGN_BUTTON_ASSETS).map(async ([key, url]) => {
+        try {
+          const img = await loadBlpImage(url);
+          if (!cancelled) imagesRef.current[key] = img;
+        } catch {}
+      }),
+    ).then(() => { if (!cancelled) draw(); });
+    return () => { cancelled = true; };
+  }, [draw]);
+
+  useEffect(() => { draw(); }, [draw]);
+
+  return (
+    <button
+      type="button"
+      className={`campaign-button ${className ?? ""}`}
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setPressed(false); }}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+    >
+      <canvas ref={canvasRef} className="glue-screen-canvas" width={500} height={96} />
+      <span>
+        {hotkey && <span className="button-hotkey">{hotkey}</span>}
+        {children}
+      </span>
+    </button>
+  );
+}

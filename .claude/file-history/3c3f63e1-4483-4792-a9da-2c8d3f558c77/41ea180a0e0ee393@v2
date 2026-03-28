@@ -1,0 +1,42 @@
+import React from "react";
+import { CommandButton } from "./CommandButton";
+import type { CommandButtonData } from "../types";
+
+export interface CommandCardProps {
+  /** 4×3 grid of command buttons (12 slots, use null for empty) */
+  buttons: (CommandButtonData | null)[];
+  onButtonClick?: (index: number) => void;
+  className?: string;
+}
+
+/**
+ * 4×3 command card grid from the in-game UI.
+ * Pass an array of up to 12 CommandButtonData objects (or null for empty cells).
+ */
+export function CommandCard({
+  buttons,
+  onButtonClick,
+  className,
+}: CommandCardProps) {
+  const cells = Array.from({ length: 12 }, (_, i) => buttons[i] ?? null);
+
+  return (
+    <div className={`command-card-preview ${className ?? ""}`}>
+      <div className="command-card-grid" role="grid">
+        {cells.map((btn, i) => (
+          <div key={i} className="command-card-cell" role="gridcell">
+            {btn ? (
+              <CommandButton
+                {...btn}
+                showcase
+                onClick={() => onButtonClick?.(i)}
+              />
+            ) : (
+              <CommandButton showcase />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

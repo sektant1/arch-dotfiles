@@ -1,0 +1,109 @@
+# Plan: Make @wc3-ui/react Importable
+
+## Current State (what's done)
+
+- **Phase 1 ✓** — `packages/core` exists with the renderer, types, and race data. All framework-agnostic.
+- **Phase 2 ✓** — `packages/react` scaffolded: `WC3RendererProvider`, `useWC3Renderer`, `useRendererRegistration` hook, Vite library build config.
+
+## What's Missing (the three gaps)
+
+### Gap 1: No React UI components
+`packages/react/src/index.ts` only exports the context and hooks — no `Checkbox`, `Tooltip`, `StatBar`, etc. The library is empty.
+
+### Gap 2: No built dist/
+`packages/react/package.json` currently exports `"./src/index.ts"` (TypeScript source). This works within this monorepo, but **external projects can't consume raw `.ts` files from node_modules** without special configuration. Running `vite build` inside `packages/react/` would produce `dist/index.js`, `dist/index.cjs`, and `.d.ts` declarations, and the exports should then point to those.
+
+### Gap 3: No styles.css
+`packages/react/package.json` exports `"./styles.css"` but `packages/react/src/styles.css` doesn't exist. Components need the WC3 CSS to render correctly. The source is in `src/global.css` (root).
+
+---
+
+## Plan: Minimum to Make It Importable
+
+### Step 1 — Port simple components (immediate value, low effort)
+
+Port these 4 first — they're stateless and establish the pattern:
+
+**`Tooltip.tsx`**
+- `useRef<HTMLDivElement>` for the element
+- `useRendererRegistration('tooltips', () => ({ ref: () => ref.current! }))`
+- Props: `{ children: ReactNode }`
+
+**`EditBox.tsx`**
+- `useRef<HTMLDivElement>`, register to `renderer.editBoxes`
+- Props: `{ text?: string }`
+
+**`MenuPanel.tsx`**
+- `useRef<HTMLDivElement>`, register to `renderer.menuPanels`
+- No custom props
+
+**`StatBar.tsx`** (medium but high priority — frequently used)
+- Props: `{ type, fillPercent: number, label, maxValue?, height?, hasBorder? }`
+- Wrap `fillPercent` in a `useRef` so the renderer's RAF loop reads the latest value without re-registering
+- Pattern: `const fillRef = useRef(fillPercent); fillRef.current = fillPercent;` then `fillPercent: () => fillRef.current`
+
+### Step 2 — Create styles.css
+
+Copy `src/global.css` (root) into `packages/react/src/styles.css`. Adjust any paths that are showcase-specific.
+
+### Step 3 — Build the library and fix exports
+
+1. Add a build script to `packages/react/package.json`:
+   ```json
+   "scripts": { "build": "vite build" }
+   ```
+2. Run `npm run build` inside `packages/react/`
+3. Update `packages/react/package.json` exports to point to `dist/`:
+   ```json
+   "exports": {
+     ".": {
+       "import": "./dist/index.js",
+       "require": "./dist/index.cjs",
+       "types": "./dist/index.d.ts"
+     },
+     "./styles.css": "./dist/styles.css"
+   }
+   ```
+4. Remove `"private": true` before publishing (or keep if only using locally with `npm link`)
+
+### Step 4 — Wire @wc3-ui/core into the build
+
+`@wc3-ui/core` is currently also source-only. For the external build to work, it either needs to be built too, or bundled into `@wc3-ui/react` (simpler for now). Remove `@wc3-ui/core` from the `external` list in `packages/react/vite.config.ts` so it gets bundled into the output.
+
+---
+
+## How to Test Import in an External Project
+
+After Step 3, from outside this repo:
+
+```bash
+# Option A: npm link
+cd /path/to/warcraft-components/packages/react
+npm link
+cd /path/to/my-react-app
+npm link @wc3-ui/react
+
+# Option B: file reference in package.json
+"@wc3-ui/react": "file:/path/to/warcraft-components/packages/react"
+```
+
+Then in the external project:
+```tsx
+import { WC3RendererProvider, Tooltip, StatBar } from '@wc3-ui/react';
+import '@wc3-ui/react/styles.css';
+```
+
+---
+
+## File Changes
+
+| File | Action |
+|------|--------|
+| `packages/react/src/components/Tooltip.tsx` | Create |
+| `packages/react/src/components/EditBox.tsx` | Create |
+| `packages/react/src/components/MenuPanel.tsx` | Create |
+| `packages/react/src/components/StatBar.tsx` | Create |
+| `packages/react/src/styles.css` | Create (from `src/global.css`) |
+| `packages/react/src/index.ts` | Add component exports |
+| `packages/react/package.json` | Add `scripts.build`, fix exports to point to `dist/` |
+| `packages/react/vite.config.ts` | Bundle `@wc3-ui/core` instead of externalizing |

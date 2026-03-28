@@ -1,0 +1,44 @@
+import React from "react";
+import type { Race } from "../types";
+import { RACES } from "../types";
+
+export interface FactionSelectorProps {
+  value: Race;
+  onChange?: (race: Race) => void;
+  className?: string;
+}
+
+const RACE_ORDER: Race[] = ["Human", "Orc", "NightElf", "Undead"];
+
+/**
+ * Race selector tabs from the top bar.
+ * Text turns gold on hover and when active.
+ */
+export function FactionSelector({
+  value,
+  onChange,
+  className,
+}: FactionSelectorProps) {
+  return (
+    <div className={`faction-preview ${className ?? ""}`}>
+      {RACE_ORDER.map((race) => (
+        <div key={race} className="faction-preview-card">
+          <button
+            type="button"
+            className="top-tab-preview"
+            onClick={() => onChange?.(race)}
+            style={{ width: `${100 / RACE_ORDER.length}%` }}
+          >
+            <span
+              style={{
+                color: value === race ? "#ffd412" : "#ffffff",
+              }}
+            >
+              {RACES[race].display}
+            </span>
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}

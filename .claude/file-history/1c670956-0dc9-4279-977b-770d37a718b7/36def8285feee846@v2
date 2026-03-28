@@ -1,0 +1,18 @@
+#include <rts/platform/time.hpp>
+#include <GLFW/glfw3.h>
+
+namespace rts {
+
+void Time::update() {
+    f64 current = glfwGetTime();
+    m_delta_time = static_cast<f32>(current - m_last_time);
+    m_last_time  = current;
+    m_elapsed    = current;
+
+    // Clamp delta para evitar pulos grandes (pausa no debugger, primeiro frame)
+    if (m_delta_time > 0.1f) {
+        m_delta_time = 0.016f;
+    }
+}
+
+}  // namespace rts

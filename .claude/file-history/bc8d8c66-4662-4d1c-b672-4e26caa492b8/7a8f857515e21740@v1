@@ -1,0 +1,47 @@
+import type { Accessor } from 'solid-js';
+import type { Renderer } from '../../renderer/Renderer';
+import StatBar from '../StatBar';
+import LoadingBar from '../LoadingBar';
+import { currentRace, RACE_PREFIXES } from '../../state/race';
+
+interface Props {
+  renderer: Renderer;
+  healthPct: Accessor<number>;
+  manaPct: Accessor<number>;
+  xpPct: Accessor<number>;
+  buildPct: Accessor<number>;
+  loadingProgress: Accessor<number>;
+}
+
+export default function BarsSection(props: Props) {
+  const rp = () => RACE_PREFIXES[currentRace()];
+
+  return (
+    <div class="tab-content">
+      <div class="section-card">
+        <h2>Health / Mana / XP Bars</h2>
+        <p class="section-desc">Animated stat bars that cycle between random fill percentages every 3 seconds.</p>
+        <div class="bars-demo">
+          <StatBar label="Health" type="health" fillPercent={props.healthPct} maxValue={650} renderer={props.renderer} />
+          <StatBar label="Mana" type="mana" fillPercent={props.manaPct} maxValue={300} renderer={props.renderer} />
+          <StatBar label="Experience" type="xp" fillPercent={props.xpPct} maxValue={800} height={14} hasBorder renderer={props.renderer} />
+          <StatBar label="Build Progress" type="build" fillPercent={props.buildPct} height={14} hasBorder renderer={props.renderer} />
+        </div>
+        <div style={{ display: 'flex', gap: '12px', 'justify-content': 'center', 'margin-top': '16px', 'flex-wrap': 'wrap' }}>
+          <div class="tooltip-res-card"><img src={`war3/Feedback/HPBarConsole/${rp().lower}-healthbar-fill.png`} style={{ width: '64px', height: '16px', 'image-rendering': 'auto' }} /><div class="res-label">Health Fill</div></div>
+          <div class="tooltip-res-card"><img src={`war3/Feedback/ManaBarConsole/${rp().lower}-manabar-fill.png`} style={{ width: '64px', height: '16px', 'image-rendering': 'auto' }} /><div class="res-label">Mana Fill</div></div>
+          <div class="tooltip-res-card"><img src={`war3/Feedback/XpBar/${rp().lower}-bigbar-fill.png`} style={{ width: '64px', height: '16px', 'image-rendering': 'auto' }} /><div class="res-label">XP Fill</div></div>
+          <div class="tooltip-res-card"><img src={`war3/Feedback/BuildProgressBar/${rp().lower}-buildprogressbar-fill.png`} style={{ width: '64px', height: '16px', 'image-rendering': 'auto' }} /><div class="res-label">Build Fill</div></div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h2>Loading Bar</h2>
+        <p class="section-desc">Animated composite loading bar: background + fill + border + glass overlay.</p>
+        <div class="loading-preview">
+          <LoadingBar progress={props.loadingProgress} renderer={props.renderer} />
+        </div>
+      </div>
+    </div>
+  );
+}

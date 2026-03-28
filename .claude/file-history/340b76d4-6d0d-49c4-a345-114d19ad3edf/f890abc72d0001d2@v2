@@ -1,0 +1,10 @@
+import type { Race, RacePrefix } from '../types';
+
+export const RACE_PREFIXES: Record<Race, RacePrefix> = {
+  Human:    { tile: 'Human',    esc: 'human',    lower: 'human',    display: 'Human' },
+  Orc:      { tile: 'Orc',      esc: 'orc',      lower: 'orc',      display: 'Orc' },
+  NightElf: { tile: 'NightElf', esc: 'nightelf', lower: 'nightelf', display: 'Night Elf' },
+  Undead:   { tile: 'Undead',   esc: 'undead',   lower: 'undead',   display: 'Undead' },
+};
+
+export const RACES: Race[] = ['Human', 'Orc', 'NightElf', 'Undead'];

@@ -1,0 +1,9 @@
+{
+  "id": "7",
+  "subject": "Create demo App with all components and race toggle",
+  "description": "Build a full demo page showcasing every component, with a sticky header containing a race selector that propagates to all race-aware components",
+  "activeForm": "Building demo app",
+  "status": "in_progress",
+  "blocks": [],
+  "blockedBy": []
+}

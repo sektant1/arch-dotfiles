@@ -1,0 +1,62 @@
+#pragma once
+
+#include <functional>
+#include <typeindex>
+#include <unordered_map>
+#include <vector>
+#include <any>
+#include <algorithm>
+#include <rts/core/types.hpp>
+
+namespace rts {
+
+using SubscriptionId = u32;
+
+class EventBus {
+public:
+    template <typename Event>
+    SubscriptionId subscribe(std::function<void(const Event&)> callback) {
+        auto id = m_next_id++;
+        auto key = std::type_index(typeid(Event));
+        m_subscribers[key].push_back({id, [cb = std::move(callback)](const std::any& e) {
+            cb(std::any_cast<const Event&>(e));
+        }});
+        return id;
+    }
+
+    template <typename Event>
+    void unsubscribe(SubscriptionId id) {
+        auto key = std::type_index(typeid(Event));
+        auto it = m_subscribers.find(key);
+        if (it == m_subscribers.end()) return;
+
+        auto& subs = it->second;
+        subs.erase(
+            std::remove_if(subs.begin(), subs.end(),
+                [id](const Subscriber& s) { return s.id == id; }),
+            subs.end()
+        );
+    }
+
+    template <typename Event>
+    void publish(const Event& event) {
+        auto key = std::type_index(typeid(Event));
+        auto it = m_subscribers.find(key);
+        if (it == m_subscribers.end()) return;
+
+        for (auto& sub : it->second) {
+            sub.callback(event);
+        }
+    }
+
+private:
+    struct Subscriber {
+        SubscriptionId id;
+        std::function<void(const std::any&)> callback;
+    };
+
+    std::unordered_map<std::type_index, std::vector<Subscriber>> m_subscribers;
+    SubscriptionId m_next_id = 0;
+};
+
+}  // namespace rts

@@ -1,0 +1,41 @@
+import React from "react";
+import { useBlpTexture } from "../hooks/useBlpTexture";
+
+export interface BorderFrameProps {
+  /** BLP path for the border image (9-slice atlas) */
+  borderImageUrl?: string;
+  children?: React.ReactNode;
+  className?: string;
+}
+
+/**
+ * Race-themed 9-slice panel border from the options menu.
+ * Wraps children in a section with the border applied via CSS border-image.
+ */
+export function BorderFrame({
+  borderImageUrl,
+  children,
+  className,
+}: BorderFrameProps) {
+  const dataUrl = useBlpTexture(borderImageUrl);
+
+  return (
+    <div
+      className={`section-card ${className ?? ""}`}
+      style={
+        dataUrl
+          ? {
+              border: "18px solid transparent",
+              borderRadius: 0,
+              borderImageSource: `url("${dataUrl}")`,
+              borderImageSlice: 64,
+              borderImageWidth: 1,
+              borderImageRepeat: "round",
+            }
+          : undefined
+      }
+    >
+      {children}
+    </div>
+  );
+}

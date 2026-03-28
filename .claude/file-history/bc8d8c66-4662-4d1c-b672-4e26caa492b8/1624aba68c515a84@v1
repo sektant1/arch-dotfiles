@@ -1,0 +1,17 @@
+import { currentRace, RACE_PREFIXES } from '../state/race';
+
+export default function BottomHud() {
+  const tileSrc = (n: string) => {
+    const rp = RACE_PREFIXES[currentRace()];
+    return `war3/Console/${currentRace()}/${rp.tile}UITile0${n}.png`;
+  };
+
+  return (
+    <div class="hud-bar">
+      <img class="hud-tile-01" src={tileSrc('1')} alt="Tile 01" />
+      <img class="hud-tile-02" src={tileSrc('2')} alt="Tile 02" />
+      <img class="hud-tile-03" src={tileSrc('3')} alt="Tile 03" />
+      <img class="hud-tile-04" src={tileSrc('4')} alt="Tile 04" />
+    </div>
+  );
+}

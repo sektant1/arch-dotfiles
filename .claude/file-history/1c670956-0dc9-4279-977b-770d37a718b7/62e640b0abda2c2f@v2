@@ -1,0 +1,38 @@
+#pragma once
+
+#include <rts/core/types.hpp>
+#include <string>
+
+namespace rts {
+
+class ShaderProgram {
+public:
+    ShaderProgram(const std::string& vertex_source, const std::string& fragment_source);
+    ~ShaderProgram();
+
+    ShaderProgram(const ShaderProgram&) = delete;
+    ShaderProgram& operator=(const ShaderProgram&) = delete;
+    ShaderProgram(ShaderProgram&& other) noexcept;
+    ShaderProgram& operator=(ShaderProgram&& other) noexcept;
+
+    void bind()   const;
+    void unbind() const;
+
+    void set_int(  const std::string& name, int       value) const;
+    void set_float(const std::string& name, f32       value) const;
+    void set_vec3( const std::string& name, const Vec3& value) const;
+    void set_vec4( const std::string& name, const Vec4& value) const;
+    void set_mat4( const std::string& name, const Mat4& value) const;
+
+    u32 id() const { return m_program; }
+
+    static ShaderProgram from_files(const std::string& vertex_path,
+                                    const std::string& fragment_path);
+
+private:
+    u32 m_program = 0;
+
+    static u32 compile(const std::string& source, u32 type);
+};
+
+}  // namespace rts

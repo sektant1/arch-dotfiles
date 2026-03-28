@@ -1,0 +1,27 @@
+#define STB_IMAGE_IMPLEMENTATION
+#include <rts/assets/stb_loader.hpp>
+#include <stb_image.h>
+#include <stdexcept>
+
+namespace rts {
+
+TextureData StbLoader::load(const std::string& path) {
+    int w, h, channels;
+    stbi_set_flip_vertically_on_load(true);
+    u8* data = stbi_load(path.c_str(), &w, &h, &channels, 0);
+
+    if (!data) {
+        throw std::runtime_error("Failed to load image: " + path);
+    }
+
+    TextureData result;
+    result.width    = static_cast<u32>(w);
+    result.height   = static_cast<u32>(h);
+    result.channels = static_cast<u32>(channels);
+    result.pixels.assign(data, data + (w * h * channels));
+
+    stbi_image_free(data);
+    return result;
+}
+
+}  // namespace rts

@@ -1,0 +1,31 @@
+#pragma once
+
+#include <rts/core/types.hpp>
+#include <rts/renderer/mesh.hpp>
+#include <string>
+#include <vector>
+
+namespace rts {
+
+struct TerrainData {
+    std::vector<Vertex> vertices;
+    std::vector<u32>    indices;
+    u32                 grid_width  = 0;
+    u32                 grid_height = 0;
+    f32                 cell_size   = 1.0f;
+};
+
+class Terrain {
+public:
+    static TerrainData generate(const std::vector<f32>& heights,
+                                 u32 grid_width, u32 grid_height, f32 cell_size);
+
+    static f32 height_at(const TerrainData& data, f32 world_x, f32 world_z);
+
+    // Carrega heightmap de imagem grayscale (canal R normalizado para altura)
+    static std::vector<f32> load_heightmap_raw(const std::string& path,
+                                                u32& out_width, u32& out_height,
+                                                f32 height_scale = 20.0f);
+};
+
+}  // namespace rts

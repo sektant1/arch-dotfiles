@@ -1,0 +1,24 @@
+require "nvchad.mappings"
+
+-- add yours here
+
+local map = vim.keymap.set
+
+map("n", ";", ":", { desc = "CMD enter command mode" })
+map("i", "jk", "<ESC>")
+
+map("n", "o", "<cmd>:call append(line('.'), '')<CR>")
+map("n", "O", "<cmd>:call append(line('.')-1, '')<CR>")
+map("n", "Y", "y$", { desc = "Yank to end of line" })
+map("n", "D", "d$", { desc = "Delete to end of line" })
+map("v", "H", "^", { desc = "Start of line" })
+map("v", "L", "$", { desc = "End of line" })
+map("x", "<leader>P", [["_dP]], { desc = "Replace selection with buffer" })
+
+map("n", "<A-j>", "<cmd>execute 'move .+' . v:count1<cr>==", { desc = "Move line down" })
+map("n", "<A-k>", "<cmd>execute 'move .-' . (v:count1 + 1)<cr>==", { desc = "Move line up" })
+map("i", "<A-j>", "<esc><cmd>m .+1<cr>==gi", { desc = "Move line down (insert)" })
+map("i", "<A-k>", "<esc><cmd>m .-2<cr>==gi", { desc = "Move line up (insert)" })
+map("v", "<A-j>", ":<C-u>execute \"'<,'>move '>+\" . v:count1<cr>gv=gv", { desc = "Move block down" })
+map("v", "<A-k>", ":<C-u>execute \"'<,'>move '<-\" . (v:count1 + 1)<cr>gv=gv", { desc = "Move block up" })
+-- map({ "n", "i", "v" }, "<C-s>", "<cmd> w <cr>")

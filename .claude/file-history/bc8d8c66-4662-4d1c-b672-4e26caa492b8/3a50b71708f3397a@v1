@@ -1,0 +1,23 @@
+import { onMount } from 'solid-js';
+import type { Renderer } from '../renderer/Renderer';
+
+interface Props {
+  text: string;
+  renderer: Renderer;
+}
+
+export default function EditBox(props: Props) {
+  let ref!: HTMLDivElement;
+
+  onMount(() => {
+    props.renderer.editBoxes.push({ ref: () => ref });
+  });
+
+  return (
+    <div ref={ref} class="wc3-editbox">
+      <img class="eb-bg" src="" alt="" />
+      <img class="eb-border" src="" alt="" />
+      <div class="eb-text">{props.text}</div>
+    </div>
+  );
+}

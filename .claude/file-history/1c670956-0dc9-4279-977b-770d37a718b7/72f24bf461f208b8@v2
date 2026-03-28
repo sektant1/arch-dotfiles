@@ -1,0 +1,23 @@
+add_executable(rts_tests
+    core/test_logger.cpp
+    core/test_event_bus.cpp
+    camera/test_camera.cpp
+    assets/test_stb_loader.cpp
+    assets/test_blp_loader.cpp
+    assets/test_gltf_loader.cpp
+    assets/test_mdx_loader.cpp
+    assets/test_asset_manager.cpp
+    terrain/test_terrain.cpp
+)
+
+target_link_libraries(rts_tests PRIVATE
+    rts::core
+    rts::camera
+    rts::assets
+    rts::terrain
+    GTest::gtest
+    GTest::gtest_main
+)
+
+include(GoogleTest)
+gtest_discover_tests(rts_tests)

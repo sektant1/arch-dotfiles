@@ -1,0 +1,46 @@
+import WorkerUnitModel from '../WorkerUnitModel';
+import type { Race } from '../../lib/types';
+
+interface Props {
+  race: Race;
+}
+
+export default function FooterSection(props: Props) {
+  const raceYOffsetPx = () => {
+    if (props.race === 'Orc') return 20;
+    if (props.race === 'NightElf') return 15;
+    if (props.race === 'Undead') return -30;
+    return 0;
+  };
+
+  return (
+    <footer class="site-footer">
+      <div
+        class="footer-worker-unit footer-worker-unit--left"
+        aria-hidden="true"
+        style={{ '--footer-worker-y-offset': `${raceYOffsetPx()}px` }}
+      >
+        <WorkerUnitModel race={props.race} side="left" />
+      </div>
+      <div
+        class="footer-worker-unit footer-worker-unit--right"
+        aria-hidden="true"
+        style={{ '--footer-worker-y-offset': `${raceYOffsetPx()}px` }}
+      >
+        <WorkerUnitModel race={props.race} side="right" />
+      </div>
+      <div class="footer-content">
+        <p class="footer-links">
+          WC3UI is open source under MIT ·{' '}
+          <a href="#">GitHub</a> ·{' '}
+          <a href="#">Discord</a> ·{' '}
+          <a href="#">Changelog</a>
+        </p>
+        <p class="footer-joke">
+          <em>"My life for Aiur!"</em> — wait, wrong game.
+        </p>
+        <p class="footer-signoff">banteg 2026</p>
+      </div>
+    </footer>
+  );
+}

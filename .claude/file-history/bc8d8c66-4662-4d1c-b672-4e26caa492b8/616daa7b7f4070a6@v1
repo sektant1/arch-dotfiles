@@ -1,0 +1,34 @@
+import { onMount, type Accessor } from 'solid-js';
+import type { Renderer } from '../renderer/Renderer';
+
+interface Props {
+  progress: Accessor<number>;
+  renderer: Renderer;
+}
+
+export default function LoadingBar(props: Props) {
+  let ref!: HTMLDivElement;
+  let fillRef!: HTMLDivElement;
+
+  onMount(() => {
+    props.renderer.loadingBars.push({
+      ref: () => ref,
+      fillRef: () => fillRef,
+      fillPercent: () => Math.min(props.progress(), 98),
+    });
+  });
+
+  return (
+    <div ref={ref} class="loading-bar-composite">
+      <div class="lb-bg" />
+      <div
+        ref={fillRef}
+        class="lb-fill"
+        style={{ width: Math.min(props.progress(), 98) + '%' }}
+      />
+      <img class="lb-border" src="" alt="" />
+      <img class="lb-glass" src="" alt="" />
+      <div class="lb-text">{Math.floor(props.progress())}%</div>
+    </div>
+  );
+}

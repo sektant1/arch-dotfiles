@@ -1,0 +1,100 @@
+import { useRef, useState } from 'react';
+import { useRendererRegistration } from '../hooks/useRendererRegistration';
+import { RACE_PREFIXES, RACES } from '@wc3-ui/core';
+import type { Race } from '@wc3-ui/core';
+import TimeIndicatorModel from './TimeIndicatorModel';
+
+interface Props {
+  race: Race;
+  gold?: number | string;
+  lumber?: number | string;
+  onRaceChange?: (race: Race) => void;
+}
+
+export default function TopHud({ race, gold = 0, lumber = 0, onRaceChange }: Props) {
+  return (
+    <div className="top-hud">
+      <div className="top-hud-tiles">
+        <div className="top-hud-left">
+          <div className="ths ths-1" />
+          <div className="ths ths-2" />
+        </div>
+        <div className="top-hud-right">
+          <div className="ths ths-3" />
+          <div className="ths ths-4" />
+          <div className="ths ths-5" />
+        </div>
+      </div>
+      <div className="time-indicator">
+        <TimeIndicatorModel race={race} />
+      </div>
+      <div className="top-hud-overlay">
+        <div className="upper-buttons">
+          {RACES.map((r) => (
+            <UpperButton key={r} race={r} activeRace={race} onSelect={() => onRaceChange?.(r)} />
+          ))}
+        </div>
+        <div className="resources">
+          <ResourceSlot type="gold" race={race} value={gold} />
+          <ResourceSlot type="lumber" race={race} value={lumber} />
+          <ResourceSlot type="supply" race={race} value="50 / 80" />
+          <span className="upkeep-text upkeep-green">No Upkeep</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UpperButton({ race, activeRace, onSelect }: { race: Race; activeRace: Race; onSelect: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+
+  const hoveredRef = useRef(hovered);
+  hoveredRef.current = hovered;
+  const pressedRef = useRef(pressed);
+  pressedRef.current = pressed;
+
+  useRendererRegistration('upperButtons', () => ({
+    ref: () => ref.current!,
+    race,
+    hovered: () => hoveredRef.current,
+    pressed: () => pressedRef.current,
+  }));
+
+  return (
+    <button
+      ref={ref}
+      className={`upper-btn${activeRace === race ? ' active' : ''}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setPressed(false); }}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onClick={onSelect}
+    >
+      {RACE_PREFIXES[race].display}
+    </button>
+  );
+}
+
+function ResourceSlot({ type, race, value }: { type: 'gold' | 'lumber' | 'supply'; race: Race; value: number | string }) {
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useRendererRegistration('resourceIcons', () => ({
+    ref: () => imgRef.current!,
+    type,
+  }));
+
+  const imgSrc = () => {
+    if (type === 'gold') return 'war3/Feedback/Resources/ResourceGold.png';
+    if (type === 'lumber') return 'war3/Feedback/Resources/ResourceLumber.png';
+    return `war3/Feedback/Resources/Resource${race}.png`;
+  };
+
+  return (
+    <div className="resource-slot">
+      <img ref={imgRef} src={imgSrc()} alt={type} />
+      <span className="res-value">{value}</span>
+    </div>
+  );
+}

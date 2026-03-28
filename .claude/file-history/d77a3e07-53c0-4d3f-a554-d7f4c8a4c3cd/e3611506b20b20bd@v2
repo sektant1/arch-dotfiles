@@ -1,0 +1,204 @@
+import { useState } from "react";
+import type { Renderer } from "../../renderer/Renderer";
+import type { Race } from "../../lib/types";
+import EditBox from "../EditBox";
+import GlueDropdown from "../GlueDropdown";
+import GlueSmallButton from "../GlueSmallButton";
+import GlueBorderedButton from "../GlueBorderedButton";
+import { importBuilds } from "../../state/buildOrders";
+
+const RACES: Race[] = ["Human", "Orc", "NightElf", "Undead"];
+const RACE_LABELS: Record<Race, string> = {
+  Human: "Human",
+  Orc: "Orc",
+  NightElf: "Night Elf",
+  Undead: "Undead",
+};
+const DIFFICULTIES = ["Beginner", "Intermediate", "Advanced"] as const;
+type Difficulty = (typeof DIFFICULTIES)[number];
+
+interface StepRow {
+  time: string;
+  instruction: string;
+  food: string;
+}
+
+interface Props {
+  renderer: Renderer;
+}
+
+export default function BuildOrderInputSection({ renderer }: Props) {
+  const [name, setName] = useState("");
+  const [race, setRace] = useState<Race>("Human");
+  const [vs, setVs] = useState("");
+  const [difficulty, setDifficulty] = useState<Difficulty>("Beginner");
+  const [description, setDescription] = useState("");
+  const [steps, setSteps] = useState<StepRow[]>([
+    { time: "0:00", instruction: "", food: "" },
+  ]);
+  const [status, setStatus] = useState("");
+
+  function updateStep(index: number, field: keyof StepRow, value: string) {
+    setSteps((prev) =>
+      prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)),
+    );
+  }
+
+  function addStep() {
+    setSteps((prev) => [
+      ...prev,
+      { time: "", instruction: "", food: "" },
+    ]);
+  }
+
+  function removeStep(index: number) {
+    setSteps((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function handleSubmit() {
+    const build = {
+      name,
+      race,
+      vs: vs || undefined,
+      difficulty,
+      description,
+      steps: steps.map((s, i) => ({
+        order: i + 1,
+        time: s.time,
+        instruction: s.instruction,
+        food: s.food,
+      })),
+    };
+
+    const count = importBuilds([build]);
+    if (count > 0) {
+      setStatus("Build order added!");
+      setName("");
+      setVs("");
+      setDescription("");
+      setSteps([{ time: "0:00", instruction: "", food: "" }]);
+    } else {
+      setStatus("Please fill in Name and at least one step.");
+    }
+    setTimeout(() => setStatus(""), 4000);
+  }
+
+  return (
+    <section className="section-card build-order-input-section">
+      <h4 className="skill-order-title">Add Build Order</h4>
+
+      <div className="build-order-input-fields">
+        <div className="build-order-input-row">
+          <label className="build-order-input-label">Name</label>
+          <EditBox
+            value={name}
+            placeholder="Build order name"
+            onChange={setName}
+            renderer={renderer}
+          />
+        </div>
+
+        <div className="build-order-input-row">
+          <label className="build-order-input-label">Race</label>
+          <GlueDropdown
+            options={RACES}
+            value={race}
+            onChange={(v) => setRace(v as Race)}
+            label={(v) => RACE_LABELS[v as Race] ?? v}
+          />
+        </div>
+
+        <div className="build-order-input-row">
+          <label className="build-order-input-label">vs (optional)</label>
+          <EditBox
+            value={vs}
+            placeholder="e.g. Human, all"
+            onChange={setVs}
+            renderer={renderer}
+          />
+        </div>
+
+        <div className="build-order-input-row">
+          <label className="build-order-input-label">Difficulty</label>
+          <GlueDropdown
+            options={DIFFICULTIES}
+            value={difficulty}
+            onChange={(v) => setDifficulty(v as Difficulty)}
+          />
+        </div>
+
+        <div className="build-order-input-row">
+          <label className="build-order-input-label">Description</label>
+          <EditBox
+            value={description}
+            placeholder="Short description"
+            onChange={setDescription}
+            renderer={renderer}
+          />
+        </div>
+      </div>
+
+      <div className="build-order-input-steps">
+        <h5 className="build-order-input-steps-title">Steps</h5>
+        <table className="build-steps-table build-order-input-steps-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Time</th>
+              <th>Instruction</th>
+              <th>Food</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {steps.map((step, i) => (
+              <tr key={i} className="build-order-input-step-row">
+                <td className="build-step-order">{i + 1}</td>
+                <td>
+                  <EditBox
+                    value={step.time}
+                    placeholder="0:00"
+                    onChange={(v) => updateStep(i, "time", v)}
+                    renderer={renderer}
+                  />
+                </td>
+                <td>
+                  <EditBox
+                    value={step.instruction}
+                    placeholder="Instruction"
+                    onChange={(v) => updateStep(i, "instruction", v)}
+                    renderer={renderer}
+                  />
+                </td>
+                <td>
+                  <EditBox
+                    value={step.food}
+                    placeholder="5/10"
+                    onChange={(v) => updateStep(i, "food", v)}
+                    renderer={renderer}
+                  />
+                </td>
+                <td>
+                  {steps.length > 1 && (
+                    <GlueSmallButton onClick={() => removeStep(i)}>
+                      ✕
+                    </GlueSmallButton>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="build-order-input-step-actions">
+          <GlueSmallButton onClick={addStep}>+ Add Step</GlueSmallButton>
+        </div>
+      </div>
+
+      <div className="build-order-input-submit">
+        <GlueBorderedButton onClick={handleSubmit}>Add Build</GlueBorderedButton>
+      </div>
+
+      {status && <div className="build-import-status">{status}</div>}
+    </section>
+  );
+}

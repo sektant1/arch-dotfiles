@@ -1,0 +1,102 @@
+#include <gtest/gtest.h>
+#include <rts/assets/mdx_loader.hpp>
+#include <fstream>
+#include <cstdint>
+#include <cstring>
+
+static void w_u32(std::vector<uint8_t>& b, uint32_t v) {
+    b.push_back(v & 0xFF); b.push_back((v>>8)&0xFF);
+    b.push_back((v>>16)&0xFF); b.push_back((v>>24)&0xFF);
+}
+static void w_u16(std::vector<uint8_t>& b, uint16_t v) {
+    b.push_back(v & 0xFF); b.push_back((v>>8)&0xFF);
+}
+static void w_f32(std::vector<uint8_t>& b, float v) {
+    uint32_t bits; std::memcpy(&bits, &v, 4); w_u32(b, bits);
+}
+static void w_tag(std::vector<uint8_t>& b, const char* t) {
+    for (int i = 0; i < 4; ++i) b.push_back(static_cast<uint8_t>(t[i]));
+}
+
+class MdxLoaderTest : public ::testing::Test {
+protected:
+    void create_minimal_mdx(const std::string& filename) {
+        std::vector<uint8_t> data;
+
+        // MDLX magic
+        w_tag(data, "MDLX");
+
+        // VERS chunk
+        w_tag(data, "VERS"); w_u32(data, 4); w_u32(data, 800);
+
+        // Build geoset content
+        std::vector<uint8_t> geo;
+        // VRTX
+        w_tag(geo, "VRTX"); w_u32(geo, 3);
+        w_f32(geo,0); w_f32(geo,0); w_f32(geo,0);
+        w_f32(geo,1); w_f32(geo,0); w_f32(geo,0);
+        w_f32(geo,0); w_f32(geo,1); w_f32(geo,0);
+        // NRMS
+        w_tag(geo, "NRMS"); w_u32(geo, 3);
+        for (int i = 0; i < 3; ++i) { w_f32(geo,0); w_f32(geo,0); w_f32(geo,1); }
+        // PTYP
+        w_tag(geo, "PTYP"); w_u32(geo, 1); w_u32(geo, 4);
+        // PCNT
+        w_tag(geo, "PCNT"); w_u32(geo, 1); w_u32(geo, 3);
+        // PVTX
+        w_tag(geo, "PVTX"); w_u32(geo, 3);
+        w_u16(geo,0); w_u16(geo,1); w_u16(geo,2);
+        // UVBS
+        w_tag(geo, "UVBS"); w_u32(geo, 3);
+        w_f32(geo,0); w_f32(geo,0);
+        w_f32(geo,1); w_f32(geo,0);
+        w_f32(geo,0); w_f32(geo,1);
+
+        // GEOS chunk: geoset inclusive size (4 + geo.size()) + geoset data
+        uint32_t geoset_size = static_cast<uint32_t>(4 + geo.size());
+        std::vector<uint8_t> geos_content;
+        w_u32(geos_content, geoset_size);
+        geos_content.insert(geos_content.end(), geo.begin(), geo.end());
+
+        w_tag(data, "GEOS");
+        w_u32(data, static_cast<uint32_t>(geos_content.size()));
+        data.insert(data.end(), geos_content.begin(), geos_content.end());
+
+        std::ofstream f(filename, std::ios::binary);
+        f.write(reinterpret_cast<char*>(data.data()),
+                static_cast<std::streamsize>(data.size()));
+    }
+
+    void TearDown() override { std::remove("test.mdx"); }
+};
+
+TEST_F(MdxLoaderTest, LoadsMinimalMdx) {
+    create_minimal_mdx("test.mdx");
+    rts::MdxLoader loader;
+    auto models = loader.load("test.mdx");
+    ASSERT_EQ(models.size(), 1u);
+    EXPECT_EQ(models[0].vertices.size(), 3u);
+    EXPECT_EQ(models[0].indices.size(), 3u);
+}
+
+TEST_F(MdxLoaderTest, VertexPositionsCorrect) {
+    create_minimal_mdx("test.mdx");
+    rts::MdxLoader loader;
+    auto models = loader.load("test.mdx");
+    ASSERT_GE(models[0].vertices.size(), 3u);
+    EXPECT_FLOAT_EQ(models[0].vertices[1].position.x, 1.0f);
+    EXPECT_FLOAT_EQ(models[0].vertices[2].position.y, 1.0f);
+}
+
+TEST_F(MdxLoaderTest, ThrowsOnInvalidMagic) {
+    std::ofstream f("test.mdx", std::ios::binary);
+    f.write("NOPE", 4);
+    f.close();
+    rts::MdxLoader loader;
+    EXPECT_THROW(loader.load("test.mdx"), std::runtime_error);
+}
+
+TEST_F(MdxLoaderTest, ThrowsOnMissingFile) {
+    rts::MdxLoader loader;
+    EXPECT_THROW(loader.load("nonexistent.mdx"), std::runtime_error);
+}

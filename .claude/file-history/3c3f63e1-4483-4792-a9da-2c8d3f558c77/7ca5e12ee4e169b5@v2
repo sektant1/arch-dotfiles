@@ -1,0 +1,724 @@
+import React, { useState } from "react";
+import type { Race } from "../src/types";
+import {
+  HealthBar,
+  ManaBar,
+  XPBar,
+  ProgressBar,
+  BuildProgressBar,
+  LoadingBar,
+  GlueButton,
+  SmallButton,
+  CampaignButton,
+  EscOptionButton,
+  MenuButton,
+  CommandButton,
+  CommandCard,
+  Editbox,
+  Tooltip,
+  ResourceCounter,
+  PortraitFrame,
+  UnitQueue,
+  Minimap,
+  Checkbox,
+  RadioButton,
+  Slider,
+  Scrollbar,
+  Listbox,
+  Dropdown,
+  Textarea,
+  Dialog,
+  useDialog,
+  ChatLog,
+  HeroCard,
+  HeroCardCompact,
+  HeroCardSkeleton,
+  FactionSelector,
+  BorderFrame,
+  SectionCard,
+} from "../src";
+import type { CommandButtonData, ChatMessage } from "../src";
+
+const RACES: { key: Race; label: string }[] = [
+  { key: "Human", label: "Human" },
+  { key: "Orc", label: "Orc" },
+  { key: "NightElf", label: "Night Elf" },
+  { key: "Undead", label: "Undead" },
+];
+
+// ── Demo data ──────────────────────────────────────────
+
+const COMMAND_BUTTONS: (CommandButtonData | null)[] = [
+  { icon: "/buttons/command/BTNMove.blp", disabledIcon: "/buttons/command/DISBTNMove.blp", hotkey: "Q", label: "Move" },
+  { icon: "/buttons/command/BTNStop.blp", disabledIcon: "/buttons/command/DISBTNStop.blp", hotkey: "W", label: "Stop" },
+  { icon: "/buttons/command/BTNHoldPosition.blp", disabledIcon: "/buttons/command/DISBTNHoldPosition.blp", hotkey: "E", label: "Hold" },
+  { icon: "/buttons/command/BTNAttack.blp", disabledIcon: "/buttons/command/DISBTNAttack.blp", hotkey: "R", label: "Attack" },
+  { icon: "/buttons/command/BTNPatrol.blp", disabledIcon: "/buttons/command/DISBTNPatrol.blp", hotkey: "A", label: "Patrol" },
+  null,
+  null,
+  { icon: "/buttons/command/BTNSkillz.blp", disabledIcon: "/buttons/command/DISBTNSkillz.blp", hotkey: "F", label: "Learn", levelUp: true },
+  { icon: "/buttons/command/BTNWindWalkOn.blp", disabledIcon: "/buttons/command/DISBTNWindWalkOn.blp", hotkey: "Z", label: "Wind Walk" },
+  { icon: "/buttons/command/BTNMirrorImage.blp", disabledIcon: "/buttons/command/DISBTNMirrorImage.blp", hotkey: "X", label: "Mirror Image" },
+  { icon: "/buttons/command/BTNCriticalStrike.blp", disabledIcon: "/buttons/command/DISBTNCriticalStrike.blp", hotkey: "C", label: "Critical Strike", passive: true },
+  { icon: "/buttons/command/BTNWhirlwind.blp", disabledIcon: "/buttons/command/DISBTNWhirlwind.blp", hotkey: "V", label: "Bladestorm", noResources: true },
+];
+
+const CHAT_MESSAGES: ChatMessage[] = [
+  { from: "[All] HumanPlayer", text: "gl hf", type: "ally" },
+  { from: "[All] OrcPlayer", text: "gl hf", type: "enemy" },
+  { text: "Game speed changed to Fast.", type: "system" },
+  { from: "[Ally] HumanPlayer", text: "I'll take the expo", type: "ally" },
+  { from: "[Whisper] NightElfPlayer", text: "nice base", type: "whisper" },
+  { from: "[All] OrcPlayer", text: "nice creeping", type: "enemy" },
+  { text: "[02:56] Defend researched at Barracks.", type: "system" },
+];
+
+const LISTBOX_ITEMS = [
+  "Slow", "Normal", "Fast", "Faster", "Ludicrous",
+  "Insane", "Observer", "Random", "Custom",
+];
+
+const TEXT_LINES = [
+  "[00:00] Game started.",
+  "[00:12] Peasant trained.",
+  "[00:24] Altar of Kings completed.",
+  "[00:38] Archmage summoned.",
+  "[01:02] Farm completed.",
+  "[01:15] Barracks started.",
+  "[01:48] Town Hall upgrade queued.",
+  "[02:10] Footman trained.",
+  "[02:33] Lumber Mill started.",
+  "[02:56] Defend researched at Barracks.",
+  "[03:14] Scout Tower completed.",
+  "[03:30] Archmage reached level 2.",
+];
+
+// ── App ────────────────────────────────────────────────
+
+export function App() {
+  const [race, setRace] = useState<Race>("Human");
+
+  // Bar values
+  const [hp, setHp] = useState(480);
+  const [mana, setMana] = useState(210);
+  const [xp, setXp] = useState(67);
+  const [progress, setProgress] = useState(45);
+  const [buildProgress, setBuildProgress] = useState(72);
+  const [loadingProgress, setLoadingProgress] = useState(38);
+
+  // Controls
+  const [sliderVal, setSliderVal] = useState(55);
+  const [checked, setChecked] = useState(true);
+  const [radioVal, setRadioVal] = useState(0);
+  const [editVal, setEditVal] = useState("PlayerOne");
+  const [bnetEditVal, setBnetEditVal] = useState("player@battle.net");
+  const [scrollVal, setScrollVal] = useState(30);
+  const [listIdx, setListIdx] = useState(2);
+  const [dropdownVal, setDropdownVal] = useState("High");
+
+  // Resource counters
+  const [gold, setGold] = useState(1250);
+  const [lumber, setLumber] = useState(680);
+  const [supply, setSupply] = useState(52);
+
+  // Dialog
+  const dialog = useDialog();
+
+  // Faction selector state (separate from header toggle)
+  const [factionVal, setFactionVal] = useState<Race>("Human");
+
+  return (
+    <>
+      {/* ── Header with race toggle ── */}
+      <header className="demo-header">
+        <h1>WC3 Components</h1>
+        <div className="demo-race-toggle">
+          {RACES.map((r) => (
+            <button
+              key={r.key}
+              className={`demo-race-btn${race === r.key ? " demo-race-btn--active" : ""}`}
+              onClick={() => setRace(r.key)}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <div className="demo-page">
+        {/* ════════════════════════════════════════════════
+            BARS
+           ════════════════════════════════════════════════ */}
+        <section className="demo-section">
+          <h2>Bars</h2>
+          <p className="demo-desc">
+            Health, mana, XP, build, and full-screen loading bars with animated
+            fill and layered overlays.
+          </p>
+          <div className="demo-card">
+            <div className="demo-controls-row">
+              <div className="demo-slider-wrap">
+                HP
+                <input type="range" min={0} max={650} value={hp} onChange={(e) => setHp(+e.target.value)} />
+              </div>
+              <div className="demo-slider-wrap">
+                Mana
+                <input type="range" min={0} max={300} value={mana} onChange={(e) => setMana(+e.target.value)} />
+              </div>
+            </div>
+            <HealthBar value={hp} max={650} />
+            <div style={{ height: 8 }} />
+            <ManaBar value={mana} max={300} />
+            <div style={{ height: 8 }} />
+            <XPBar percent={xp} level={3} />
+            <div style={{ height: 8 }} />
+            <ProgressBar percent={progress} />
+            <div style={{ height: 8 }} />
+            <BuildProgressBar percent={buildProgress} />
+
+            <div style={{ height: 16 }} />
+            <div className="demo-controls-row">
+              <div className="demo-slider-wrap">
+                Loading
+                <input type="range" min={0} max={100} value={loadingProgress} onChange={(e) => setLoadingProgress(+e.target.value)} />
+              </div>
+            </div>
+            <LoadingBar percent={loadingProgress} />
+          </div>
+        </section>
+
+        <hr className="demo-divider" />
+
+        {/* ════════════════════════════════════════════════
+            BUTTONS
+           ════════════════════════════════════════════════ */}
+        <section className="demo-section">
+          <h2>Buttons</h2>
+          <p className="demo-desc">
+            Beveled, gold-trimmed buttons with faction-aware theming and glow states.
+          </p>
+
+          <div className="demo-card">
+            <h3 style={{ color: "#fcd312", margin: "0 0 12px" }}>ESC Option Button <span className="demo-label">(race-aware)</span></h3>
+            <div className="demo-row">
+              <div className="demo-col">
+                <EscOptionButton race={race}>Options</EscOptionButton>
+                <span className="demo-label">Normal</span>
+              </div>
+              <div className="demo-col">
+                <EscOptionButton race={race} disabled>Options</EscOptionButton>
+                <span className="demo-label">Disabled</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ height: 16 }} />
+
+          <div className="demo-card">
+            <h3 style={{ color: "#fcd312", margin: "0 0 12px" }}>Glue Buttons</h3>
+            <div className="demo-row">
+              <div className="demo-col">
+                <GlueButton hotkey="S">ingle Player</GlueButton>
+                <span className="demo-label">Login Screen</span>
+              </div>
+              <div className="demo-col">
+                <GlueButton disabled>Disabled</GlueButton>
+                <span className="demo-label">Disabled</span>
+              </div>
+            </div>
+
+            <div style={{ height: 16 }} />
+            <div className="demo-row">
+              <div className="demo-col">
+                <SmallButton>OK</SmallButton>
+                <span className="demo-label">Small</span>
+              </div>
+              <div className="demo-col">
+                <CampaignButton hotkey="C">ampaign</CampaignButton>
+                <span className="demo-label">Campaign</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ height: 16 }} />
+
+          <div className="demo-card">
+            <h3 style={{ color: "#fcd312", margin: "0 0 12px" }}>Menu Button</h3>
+            <div className="demo-row">
+              <MenuButton hotkey="S">ingle Player</MenuButton>
+            </div>
+          </div>
+        </section>
+
+        <hr className="demo-divider" />
+
+        {/* ════════════════════════════════════════════════
+            COMMAND CARD
+           ════════════════════════════════════════════════ */}
+        <section className="demo-section">
+          <h2>Command Card</h2>
+          <p className="demo-desc">
+            4x3 ability grid with pressed, disabled, cooldown, passive, and level-up states.
+          </p>
+          <div className="demo-card">
+            <CommandCard
+              buttons={COMMAND_BUTTONS}
+              onButtonClick={(i) => console.log("Button", i, "clicked")}
+            />
+          </div>
+
+          <div style={{ height: 16 }} />
+          <div className="demo-card">
+            <h3 style={{ color: "#fcd312", margin: "0 0 12px" }}>Individual States</h3>
+            <div className="demo-row">
+              <div className="demo-col">
+                <CommandButton
+                  icon="/buttons/command/BTNAttack.blp"
+                  hotkey="A"
+                  showcase
+                />
+                <span className="demo-label">Normal</span>
+              </div>
+              <div className="demo-col">
+                <CommandButton
+                  icon="/buttons/command/BTNCriticalStrike.blp"
+                  hotkey="C"
+                  passive
+                  showcase
+                />
+                <span className="demo-label">Passive</span>
+              </div>
+              <div className="demo-col">
+                <CommandButton
+                  icon="/buttons/command/BTNSkillz.blp"
+                  hotkey="F"
+                  levelUp
+                  showcase
+                />
+                <span className="demo-label">Level Up</span>
+              </div>
+              <div className="demo-col">
+                <CommandButton
+                  icon="/buttons/command/BTNWhirlwind.blp"
+                  hotkey="V"
+                  noResources
+                  showcase
+                />
+                <span className="demo-label">No Resources</span>
+              </div>
+              <div className="demo-col">
+                <CommandButton
+                  icon="/buttons/command/BTNWindWalkOn.blp"
+                  hotkey="Z"
+                  cooldown
+                  showcase
+                />
+                <span className="demo-label">Cooldown</span>
+              </div>
+              <div className="demo-col">
+                <CommandButton showcase />
+                <span className="demo-label">Empty</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <hr className="demo-divider" />
+
+        {/* ════════════════════════════════════════════════
+            CONTROLS
+           ════════════════════════════════════════════════ */}
+        <section className="demo-section">
+          <h2>Controls <span style={{ fontSize: "0.75rem", color: "#555" }}>(race-aware)</span></h2>
+          <p className="demo-desc">
+            Checkboxes, sliders, radio buttons, edit fields, scrollbars, listboxes, and dropdowns.
+          </p>
+
+          <div className="demo-card">
+            <h3 style={{ color: "#fcd312", margin: "0 0 12px" }}>Checkbox</h3>
+            <div className="demo-row">
+              <div className="demo-col">
+                <Checkbox checked={checked} onChange={setChecked} race={race} />
+                <span className="demo-label">Interactive</span>
+              </div>
+              <div className="demo-col">
+                <Checkbox checked={true} disabled race={race} />
+                <span className="demo-label">Disabled Checked</span>
+              </div>
+              <div className="demo-col">
+                <Checkbox checked={false} disabled race={race} />
+                <span className="demo-label">Disabled</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ height: 16 }} />
+
+          <div className="demo-card">
+            <h3 style={{ color: "#fcd312", margin: "0 0 12px" }}>Radio Button</h3>
+            <div className="demo-row">
+              {[0, 1, 2].map((i) => (
+                <div className="demo-col" key={i}>
+                  <RadioButton
+                    selected={radioVal === i}
+                    onClick={() => setRadioVal(i)}
+                  />
+                  <span className="demo-label">Option {i + 1}</span>
+                </div>
+              ))}
+              <div className="demo-col">
+                <RadioButton selected disabled />
+                <span className="demo-label">Disabled</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ height: 16 }} />
+
+          <div className="demo-card">
+            <h3 style={{ color: "#fcd312", margin: "0 0 12px" }}>Slider</h3>
+            <div className="demo-row">
+              <Slider
+                value={sliderVal}
+                onChange={setSliderVal}
+                race={race}
+                label={`Volume: ${sliderVal}`}
+              />
+            </div>
+            <div style={{ height: 12 }} />
+            <div className="demo-row">
+              <Slider value={30} disabled label="Disabled: 30" />
+            </div>
+          </div>
+
+          <div style={{ height: 16 }} />
+
+          <div className="demo-card">
+            <h3 style={{ color: "#fcd312", margin: "0 0 12px" }}>Text Input</h3>
+            <div className="demo-row">
+              <div className="demo-col">
+                <Editbox value={editVal} onChange={setEditVal} variant="esc" />
+                <span className="demo-label">ESC Menu</span>
+              </div>
+              <div className="demo-col">
+                <Editbox value={bnetEditVal} onChange={setBnetEditVal} variant="bnet" />
+                <span className="demo-label">Battle.net</span>
+              </div>
+              <div className="demo-col">
+                <Editbox value="Disabled" disabled variant="esc" />
+                <span className="demo-label">Disabled</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ height: 16 }} />
+
+          <div className="demo-card">
+            <h3 style={{ color: "#fcd312", margin: "0 0 12px" }}>Dropdown</h3>
+            <Dropdown
+              options={["Low", "Medium", "High", "Ultra"]}
+              value={dropdownVal}
+              onChange={setDropdownVal}
+            />
+          </div>
+
+          <div style={{ height: 16 }} />
+
+          <div className="demo-card">
+            <h3 style={{ color: "#fcd312", margin: "0 0 12px" }}>Scrollbar</h3>
+            <div className="demo-row">
+              <div className="demo-col">
+                <Scrollbar value={scrollVal} onChange={setScrollVal} />
+                <span className="demo-label">Interactive ({scrollVal})</span>
+              </div>
+              <div className="demo-col">
+                <Scrollbar value={50} disabled />
+                <span className="demo-label">Disabled</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ height: 16 }} />
+
+          <div className="demo-card">
+            <h3 style={{ color: "#fcd312", margin: "0 0 12px" }}>Listbox</h3>
+            <Listbox
+              items={LISTBOX_ITEMS}
+              selectedIndex={listIdx}
+              onSelect={setListIdx}
+            />
+          </div>
+
+          <div style={{ height: 16 }} />
+
+          <div className="demo-card">
+            <h3 style={{ color: "#fcd312", margin: "0 0 12px" }}>Text Area</h3>
+            <Textarea lines={TEXT_LINES} />
+          </div>
+        </section>
+
+        <hr className="demo-divider" />
+
+        {/* ════════════════════════════════════════════════
+            RESOURCE COUNTERS
+           ════════════════════════════════════════════════ */}
+        <section className="demo-section">
+          <h2>Resource Counters</h2>
+          <p className="demo-desc">Animated numeric display with icon slot.</p>
+          <div className="demo-card">
+            <div className="demo-controls-row">
+              <div className="demo-slider-wrap">
+                Gold
+                <input type="range" min={0} max={5000} value={gold} onChange={(e) => setGold(+e.target.value)} />
+              </div>
+              <div className="demo-slider-wrap">
+                Lumber
+                <input type="range" min={0} max={5000} value={lumber} onChange={(e) => setLumber(+e.target.value)} />
+              </div>
+            </div>
+            <div className="demo-row" style={{ gap: 24 }}>
+              <ResourceCounter type="gold" value={gold} />
+              <ResourceCounter type="lumber" value={lumber} />
+              <ResourceCounter type="supply" value={supply} max={80} />
+              <ResourceCounter type="upkeep" value={0} />
+            </div>
+          </div>
+        </section>
+
+        <hr className="demo-divider" />
+
+        {/* ════════════════════════════════════════════════
+            TOOLTIP
+           ════════════════════════════════════════════════ */}
+        <section className="demo-section">
+          <h2>Tooltip</h2>
+          <p className="demo-desc">
+            Rich content tooltips with title, description, hotkey badge, and inline resource costs.
+          </p>
+          <div className="demo-card">
+            <div className="demo-row" style={{ gap: 16, alignItems: "flex-start" }}>
+              <Tooltip
+                title="Build Footman"
+                hotkey="F"
+                description="Basic frontline infantry. Strong against early pressure and pairs with priest support."
+                costs={[
+                  { icon: "gold", amount: 135 },
+                  { icon: "lumber", amount: 0 },
+                  { icon: "supply", amount: 2 },
+                ]}
+              />
+              <Tooltip
+                title="Holy Light"
+                hotkey="T"
+                description="Heals a friendly living unit for 200 hit points, or damages an Undead unit for 100."
+                simple
+              />
+              <Tooltip
+                title="Not Enough Mana"
+                description="Requires 75 mana to cast."
+                error
+                simple
+              />
+            </div>
+          </div>
+        </section>
+
+        <hr className="demo-divider" />
+
+        {/* ════════════════════════════════════════════════
+            PORTRAIT FRAME
+           ════════════════════════════════════════════════ */}
+        <section className="demo-section">
+          <h2>Portrait Frame</h2>
+          <p className="demo-desc">Hero-tier avatar frame with masked window.</p>
+          <div className="demo-card">
+            <PortraitFrame>
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  background: "radial-gradient(circle at 40% 35%, #2a4a8a, #0a1530)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#fcd312",
+                  fontSize: "1.5rem",
+                }}
+              >
+                3D
+              </div>
+            </PortraitFrame>
+          </div>
+        </section>
+
+        <hr className="demo-divider" />
+
+        {/* ════════════════════════════════════════════════
+            UNIT QUEUE
+           ════════════════════════════════════════════════ */}
+        <section className="demo-section">
+          <h2>Unit Queue</h2>
+          <p className="demo-desc">Build queue backdrop with the in-game border frame.</p>
+          <div className="demo-card">
+            <UnitQueue />
+          </div>
+        </section>
+
+        <hr className="demo-divider" />
+
+        {/* ════════════════════════════════════════════════
+            MINIMAP
+           ════════════════════════════════════════════════ */}
+        <section className="demo-section">
+          <h2>Minimap</h2>
+          <p className="demo-desc">Minimap frame with fog of war and animated ping markers.</p>
+          <div className="demo-card">
+            <Minimap
+              pings={[
+                { x: "26%", y: "34%", color: "#58d869" },
+                { x: "61%", y: "54%", color: "#e65a5a", delay: "0.6s" },
+                { x: "47%", y: "20%", color: "#f0d775", delay: "1.1s" },
+              ]}
+              legend={[
+                { label: "Ally", color: "#58d869" },
+                { label: "Enemy", color: "#e65a5a" },
+                { label: "Neutral", color: "#f0d775" },
+              ]}
+            />
+          </div>
+        </section>
+
+        <hr className="demo-divider" />
+
+        {/* ════════════════════════════════════════════════
+            FACTION SELECTOR
+           ════════════════════════════════════════════════ */}
+        <section className="demo-section">
+          <h2>Faction Selector</h2>
+          <p className="demo-desc">Race selector tabs — text turns gold on active.</p>
+          <div className="demo-card">
+            <FactionSelector value={factionVal} onChange={setFactionVal} />
+            <p style={{ color: "#9aa4c0", marginTop: 8, fontSize: "0.85rem" }}>
+              Selected: {factionVal}
+            </p>
+          </div>
+        </section>
+
+        <hr className="demo-divider" />
+
+        {/* ════════════════════════════════════════════════
+            DIALOG
+           ════════════════════════════════════════════════ */}
+        <section className="demo-section">
+          <h2>Dialog</h2>
+          <p className="demo-desc">Modal dialog with backdrop scrim and action buttons.</p>
+          <div className="demo-card">
+            <button className="demo-race-btn" onClick={dialog.show}>
+              Open Dialog
+            </button>
+            <Dialog
+              title="Quit Game?"
+              open={dialog.open}
+              onClose={dialog.hide}
+              actions={[
+                { label: "Cancel", onClick: dialog.hide, variant: "secondary" },
+                { label: "Quit", onClick: dialog.hide, variant: "danger" },
+              ]}
+            >
+              <p>Are you sure you want to leave the game? This cannot be undone.</p>
+            </Dialog>
+          </div>
+        </section>
+
+        <hr className="demo-divider" />
+
+        {/* ════════════════════════════════════════════════
+            CHAT LOG
+           ════════════════════════════════════════════════ */}
+        <section className="demo-section">
+          <h2>Chat Log</h2>
+          <p className="demo-desc">Color-coded in-game chat messages.</p>
+          <div className="demo-card">
+            <ChatLog messages={CHAT_MESSAGES} />
+          </div>
+        </section>
+
+        <hr className="demo-divider" />
+
+        {/* ════════════════════════════════════════════════
+            HERO CARDS
+           ════════════════════════════════════════════════ */}
+        <section className="demo-section">
+          <h2>Hero Card</h2>
+          <p className="demo-desc">
+            Detailed hero info cards, compact variant, and skeleton loading state.
+          </p>
+          <div className="demo-card">
+            <HeroCard
+              name="Blademaster"
+              title="Orc Agility Hero"
+              level={5}
+              hp={625}
+              maxHp={750}
+              mp={270}
+              maxMp={315}
+              stats={[
+                { label: "STR", value: 18 },
+                { label: "AGI", value: 28 },
+                { label: "INT", value: 16 },
+                { label: "DMG", value: "42-64" },
+              ]}
+            />
+            <div style={{ height: 16 }} />
+            <HeroCardCompact name="Archmage" subtitle="Lvl 3 · Human" />
+            <div style={{ height: 16 }} />
+            <HeroCardSkeleton />
+          </div>
+        </section>
+
+        <hr className="demo-divider" />
+
+        {/* ════════════════════════════════════════════════
+            BORDER FRAME
+           ════════════════════════════════════════════════ */}
+        <section className="demo-section">
+          <h2>Border Frame</h2>
+          <p className="demo-desc">
+            9-slice race-themed panel borders. Pass a border BLP to wrap any content.
+          </p>
+          <div className="demo-card">
+            <BorderFrame>
+              <p style={{ margin: 0, color: "#9aa4c0" }}>
+                Content wrapped in a race-themed border frame.
+                The border texture is loaded from a BLP atlas and rendered via CSS border-image.
+              </p>
+            </BorderFrame>
+          </div>
+        </section>
+
+        <hr className="demo-divider" />
+
+        {/* ════════════════════════════════════════════════
+            SECTION CARD
+           ════════════════════════════════════════════════ */}
+        <section className="demo-section">
+          <h2>Section Card</h2>
+          <p className="demo-desc">Dark container used to group content sections.</p>
+          <SectionCard
+            title="Example Section"
+            description="This is a section card with a title and description."
+          >
+            <p style={{ margin: 0, color: "#c8d0e8" }}>
+              Arbitrary content goes here.
+            </p>
+          </SectionCard>
+        </section>
+
+        {/* ── Footer ── */}
+        <footer style={{ textAlign: "center", padding: "32px 0", color: "#3a3f54", fontSize: "0.78rem" }}>
+          WC3 Components Demo
+        </footer>
+      </div>
+    </>
+  );
+}

@@ -1,0 +1,174 @@
+λ ./scripts/test.sh
+==> Compilando testes...
+[  6%] Built target glad
+[ 16%] Built target rts_core
+[ 23%] Built target rts_camera
+[ 40%] Built target rts_renderer
+[ 60%] Built target rts_assets
+[ 66%] Built target rts_terrain
+[100%] Built target rts_tests
+==> Rodando testes...
+Test project /home/garrosh/repos/rts-engine/build
+      Start  1: LoggerTest.InitializeDoesNotThrow
+ 1/33 Test  #1: LoggerTest.InitializeDoesNotThrow ..............   Passed    0.0
+0 sec
+      Start  2: LoggerTest.InitializeTwiceDoesNotThrow
+ 2/33 Test  #2: LoggerTest.InitializeTwiceDoesNotThrow .........   Passed    0.0
+0 sec
+      Start  3: LoggerTest.LogAfterInit
+ 3/33 Test  #3: LoggerTest.LogAfterInit ........................   Passed    0.0
+0 sec
+      Start  4: EventBusTest.SubscribeAndPublish
+ 4/33 Test  #4: EventBusTest.SubscribeAndPublish ...............   Passed    0.0
+0 sec
+      Start  5: EventBusTest.MultipleSubscribers
+ 5/33 Test  #5: EventBusTest.MultipleSubscribers ...............   Passed    0.0
+0 sec
+      Start  6: EventBusTest.DifferentEventTypes
+ 6/33 Test  #6: EventBusTest.DifferentEventTypes ...............   Passed    0.0
+0 sec
+      Start  7: EventBusTest.NoSubscribersDoesNotCrash
+ 7/33 Test  #7: EventBusTest.NoSubscribersDoesNotCrash .........   Passed    0.0
+0 sec
+      Start  8: EventBusTest.UnsubscribeById
+ 8/33 Test  #8: EventBusTest.UnsubscribeById ...................   Passed    0.0
+0 sec
+      Start  9: CameraTest.DefaultPositionLooksDown
+ 9/33 Test  #9: CameraTest.DefaultPositionLooksDown ............   Passed    0.0
+0 sec
+      Start 10: CameraTest.ProjectionIsNotIdentity
+10/33 Test #10: CameraTest.ProjectionIsNotIdentity .............   Passed    0.0
+0 sec
+      Start 11: CameraTest.PanChangesPosition
+11/33 Test #11: CameraTest.PanChangesPosition ..................   Passed    0.0
+0 sec
+      Start 12: CameraTest.ZoomChangesDistance
+12/33 Test #12: CameraTest.ZoomChangesDistance .................   Passed    0.0
+0 sec
+      Start 13: CameraTest.ZoomClampsToMinMax
+13/33 Test #13: CameraTest.ZoomClampsToMinMax ..................   Passed    0.0
+0 sec
+      Start 14: StbLoaderTest.LoadsPngImage
+14/33 Test #14: StbLoaderTest.LoadsPngImage ....................   Passed    0.0
+0 sec
+      Start 15: StbLoaderTest.ThrowsOnMissingFile
+15/33 Test #15: StbLoaderTest.ThrowsOnMissingFile ..............   Passed    0.0
+0 sec
+      Start 16: BlpLoaderTest.LoadsPalettedBlp1
+16/33 Test #16: BlpLoaderTest.LoadsPalettedBlp1 ................   Passed    0.0
+0 sec
+      Start 17: BlpLoaderTest.ThrowsOnInvalidMagic
+17/33 Test #17: BlpLoaderTest.ThrowsOnInvalidMagic .............   Passed    0.0
+0 sec
+      Start 18: BlpLoaderTest.ThrowsOnMissingFile
+18/33 Test #18: BlpLoaderTest.ThrowsOnMissingFile ..............   Passed    0.0
+0 sec
+      Start 19: GltfLoaderTest.LoadsTriangle
+19/33 Test #19: GltfLoaderTest.LoadsTriangle ...................***Exception: Se
+gFault  0.12 sec
+Running main() from /home/garrosh/.conan2/p/b/gtest9916867f4bffe/b/src/googletes
+t/src/gtest_main.cc
+Note: Google Test filter = GltfLoaderTest.LoadsTriangle
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from GltfLoaderTest
+[ RUN      ] GltfLoaderTest.LoadsTriangle
+
+      Start 20: GltfLoaderTest.VertexPositionsAreCorrect
+20/33 Test #20: GltfLoaderTest.VertexPositionsAreCorrect .......***Exception: Se
+gFault  0.10 sec
+Running main() from /home/garrosh/.conan2/p/b/gtest9916867f4bffe/b/src/googletes
+t/src/gtest_main.cc
+Note: Google Test filter = GltfLoaderTest.VertexPositionsAreCorrect
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from GltfLoaderTest
+[ RUN      ] GltfLoaderTest.VertexPositionsAreCorrect
+
+      Start 21: GltfLoaderTest.ThrowsOnMissingFile
+21/33 Test #21: GltfLoaderTest.ThrowsOnMissingFile .............   Passed    0.0
+0 sec
+      Start 22: MdxLoaderTest.LoadsMinimalMdx
+22/33 Test #22: MdxLoaderTest.LoadsMinimalMdx ..................***Exception: Se
+gFault  0.09 sec
+Running main() from /home/garrosh/.conan2/p/b/gtest9916867f4bffe/b/src/googletes
+t/src/gtest_main.cc
+Note: Google Test filter = MdxLoaderTest.LoadsMinimalMdx
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from MdxLoaderTest
+[ RUN      ] MdxLoaderTest.LoadsMinimalMdx
+
+      Start 23: MdxLoaderTest.VertexPositionsCorrect
+23/33 Test #23: MdxLoaderTest.VertexPositionsCorrect ...........***Exception: Se
+gFault  0.10 sec
+Running main() from /home/garrosh/.conan2/p/b/gtest9916867f4bffe/b/src/googletes
+t/src/gtest_main.cc
+Note: Google Test filter = MdxLoaderTest.VertexPositionsCorrect
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from MdxLoaderTest
+[ RUN      ] MdxLoaderTest.VertexPositionsCorrect
+
+      Start 24: MdxLoaderTest.ThrowsOnInvalidMagic
+24/33 Test #24: MdxLoaderTest.ThrowsOnInvalidMagic .............   Passed    0.0
+0 sec
+      Start 25: MdxLoaderTest.ThrowsOnMissingFile
+25/33 Test #25: MdxLoaderTest.ThrowsOnMissingFile ..............   Passed    0.0
+0 sec
+      Start 26: AssetManagerTest.RegisterAndUseTextureLoader
+26/33 Test #26: AssetManagerTest.RegisterAndUseTextureLoader ...***Exception: Se
+gFault  0.09 sec
+Running main() from /home/garrosh/.conan2/p/b/gtest9916867f4bffe/b/src/googletes
+t/src/gtest_main.cc
+Note: Google Test filter = AssetManagerTest.RegisterAndUseTextureLoader
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from AssetManagerTest
+[ RUN      ] AssetManagerTest.RegisterAndUseTextureLoader
+
+      Start 27: AssetManagerTest.CachesLoadedTextures
+27/33 Test #27: AssetManagerTest.CachesLoadedTextures ..........***Exception: Se
+gFault  0.10 sec
+Running main() from /home/garrosh/.conan2/p/b/gtest9916867f4bffe/b/src/googletes
+t/src/gtest_main.cc
+Note: Google Test filter = AssetManagerTest.CachesLoadedTextures
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from AssetManagerTest
+[ RUN      ] AssetManagerTest.CachesLoadedTextures
+
+      Start 28: AssetManagerTest.ThrowsOnUnknownExtension
+28/33 Test #28: AssetManagerTest.ThrowsOnUnknownExtension ......   Passed    0.0
+0 sec
+      Start 29: TerrainTest.GeneratesFlatTerrain
+29/33 Test #29: TerrainTest.GeneratesFlatTerrain ...............   Passed    0.0
+0 sec
+      Start 30: TerrainTest.HeightQueryReturnsCorrectValue
+30/33 Test #30: TerrainTest.HeightQueryReturnsCorrectValue .....   Passed    0.0
+0 sec
+      Start 31: TerrainTest.NormalsAreNormalized
+31/33 Test #31: TerrainTest.NormalsAreNormalized ...............   Passed    0.0
+0 sec
+      Start 32: TerrainTest.UVsSpanZeroToOne
+32/33 Test #32: TerrainTest.UVsSpanZeroToOne ...................   Passed    0.0
+0 sec
+      Start 33: TerrainTest.HeightAtPosition
+33/33 Test #33: TerrainTest.HeightAtPosition ...................   Passed    0.0
+0 sec
+
+82% tests passed, 6 tests failed out of 33
+
+Total Test time (real) =   0.69 sec
+
+The following tests FAILED:
+         19 - GltfLoaderTest.LoadsTriangle (SEGFAULT)
+         20 - GltfLoaderTest.VertexPositionsAreCorrect (SEGFAULT)
+         22 - MdxLoaderTest.LoadsMinimalMdx (SEGFAULT)
+         23 - MdxLoaderTest.VertexPositionsCorrect (SEGFAULT)
+         26 - AssetManagerTest.RegisterAndUseTextureLoader (SEGFAULT)
+         27 - AssetManagerTest.CachesLoadedTextures (SEGFAULT)
+Errors while running CTest
+
+~/repos/rts-engine master*                                             21:03:18
+λ 

@@ -1,0 +1,32 @@
+#pragma once
+
+#include <rts/assets/texture_loader.hpp>
+#include <rts/assets/model_loader.hpp>
+#include <memory>
+#include <string>
+#include <unordered_map>
+
+namespace rts {
+
+class AssetManager {
+public:
+    void register_texture_loader(const std::string& extension,
+                                  std::unique_ptr<ITextureLoader> loader);
+    void register_model_loader(const std::string& extension,
+                                std::unique_ptr<IModelLoader> loader);
+
+    TextureData            load_texture(const std::string& path);
+    std::vector<ModelData> load_model(const std::string& path);
+
+    void clear_cache();
+
+private:
+    std::string get_extension(const std::string& path) const;
+
+    std::unordered_map<std::string, std::unique_ptr<ITextureLoader>> m_texture_loaders;
+    std::unordered_map<std::string, std::unique_ptr<IModelLoader>>   m_model_loaders;
+    std::unordered_map<std::string, TextureData>                     m_texture_cache;
+    std::unordered_map<std::string, std::vector<ModelData>>          m_model_cache;
+};
+
+}  // namespace rts

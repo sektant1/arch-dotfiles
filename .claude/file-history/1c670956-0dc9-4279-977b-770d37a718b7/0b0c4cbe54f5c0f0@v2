@@ -1,0 +1,38 @@
+#pragma once
+
+#include <rts/core/types.hpp>
+#include <vector>
+#include <string>
+
+namespace rts {
+
+struct BoneKeyframe {
+    f32  time;
+    Vec3 translation;
+    Quat rotation;
+    Vec3 scale;
+};
+
+struct Bone {
+    std::string name;
+    i32         parent_index        = -1;   // -1 = raiz
+    Mat4        inverse_bind_pose   = Mat4(1.0f);
+    Mat4        local_bind_transform = Mat4(1.0f);
+};
+
+struct AnimationSequence {
+    std::string                        name;
+    f32                                duration = 0.0f;
+    bool                               looping  = true;
+    // keyframes[bone_index] = vetor de keyframes do bone
+    std::vector<std::vector<BoneKeyframe>> keyframes;
+};
+
+struct Skeleton {
+    std::vector<Bone>              bones;
+    std::vector<AnimationSequence> animations;
+
+    bool has_bones() const { return !bones.empty(); }
+};
+
+}  // namespace rts

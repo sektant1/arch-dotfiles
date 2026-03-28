@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Compila e roda o editor
+# Uso: ./scripts/run.sh [Debug|Release]
+set -e
+
+BUILD_TYPE=${1:-Debug}
+BUILD_DIR="build"
+
+if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
+    echo "==> Build não configurado. Rode './scripts/configure.sh' primeiro."
+    exit 1
+fi
+
+echo "==> Compilando editor..."
+cmake --build "$BUILD_DIR" --target editor --parallel "$(nproc)"
+
+echo "==> Iniciando editor..."
+"$BUILD_DIR/editor/editor"

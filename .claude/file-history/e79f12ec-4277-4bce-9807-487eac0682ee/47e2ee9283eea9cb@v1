@@ -1,0 +1,158 @@
+import { useEffect, useState } from "react";
+import type { SkillPick } from "../data/buildOrders";
+import { loadBlpDataUrl } from "../utils/glueButton";
+import SkillTooltip from "./SkillTooltip";
+
+const FALLBACK_ICON = "./buttons/command/BTNSkillz.blp";
+
+const SKILL_ICON_OVERRIDES: Record<string, string> = {
+  "Holy Light": "BTNHolyBolt",
+  Bladestorm: "BTNWhirlwind",
+  "Wind Walk": "BTNWindWalkOn",
+  "Devotion Aura": "BTNDevotion",
+  "Divine Shield": "BTNDivineIntervention",
+  Resurrection: "BTNResurrection",
+  "Storm Bolt": "BTNStormBolt",
+  "Thunder Clap": "BTNThunderClap",
+  Avatar: "BTNAvatar",
+  "Flame Strike": "BTNWallOfFire",
+  Banish: "BTNBanish",
+  Phoenix: "BTNMarkOfFire",
+  "Brilliance Aura": "BTNBrilliance",
+  "Water Elemental": "BTNSummonWaterElemental",
+  Blizzard: "BTNBlizzard",
+  "Mass Teleport": "BTNMassTeleport",
+  "Feral Spirit": "BTNSpiritWolf",
+  "Chain Lightning": "BTNChainLightning",
+  Earthquake: "BTNEarthquake",
+  "Healing Wave": "BTNHealingWave",
+  Hex: "BTNHex",
+  "Serpent Ward": "BTNSerpentWard",
+  "Big Bad Voodoo": "BTNBigBadVoodooSpell",
+  "War Stomp": "BTNWarStomp",
+  "Endurance Aura": "BTNCommand",
+  Reincarnation: "BTNReincarnation",
+  "Shadow Strike": "BTNShadowStrike",
+  "Fan of Knives": "BTNFanOfKnives",
+  Blink: "BTNBlink",
+  Vengeance: "BTNSpiritOfVengeance",
+  "Mana Burn": "BTNManaBurn",
+  Evasion: "BTNEvasion",
+  Metamorphosis: "BTNMetamorphosis",
+  "Critical Strike": "BTNCriticalStrike",
+  "Force of Nature": "BTNEnt",
+  "Entangling Roots": "BTNEntanglingRoots",
+  Tranquility: "BTNTranquility",
+  Scout: "BTNSentinel",
+  "Trueshot Aura": "BTNTrueShot",
+  Starfall: "BTNStarFall",
+  "Frost Nova": "BTNGlacier",
+  "Dark Ritual": "BTNDarkRitual",
+  "Frost Armor": "BTNFrostArmor",
+  "Death and Decay": "BTNDeathAndDecay",
+  Impale: "BTNImpale",
+  "Spiked Carapace": "BTNThornShield",
+  "Locust Swarm": "BTNLocustSwarm",
+  "Death Coil": "BTNDeathCoil",
+  "Unholy Aura": "BTNUnholyAura",
+  "Animate Dead": "BTNAnimateDead",
+  "Death Pact": "BTNDeathPact",
+};
+
+function skillToIconPath(skillName: string): string {
+  const override = SKILL_ICON_OVERRIDES[skillName];
+  if (override) return `./buttons/command/${override}.blp`;
+
+  const pascal = skillName.replace(/\s+/g, "");
+  return `./buttons/command/BTN${pascal}.blp`;
+}
+
+function resolveIconPath(pick: SkillPick): string {
+  if (pick.icon) {
+    if (pick.icon.endsWith(".blp")) return pick.icon;
+
+    return `./buttons/command/${pick.icon}.blp`;
+  }
+
+  return skillToIconPath(pick.skill);
+}
+
+function SkillIcon({ pick, isLast }: { pick: SkillPick; isLast: boolean }) {
+  const [iconUrl, setIconUrl] = useState("");
+  const [hovered, setHovered] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadIcon() {
+      try {
+        const path = resolveIconPath(pick);
+        const url = await loadBlpDataUrl(path);
+        if (!cancelled) setIconUrl(url);
+      } catch {
+        try {
+          const fallback = await loadBlpDataUrl(FALLBACK_ICON);
+          if (!cancelled) setIconUrl(fallback);
+        } catch {
+          if (!cancelled) setIconUrl("");
+        }
+      }
+    }
+
+    loadIcon();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pick.skill, pick.icon]);
+
+  return (
+    <div className="skill-pick">
+      <div
+        className="skill-pick-content"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        <div className="skill-pick-icon-wrapper">
+          <div className="skill-pick-level">Lv{pick.level}</div>
+
+          {iconUrl ? (
+            <img src={iconUrl} alt={pick.skill} className="skill-pick-icon" />
+          ) : (
+            <div className="skill-pick-icon skill-pick-icon--placeholder" />
+          )}
+        </div>
+
+        <div className="skill-pick-name">{pick.skill}</div>
+
+        {hovered && <SkillTooltip pick={pick} />}
+      </div>
+
+      {!isLast && <div className="skill-pick-connector" />}
+    </div>
+  );
+}
+
+interface Props {
+  skillOrder: SkillPick[];
+}
+
+export default function SkillOrderSection({ skillOrder }: Props) {
+  if (skillOrder.length === 0) return null;
+
+  return (
+    <section className="section-card skill-order-section">
+      <h4 className="skill-order-title">Skill Order</h4>
+
+      <div className="skill-order-row">
+        {skillOrder.map((pick, i) => (
+          <SkillIcon
+            key={`${pick.skill}-${i}`}
+            pick={pick}
+            isLast={i === skillOrder.length - 1}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}

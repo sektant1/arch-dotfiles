@@ -1,0 +1,189 @@
+/**
+ * BLP1 image decoder — reads Warcraft III .blp texture files
+ * and converts them to data URLs for use in <img> and CSS backgrounds.
+ *
+ * Supports JPEG-content BLP1 images (the most common WC3 format).
+ */
+
+enum BlpType {
+  BLP0 = 0,
+  BLP1 = 1,
+  BLP2 = 2,
+}
+
+enum BlpContent {
+  JPEG = 0,
+  Direct = 1,
+}
+
+interface BlpImage {
+  type: BlpType;
+  width: number;
+  height: number;
+  content: BlpContent;
+  alphaBits: number;
+  mipmaps: Array<{ offset: number; size: number }>;
+  data: ArrayBuffer;
+}
+
+function readString(view: DataView, offset: number): string {
+  let s = "";
+  for (let i = 0; i < 4; i++) {
+    s += String.fromCharCode(view.getUint8(offset + i));
+  }
+  return s;
+}
+
+function parseBlp(buffer: ArrayBuffer): BlpImage {
+  const view = new DataView(buffer);
+  const img: BlpImage = {
+    type: BlpType.BLP1,
+    width: 0,
+    height: 0,
+    content: BlpContent.JPEG,
+    alphaBits: 0,
+    mipmaps: [],
+    data: buffer,
+  };
+
+  const magic = readString(view, 0);
+  if (magic === "BLP0" || magic === "BLP2") {
+    throw new Error("BLP0/BLP2 not supported");
+  }
+  if (magic !== "BLP1") {
+    throw new Error("Not a BLP image");
+  }
+
+  img.content = view.getUint32(4, true) as BlpContent;
+  img.alphaBits = view.getUint32(8, true);
+  img.width = view.getUint32(12, true);
+  img.height = view.getUint32(16, true);
+
+  for (let i = 0; i < 16; i++) {
+    const offset = view.getUint32(28 + i * 4, true);
+    const size = view.getUint32(92 + i * 4, true);
+    if (size > 0) {
+      img.mipmaps.push({ offset, size });
+    }
+  }
+
+  return img;
+}
+
+function blpToImageData(img: BlpImage): ImageData | null {
+  if (img.content === BlpContent.JPEG && img.mipmaps.length > 0) {
+    // JPEG content: header + mipmap data
+    const headerSize = new DataView(img.data).getUint32(160, true);
+    const header = new Uint8Array(img.data, 164, headerSize);
+    const mip = img.mipmaps[0];
+    const mipData = new Uint8Array(img.data, mip.offset, mip.size);
+
+    // Combine JPEG header + mipmap body
+    const jpegData = new Uint8Array(headerSize + mip.size);
+    jpegData.set(header);
+    jpegData.set(mipData, headerSize);
+
+    return null; // For JPEG, we use blob URL approach instead
+  }
+
+  if (img.content === BlpContent.Direct) {
+    // Palette-based: 256-color palette at offset 156
+    const palette = new Uint32Array(img.data, 156, 256);
+    const mip = img.mipmaps[0];
+    if (!mip) return null;
+
+    const indices = new Uint8Array(img.data, mip.offset, mip.size);
+    const w = img.width;
+    const h = img.height;
+    const pixelCount = w * h;
+    const imageData = new ImageData(w, h);
+    const pixels = imageData.data;
+
+    for (let i = 0; i < pixelCount; i++) {
+      const color = palette[indices[i]];
+      pixels[i * 4] = color & 0xff;
+      pixels[i * 4 + 1] = (color >> 8) & 0xff;
+      pixels[i * 4 + 2] = (color >> 16) & 0xff;
+      pixels[i * 4 + 3] = 255;
+    }
+
+    // Handle alpha channel
+    if (img.alphaBits > 0) {
+      const alphaOffset = mip.offset + pixelCount;
+      const alphaData = new Uint8Array(img.data, alphaOffset);
+      if (img.alphaBits === 8) {
+        for (let i = 0; i < pixelCount; i++) {
+          pixels[i * 4 + 3] = alphaData[i];
+        }
+      } else if (img.alphaBits === 4) {
+        for (let i = 0; i < pixelCount; i++) {
+          const byte = alphaData[Math.floor(i / 2)];
+          const nibble = i % 2 === 0 ? byte & 0xf : (byte >> 4) & 0xf;
+          pixels[i * 4 + 3] = nibble * 17;
+        }
+      } else if (img.alphaBits === 1) {
+        for (let i = 0; i < pixelCount; i++) {
+          const byte = alphaData[Math.floor(i / 8)];
+          const bit = (byte >> (i % 8)) & 1;
+          pixels[i * 4 + 3] = bit * 255;
+        }
+      }
+    }
+
+    return imageData;
+  }
+
+  return null;
+}
+
+/**
+ * Load a BLP file from a URL and return a data URL.
+ * This is the primary way to use BLP textures in React components.
+ */
+export async function loadBlpDataUrl(url: string): Promise<string> {
+  const response = await fetch(url);
+  const buffer = await response.arrayBuffer();
+  const img = parseBlp(buffer);
+
+  if (img.content === BlpContent.JPEG) {
+    // For JPEG BLP: extract JPEG data and create blob URL
+    const headerSize = new DataView(buffer).getUint32(160, true);
+    const header = new Uint8Array(buffer, 164, headerSize);
+    const mip = img.mipmaps[0];
+    if (!mip) throw new Error("No mipmap data");
+
+    const mipData = new Uint8Array(buffer, mip.offset, mip.size);
+    const jpegData = new Uint8Array(headerSize + mip.size);
+    jpegData.set(header);
+    jpegData.set(mipData, headerSize);
+
+    const blob = new Blob([jpegData], { type: "image/jpeg" });
+    return URL.createObjectURL(blob);
+  }
+
+  // For palette-based BLP: render to canvas
+  const imageData = blpToImageData(img);
+  if (!imageData) throw new Error("Failed to decode BLP");
+
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas 2D context unavailable");
+  ctx.putImageData(imageData, 0, 0);
+
+  return canvas.toDataURL("image/png");
+}
+
+/**
+ * Load a BLP file and return it as an HTMLImageElement (for canvas drawing).
+ */
+export async function loadBlpImage(url: string): Promise<HTMLImageElement> {
+  const dataUrl = await loadBlpDataUrl(url);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}

@@ -1,0 +1,11 @@
+RTS Engine Documentation
+========================
+
+.. toctree::
+   :maxdepth: 2
+
+API Reference
+-------------
+
+.. doxygenindex::
+   :project: rts-engine

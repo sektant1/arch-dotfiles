@@ -1,0 +1,17 @@
+import { defineConfig } from 'vite';
+import solidPlugin from 'vite-plugin-solid';
+
+export default defineConfig({
+  plugins: [solidPlugin()],
+  resolve: {
+    alias: {
+      '@wc3-ui/core': new URL('packages/core/src/index.ts', import.meta.url).pathname,
+    },
+  },
+  server: {
+    port: 3000,
+  },
+  build: {
+    target: 'esnext',
+  },
+});

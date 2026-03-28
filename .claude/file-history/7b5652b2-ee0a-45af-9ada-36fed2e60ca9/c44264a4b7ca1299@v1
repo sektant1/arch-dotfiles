@@ -1,0 +1,54 @@
+interface Props {
+  getStartedPressed: boolean;
+  getStartedCanvasRef: React.RefObject<HTMLCanvasElement | null>;
+  installCanvasRef: React.RefObject<HTMLCanvasElement | null>;
+  onGetStartedMouseEnter: () => void;
+  onGetStartedMouseLeave: () => void;
+  onGetStartedMouseDown: () => void;
+  onGetStartedMouseUp: () => void;
+}
+
+export default function HeroSection(props: Props) {
+  const handleCopy = () => {
+    void navigator.clipboard.writeText("npm i wc3ui");
+  };
+
+  return (
+    <section className="hero-section">
+      <div className="hero-content">
+        <img src="/logo.avif" alt="WC3UI" className="hero-logo" />
+        <p className="hero-subtitle">
+          Build order guide for Warcraft 3 Practice.
+        </p>
+        <div className="hero-cta-row hero-cta-row--components">
+          <button
+            type="button"
+            className="esc-option-preview hero-get-started-btn"
+            onMouseEnter={props.onGetStartedMouseEnter}
+            onMouseLeave={props.onGetStartedMouseLeave}
+            onMouseDown={props.onGetStartedMouseDown}
+            onMouseUp={props.onGetStartedMouseUp}
+          >
+            <canvas
+              ref={props.getStartedCanvasRef}
+              className="esc-option-canvas"
+            />
+            <span
+              className="esc-option-label"
+              style={{
+                transform: props.getStartedPressed
+                  ? "translate(2px, 2px)"
+                  : "none",
+              }}
+            >
+              {"Get\u00A0"}
+              <span className="button-hotkey">S</span>tarted
+            </span>
+          </button>
+        </div>
+        <div className="hero-version-label">Patch 0.01</div>
+        <p className="social-proof">Created by noobs, for noobs :p</p>
+      </div>
+    </section>
+  );
+}

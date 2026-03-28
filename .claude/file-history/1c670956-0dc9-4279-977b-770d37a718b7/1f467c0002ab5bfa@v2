@@ -1,0 +1,12 @@
+#pragma once
+
+#include <rts/assets/texture_loader.hpp>
+
+namespace rts {
+
+class StbLoader : public ITextureLoader {
+public:
+    TextureData load(const std::string& path) override;
+};
+
+}  // namespace rts

@@ -1,0 +1,20 @@
+import { useRef } from 'react';
+import { useRendererRegistration } from '../hooks/useRendererRegistration';
+
+interface Props {
+  text?: string;
+}
+
+export default function EditBox({ text = '' }: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useRendererRegistration('editBoxes', () => ({ ref: () => ref.current! }));
+
+  return (
+    <div ref={ref} className="wc3-editbox">
+      <img className="eb-bg" src="" alt="" />
+      <img className="eb-border" src="" alt="" />
+      <div className="eb-text">{text}</div>
+    </div>
+  );
+}

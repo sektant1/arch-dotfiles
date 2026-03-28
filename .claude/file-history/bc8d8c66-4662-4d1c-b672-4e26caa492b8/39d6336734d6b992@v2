@@ -1,0 +1,36 @@
+import { useEffect, useRef } from 'react';
+import type { Renderer } from '../renderer/Renderer';
+
+interface Props {
+  label: string;
+  selected: boolean;
+  onSelect: () => void;
+  renderer: Renderer;
+}
+
+export default function RadioButton(props: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+  const visualRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    props.renderer.radios.push({
+      ref: () => ref.current!,
+      visualRef: () => visualRef.current!,
+      selected: () => props.selected,
+    });
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      className={`wc3-radio${props.selected ? ' selected' : ''}`}
+      onClick={props.onSelect}
+    >
+      <div ref={visualRef} className="rb-visual">
+        <img className="rb-bg" src="" alt="" />
+        <img className="rb-dot" src="" alt="" />
+      </div>
+      <span className="cb-label">{props.label}</span>
+    </div>
+  );
+}

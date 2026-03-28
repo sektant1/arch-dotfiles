@@ -1,0 +1,106 @@
+interface BuildStep {
+  order: number;
+  time: string;
+  instruction: string;
+  food: string;
+}
+
+export interface BuildOrder {
+  name: string;
+  race: string; // 'Human' | 'Orc' | 'NightElf' | 'Undead'
+  vs?: string; // matchup hint
+  description: string;
+  keyTiming?: { minute: number; note: string };
+  steps: BuildStep[];
+  note?: string;
+}
+
+export const BUILD_ORDERS_2026: BuildOrder[] = [
+  {
+    name: "Standard FS → Grunt / Shaman Push",
+    race: "Orc",
+    vs: "most matchups (meta backbone)",
+    description: "",
+    keyTiming: { minute: 3, note: "Expect tier 2 timing 3:00–3:10" },
+    steps: [
+      {
+        order: 1,
+        time: "0:03",
+        instruction: "Peon → Altar + Burrow",
+        food: "5/12",
+      },
+      {
+        order: 2,
+        time: "0:05",
+        instruction: "Queue 3 peons",
+        food: "6/12",
+      },
+    ],
+  },
+  {
+    name: "Fast Rifle → Caster Push",
+    race: "Human",
+    vs: "Undead / Orc",
+    description:
+      "Fast tier 2 rifles + breakers/priests – popular eco/aggression hybrid.",
+    keyTiming: { minute: 7, note: "Rifle timing around 7:00–8:00" },
+    steps: [
+      {
+        order: 1,
+        time: "0:03",
+        instruction: "Peon → Altar + Burrow",
+        food: "5/12",
+      },
+      {
+        order: 2,
+        time: "0:05",
+        instruction: "Queue 3 peons",
+        food: "6/12",
+      },
+    ],
+  },
+  {
+    name: "Warden → Dryad / Huntress Pressure",
+    race: "NightElf",
+    vs: "Human / Orc",
+    description:
+      "Early Warden harass into dryad archer push – classic NE aggression.",
+    keyTiming: { minute: 5, note: "Warden level 2–3 pressure window" },
+    steps: [
+      {
+        order: 1,
+        time: "0:03",
+        instruction: "Peon → Altar + Burrow",
+        food: "5/12",
+      },
+      {
+        order: 2,
+        time: "0:05",
+        instruction: "Queue 3 peons",
+        food: "6/12",
+      },
+    ],
+  },
+  {
+    name: "Standard Fiend → DK / Lich Push",
+    race: "Undead",
+    vs: "all (safe opener)",
+    description: "Reliable one-base play into tier 2 fiends + necros.",
+    keyTiming: { minute: 8, note: "Fiend mass + nova timing ~8:00" },
+    steps: [
+      {
+        order: 1,
+        time: "0:03",
+        instruction: "Peon → Altar + Burrow",
+        food: "5/12",
+      },
+      {
+        order: 2,
+        time: "0:05",
+        instruction: "Queue 3 peons",
+        food: "6/12",
+      },
+    ],
+  },
+  // Add 2–5 more per race as you update from wc3.no, Grubby videos, etc.
+];

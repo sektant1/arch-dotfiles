@@ -1,0 +1,21 @@
+from conan import ConanFile
+from conan.tools.cmake import cmake_layout
+
+
+class RtsEngineConan(ConanFile):
+    name = "rts-engine"
+    version = "0.1.0"
+    settings = "os", "compiler", "build_type", "arch"
+    generators = "CMakeDeps", "CMakeToolchain"
+
+    def requirements(self):
+        self.requires("glfw/3.4")
+        self.requires("glm/1.0.1")
+        self.requires("spdlog/1.15.1")
+        self.requires("stb/cci.20240531")
+        self.requires("gtest/1.15.0")
+        self.requires("imgui/1.91.8-docking")
+        self.requires("tinygltf/2.9.7")
+
+    def layout(self):
+        cmake_layout(self)

@@ -1,0 +1,55 @@
+import React, { useState } from "react";
+import { useBlpTexture } from "../hooks/useBlpTexture";
+import { CHECKBOX_ASSETS, getCheckboxDepressed } from "../utils/assets";
+import type { Race } from "../types";
+
+export interface CheckboxProps {
+  checked: boolean;
+  onChange?: (checked: boolean) => void;
+  disabled?: boolean;
+  race?: Race;
+  className?: string;
+}
+
+/**
+ * In-game option toggle checkbox.
+ * The pressed background is race-specific while the check mark and base are shared.
+ */
+export function Checkbox({
+  checked,
+  onChange,
+  disabled = false,
+  race = "Human",
+  className,
+}: CheckboxProps) {
+  const [pressed, setPressed] = useState(false);
+
+  const bgUrl = useBlpTexture(
+    disabled ? CHECKBOX_ASSETS.bgDisabled : CHECKBOX_ASSETS.bg,
+  );
+  const checkUrl = useBlpTexture(CHECKBOX_ASSETS.check);
+  const depressedUrl = useBlpTexture(getCheckboxDepressed(race));
+
+  const handleClick = () => {
+    if (!disabled) onChange?.(!checked);
+  };
+
+  return (
+    <button
+      type="button"
+      className={`esc-checkbox ${className ?? ""}`}
+      role="checkbox"
+      aria-checked={checked}
+      onClick={handleClick}
+      disabled={disabled}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setPressed(false)}
+      style={disabled ? { cursor: "default" } : undefined}
+    >
+      {bgUrl && <img src={bgUrl} alt="" />}
+      {pressed && depressedUrl && <img src={depressedUrl} alt="" />}
+      {checked && checkUrl && <img src={checkUrl} alt="" />}
+    </button>
+  );
+}

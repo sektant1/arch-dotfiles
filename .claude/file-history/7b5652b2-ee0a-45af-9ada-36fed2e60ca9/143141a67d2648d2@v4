@@ -1,0 +1,754 @@
+# EXAMPLE.md — How to Add Sections to This App
+
+This file shows concrete, copy-paste examples for extending the app with new sections and state.
+
+---
+
+## Example 1: Minimal Static Section
+
+The simplest possible section — no props, no state, just content.
+
+**`src/components/sections/HelloSection.tsx`**
+```tsx
+export default function HelloSection() {
+  return (
+    <section className="section-card hello-section">
+      <h3>Hello World</h3>
+      <p>This is a new section.</p>
+    </section>
+  );
+}
+```
+
+**Register it in `src/App.tsx`** — add the import at the top with the other section imports:
+```tsx
+import HelloSection from './components/sections/HelloSection';
+```
+
+Then add it into the render tree. Find the `tab-content--showcase-flow` div and add your wrapper:
+```tsx
+<div className="tab-content tab-content--showcase-flow">
+  {/* Add your section here, before or after existing ones */}
+  <div className="showcase-flow-item showcase-flow-item--hello">
+    <HelloSection />
+  </div>
+
+  <div className="showcase-flow-item showcase-flow-item--hero">
+    <HeroSection ... />
+  </div>
+  {/* ... rest of sections */}
+</div>
+```
+
+**Add styles in `src/global.css`:**
+```css
+.hello-section {
+  padding: 2rem;
+}
+
+.hello-section h3 {
+  color: #fcd312; /* WC3 gold */
+  font-family: 'Friz Quadrata', serif;
+  margin-bottom: 1rem;
+}
+```
+
+---
+
+## Example 2: Section with Local State
+
+A section that manages its own UI state with `useState`.
+
+**`src/components/sections/CounterSection.tsx`**
+```tsx
+interface Props {
+  count: number;
+  onIncrement: () => void;
+  counterPressed: boolean;
+  counterCanvasRef: React.RefObject<HTMLCanvasElement | null>;
+  onCounterMouseEnter: () => void;
+  onCounterMouseLeave: () => void;
+  onCounterMouseDown: () => void;
+  onCounterMouseUp: () => void;
+}
+export default function CounterSection(props: Props) {
+  return (
+    <section className="section-card counter-section">
+      <h3>Counter</h3>
+      <p className="counter-value">{props.count}</p>
+      <div className="counter-buttons">
+        <button
+          type="button"
+          className="esc-option-preview counter-btn"
+          onMouseEnter={props.onCounterMouseEnter}
+          onMouseLeave={props.onCounterMouseLeave}
+          onMouseDown={() => {
+            props.onCounterMouseDown();
+            props.onIncrement();
+          }}
+          onMouseUp={props.onCounterMouseUp}
+        >
+          <canvas ref={props.counterCanvasRef} className="esc-option-canvas" />
+          <span
+            className="esc-option-label"
+            style={{
+              transform: props.counterPressed ? "translate(2px, 2px)" : "none",
+            }}
+          >
+            +1
+          </span>
+        </button>
+      </div>
+    </section>
+  );
+}
+```
+and add this at:
+**`src/App.tsx`**
+```tsx
+
+// other app code...
+
+import CounterSection from "./components/sections/CounterSection";
+
+// other app code...
+
+const [counterHovered, setCounterHovered] = useState(false);
+const [counterPressed, setCounterPressed] = useState(false);
+const [counterCount, setCounterCount] = useState(0);
+
+// other app code...
+
+const handleIncrement = () => {
+    setCounterCount(prev => prev + 1);
+  };
+
+// other app code...
+
+ // Effect: count canvas
+  useEffect(() => {
+    const canvas = counterCanvasRef.current;
+    const bgUrlVal = counterPressed ? escBgDownUrl : escBgUrl;
+    const borderUrlVal = counterPressed
+      ? escBorderDownUrl
+      : escBorderUrl;
+    const hoverActive = counterHovered && !counterPressed;
+    const hoverUrlVal = escHoverUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      hoverUrlVal ? loadDataUrlImage(hoverUrlVal) : Promise.resolve(null),
+    ])
+      .then(([bgImg, borderImg, hoverImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(
+          canvas,
+          bgImg,
+          borderImg,
+          hoverImg,
+          hoverActive,
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    counterPressed,
+    counterHovered,
+    escBgUrl,
+    escBgDownUrl,
+    escBorderUrl,
+    escBorderDownUrl,
+    escHoverUrl,
+  ]);
+
+// other app code...
+
+  <div className="showcase-flow-item showcase-flow-item--counter">
+    <CounterSection 
+      count={counterCount}                     // ← new
+      onIncrement={handleIncrement}
+      counterPressed={counterPressed}
+      counterCanvasRef={counterCanvasRef}
+      onCounterMouseEnter={() => setCounterHovered(true)}
+      onCounterMouseLeave={() => {
+        setCounterHovered(false);
+        setCounterPressed(false);
+      }}
+      onCounterMouseDown={() => {
+        setCounterPressed(true);
+      }}
+      onCounterMouseUp={() => setCounterPressed(false)}
+    />
+  </div>
+```
+
+> The `esc-option-preview` and `esc-option-label` classes are the WC3-styled button from HeroSection. They give you the gold frame button look for free.
+
+---
+
+## Example 3: Global State Store
+
+When state needs to be shared between sections or accessed outside React, use the external store pattern.
+
+**`src/state/counter.ts`**
+```ts
+import { createExternalStore } from './createStore';
+
+// --- Stores ---
+const countStore = createExternalStore<number>(0);
+
+// --- Non-reactive getters (use anywhere) ---
+export const getCount = countStore.get;
+
+// --- Setters (use anywhere) ---
+export const setCount = countStore.set;
+
+// --- Helper actions ---
+export function increment() {
+  countStore.set(prev => prev + 1);
+}
+export function decrement() {
+  countStore.set(prev => prev - 1);
+}
+export function reset() {
+  countStore.set(0);
+}
+
+// --- Hooks (use in React components only) ---
+export const useCount = countStore.useValue;
+```
+
+**Using the store in a section:**
+```tsx
+import { useCount, increment, decrement, reset } from '../../state/counter';
+
+export default function CounterSection() {
+  const count = useCount(); // reactive — re-renders when count changes
+
+  return (
+    <section className="section-card counter-section">
+      <h3>Count: {count}</h3>
+      <button type="button" onClick={decrement}>−</button>
+      <button type="button" onClick={increment}>+</button>
+      <button type="button" onClick={reset}>Reset</button>
+    </section>
+  );
+}
+```
+
+**Using the store outside React** (e.g., from a timer callback):
+```ts
+import { getCount, setCount } from './state/counter';
+
+setInterval(() => {
+  const current = getCount(); // read without subscribing
+  setCount(current + 1);      // write — triggers re-renders in subscribed components
+}, 1000);
+```
+
+---
+
+## Example 4: Race-Aware Section
+
+A section that reads the active race and changes its content accordingly.
+
+**`src/components/sections/RaceInfoSection.tsx`**
+```tsx
+import { useCurrentRace } from '../../state/race';
+
+const RACE_DESCRIPTIONS: Record<string, string> = {
+  Human:    'The Alliance. Builds towers, trains Footmen, expands fast.',
+  Orc:      'The Horde. Blade Master rushes and Grunt armies.',
+  NightElf: 'The night elves. Moon Wells, Wisps, and Demon Hunters.',
+  Undead:   'The Scourge. Death Knights, Ghouls, and Necromancers.',
+};
+
+export default function RaceInfoSection() {
+  const race = useCurrentRace(); // re-renders whenever the user switches race
+
+  return (
+    <section className="section-card race-info-section">
+      <h3>{race}</h3>
+      <p>{RACE_DESCRIPTIONS[race]}</p>
+    </section>
+  );
+}
+```
+
+> The race switches when the user clicks a faction tab in the top HUD. Your section automatically re-renders.
+
+---
+
+## Example 5: Timer with setInterval
+
+A section with a running timer — the pattern for the build order timer.
+
+**`src/state/timer.ts`**
+```ts
+import { createExternalStore } from './createStore';
+
+const runningStore = createExternalStore<boolean>(false);
+const elapsedStore = createExternalStore<number>(0); // seconds
+
+let intervalId: ReturnType<typeof setInterval> | null = null;
+
+export function startTimer() {
+  if (runningStore.get()) return; // already running
+  runningStore.set(true);
+  intervalId = setInterval(() => {
+    elapsedStore.set(prev => prev + 1);
+  }, 1000);
+}
+
+export function pauseTimer() {
+  if (intervalId !== null) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+  runningStore.set(false);
+}
+
+export function resetTimer() {
+  pauseTimer();
+  elapsedStore.set(0);
+}
+
+export const useTimerRunning = runningStore.useValue;
+export const useElapsedSeconds = elapsedStore.useValue;
+export const getElapsedSeconds = elapsedStore.get;
+```
+
+**`src/components/sections/TimerSection.tsx`**
+```tsx
+import {
+  useTimerRunning,
+  useElapsedSeconds,
+  startTimer,
+  pauseTimer,
+  resetTimer,
+} from '../../state/timer';
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+export default function TimerSection() {
+  const running = useTimerRunning();
+  const elapsed = useElapsedSeconds();
+
+  return (
+    <section className="section-card timer-section">
+      <h3>Timer</h3>
+      <div className="timer-display">{formatTime(elapsed)}</div>
+      <div className="timer-controls">
+        {running ? (
+          <button type="button" className="esc-option-preview" onClick={pauseTimer}>
+            <span className="esc-option-label">Pause</span>
+          </button>
+        ) : (
+          <button type="button" className="esc-option-preview" onClick={startTimer}>
+            <span className="esc-option-label">Start</span>
+          </button>
+        )}
+        <button type="button" className="esc-option-preview" onClick={resetTimer}>
+          <span className="esc-option-label">Reset</span>
+        </button>
+      </div>
+    </section>
+  );
+}
+```
+
+**CSS in `src/global.css`:**
+```css
+.timer-section {
+  text-align: center;
+  padding: 2rem;
+}
+
+.timer-display {
+  font-family: 'Friz Quadrata', serif;
+  font-size: 4rem;
+  color: #fcd312;
+  margin: 1rem 0;
+  letter-spacing: 0.05em;
+}
+
+.timer-controls {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+```
+
+---
+
+## Example 6: Adding a New Page
+
+Pages are full-screen views that replace the showcase flow. They are rendered inside the same viewport and top HUD, but the showcase sections are hidden while a page is active.
+
+### How it works
+
+- **`src/state/page.ts`** — a store holding the active page ID (`"showcase"` = default showcase flow)
+- **`src/pages/index.ts`** — a registry mapping page IDs to their React components
+- **`src/App.tsx`** — renders the page from the registry, or falls back to the showcase flow
+
+### Step 1: Create the page component
+
+**`src/pages/MyPage.tsx`**
+```tsx
+import GlueSmallButton from "../components/GlueSmallButton";
+import { setPage } from "../state/page";
+
+export default function MyPage() {
+  return (
+    <div className="tab-content tab-content--page">
+      <div className="page-nav">
+        <GlueSmallButton onClick={() => setPage("showcase")}>
+          Back
+        </GlueSmallButton>
+      </div>
+      <section className="section-card">
+        <h3>My Custom Page</h3>
+        <p>This is a full-screen page that replaces the showcase.</p>
+      </section>
+    </div>
+  );
+}
+```
+
+- Use `tab-content tab-content--page` for proper max-width and padding
+- Use `page-nav` for a back-button row at the top
+- Add any sections or custom content below
+
+### Step 2: Register the page
+
+**`src/pages/index.ts`**
+```ts
+import type { ComponentType } from "react";
+import BuildOrderPage from "./BuildOrderPage";
+import MyPage from "./MyPage";
+
+export const PAGE_REGISTRY: Record<string, ComponentType> = {
+  "build-orders": BuildOrderPage,
+  "my-page": MyPage,  // ← add your page here
+};
+```
+
+That's it — the page ID `"my-page"` now maps to your component. `App.tsx` looks up the registry automatically.
+
+### Step 3: Navigate to the page
+
+From anywhere in the app (components, callbacks, event handlers):
+
+```tsx
+import { setPage } from "../state/page";
+
+// Navigate to your page
+setPage("my-page");
+
+// Go back to the showcase
+setPage("showcase");
+```
+
+You can use any WC3-styled button to trigger navigation:
+
+```tsx
+import GlueSmallButton from "../components/GlueSmallButton";
+import { setPage } from "../state/page";
+
+<GlueSmallButton onClick={() => setPage("my-page")}>
+  Open My Page
+</GlueSmallButton>
+```
+
+### Step 4 (optional): Read the active page
+
+To conditionally render UI based on the current page:
+
+```tsx
+import { usePage } from "../state/page";
+
+function MyComponent() {
+  const page = usePage(); // reactive — re-renders on page change
+  return <span>Current page: {page}</span>;
+}
+```
+
+### Existing pages
+
+| Page ID | Component | Description |
+|---|---|---|
+| `"showcase"` | *(built-in)* | Default showcase flow with all sections |
+| `"build-orders"` | `BuildOrderPage` | Full-screen build order tracker |
+
+### Key files
+
+| File | Purpose |
+|---|---|
+| `src/state/page.ts` | Page store — `setPage()`, `usePage()`, `currentPage()` |
+| `src/pages/index.ts` | Page registry — maps IDs to components |
+| `src/pages/BuildOrderPage.tsx` | Example full page |
+
+---
+
+## Example 7: Adding Build Orders
+
+Builds can be added in two ways: hardcoded in the data file, or imported at runtime via JSON.
+
+### Method 1: Add to the data file
+
+Edit `src/data/buildOrders.ts` and add an entry to the `BUILD_ORDERS_2026` array:
+
+```ts
+{
+  name: "My Custom Build",
+  race: "Orc",                        // "Human" | "Orc" | "NightElf" | "Undead"
+  vs: "all matchups",                  // optional — matchup description
+  difficulty: "Beginner",              // optional — "Beginner" | "Intermediate" | "Advanced"
+  description: "A short description of the strategy.",
+  note: "Optional tip shown in italics.",  // optional
+  keyTiming: { minute: 3, note: "Tier 2 should be done" },  // optional
+  steps: [
+    { order: 1, time: "0:00", instruction: "Rally 4 workers to gold", food: "5/10" },
+    { order: 2, time: "0:15", instruction: "Train worker → build Altar",  food: "5/10" },
+    // ... more steps
+  ],
+  skillOrder: [                        // optional — hero skill leveling
+    { level: 1, skill: "Wind Walk", icon: "/buttons/command/BTNWindWalkOn.blp" },
+    { level: 2, skill: "Critical Strike", icon: "/buttons/command/BTNCriticalStrike.blp" },
+    // icon is optional — omit it to use the generic fallback icon (BTNSkillz.blp)
+  ],
+},
+```
+
+### Method 2: Import via JSON at runtime
+
+Click the **Import** button in the build orders toolbar and select a `.json` file. The file should contain an array of build objects (or a single object):
+
+```json
+[
+  {
+    "name": "Tauren Chieftain Rush",
+    "race": "Orc",
+    "vs": "Night Elf",
+    "difficulty": "Advanced",
+    "description": "Fast TC with War Stomp into grunts.",
+    "note": "War Stomp is devastating against clustered archers.",
+    "keyTiming": { "minute": 3, "note": "TC level 2 timing" },
+    "steps": [
+      { "order": 1, "time": "0:00", "instruction": "Rally 4 peons to gold", "food": "5/10" },
+      { "order": 2, "time": "0:01", "instruction": "5th peon → build Altar", "food": "5/10" },
+      { "order": 3, "time": "0:15", "instruction": "Train peon → gold", "food": "5/10" },
+      { "order": 4, "time": "0:35", "instruction": "Build Burrow", "food": "6/10" },
+      { "order": 5, "time": "1:00", "instruction": "Build Barracks", "food": "7/10" },
+      { "order": 6, "time": "1:20", "instruction": "TC spawns — creep with War Stomp", "food": "8/10" },
+      { "order": 7, "time": "2:00", "instruction": "Train grunts, push at level 2", "food": "12/20" }
+    ],
+    "skillOrder": [
+      { "level": 1, "skill": "War Stomp" },
+      { "level": 2, "skill": "Endurance Aura" },
+      { "level": 3, "skill": "War Stomp" },
+      { "level": 4, "skill": "Endurance Aura" },
+      { "level": 5, "skill": "War Stomp" },
+      { "level": 6, "skill": "Reincarnation" }
+    ]
+  }
+]
+```
+
+### JSON validation rules
+
+The importer (`src/state/buildOrders.ts`) validates each build. A build is **rejected** if:
+
+- `name` is missing or not a string
+- `race` is not one of `"Human"`, `"Orc"`, `"NightElf"`, `"Undead"`
+- `steps` is missing, not an array, or empty
+- Any step is missing `order` (number), `time` (string), `instruction` (string), or `food` (string)
+
+Optional fields (`vs`, `difficulty`, `description`, `note`, `keyTiming`, `skillOrder`) are silently ignored if malformed.
+
+### Full build order schema
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | Build name shown in the dropdown |
+| `race` | string | yes | One of: Human, Orc, NightElf, Undead |
+| `vs` | string | no | Matchup (e.g. "vs Undead") |
+| `difficulty` | string | no | Beginner, Intermediate, or Advanced |
+| `description` | string | no | Strategy summary |
+| `note` | string | no | Italic tip text |
+| `keyTiming` | object | no | `{ minute: number, note: string }` |
+| `steps` | array | yes | `[{ order, time, instruction, food }]` |
+| `skillOrder` | array | no | `[{ level, skill, icon? }]` |
+
+---
+
+## Example 8: Adding Icons (BLP Ability/Command Icons)
+
+WC3 uses `.blp` format for all icons. The app decodes them at runtime via `loadBlpDataUrl()`.
+
+### Where icons live
+
+```
+public/buttons/command/     ← ability & command card icons (BTN*.blp)
+public/buttons/esc/         ← ESC menu button textures (per race)
+public/buttons/glue/        ← login/menu screen button textures
+public/buttons/scrollbar/   ← scrollbar textures
+public/buttons/slider/      ← slider knob textures (per race)
+public/console-buttons/     ← race-specific console buttons
+```
+
+### Adding a new ability icon
+
+1. **Get the BLP file** — extract it from WC3 game data (e.g. via CASC/MPQ tools) or find it online. Icon filenames follow the WC3 convention: `BTN<Name>.blp` (enabled) and `DISBTN<Name>.blp` (disabled/greyed).
+
+2. **Place it in `public/buttons/command/`**:
+```
+public/buttons/command/BTNBlizzard.blp
+public/buttons/command/DISBTNBlizzard.blp   ← optional disabled version
+```
+
+3. **Use it in code** — load via `loadBlpDataUrl()`:
+```tsx
+import { useEffect, useState } from "react";
+import { loadBlpDataUrl } from "../utils/glueButton";
+
+function MyIcon() {
+  const [url, setUrl] = useState("");
+
+  useEffect(() => {
+    void loadBlpDataUrl("/buttons/command/BTNBlizzard.blp").then(setUrl);
+  }, []);
+
+  return url ? <img src={url} alt="Blizzard" className="skill-pick-icon" /> : null;
+}
+```
+
+4. **Use it in build order skill data** — reference the path in `src/data/buildOrders.ts`:
+```ts
+skillOrder: [
+  { level: 1, skill: "Blizzard", icon: "/buttons/command/BTNBlizzard.blp" },
+  { level: 2, skill: "Water Elemental" },  // no icon → uses fallback (BTNSkillz.blp)
+],
+```
+
+### Currently available icons
+
+| Icon | Path |
+|---|---|
+| Holy Bolt | `/buttons/command/BTNHolyBolt.blp` |
+| Wind Walk | `/buttons/command/BTNWindWalkOn.blp` |
+| Mirror Image | `/buttons/command/BTNMirrorImage.blp` |
+| Critical Strike | `/buttons/command/BTNCriticalStrike.blp` |
+| Bladestorm | `/buttons/command/BTNWhirlwind.blp` |
+| Skillz (generic) | `/buttons/command/BTNSkillz.blp` |
+| Attack | `/buttons/command/BTNAttack.blp` |
+| Move | `/buttons/command/BTNMove.blp` |
+| Stop | `/buttons/command/BTNStop.blp` |
+| Hold Position | `/buttons/command/BTNHoldPosition.blp` |
+| Patrol | `/buttons/command/BTNPatrol.blp` |
+| Peon | `/buttons/command/BTNPeon.blp` |
+
+> To add more, drop the `.blp` file in `public/buttons/command/` and reference the path. No code changes needed — `loadBlpDataUrl()` handles decoding and caching.
+
+---
+
+## Example 9: Adding Hero Portrait Models (MDX/BLP)
+
+Hero portraits use WC3 `.mdx` 3D models rendered via WebGL, with `.blp` textures.
+
+### Where models live
+
+```
+public/models/hero-portrait/<Race>/
+  Hero<Name>_portrait.mdx        ← 3D model
+  Hero<Name>.blp                 ← main texture
+  TeamColor00.blp                ← shared team color
+  TeamGlow00.blp                 ← shared team glow
+```
+
+### Current heroes
+
+| Race | Hero | Model file |
+|---|---|---|
+| Human | Archmage | `Human/HeroArchMage_portrait.mdx` |
+| Orc | Blademaster | `Orc/HeroBladeMaster_portrait.mdx` |
+| NightElf | Demon Hunter | `NightElf/HeroDemonHunter_Portrait.mdx` |
+| Undead | Death Knight | `Undead/HeroDeathKnight_portrait.mdx` |
+
+### Adding a new hero model
+
+1. **Extract the model and textures** from WC3 game data:
+   - The `_portrait.mdx` variant (not the full unit model)
+   - All referenced `.blp` textures
+
+2. **Place files in** `public/models/hero-portrait/<Race>/`:
+```
+public/models/hero-portrait/Orc/HeroFarSeer_portrait.mdx
+public/models/hero-portrait/Orc/HeroFarSeer.blp
+```
+
+3. **Update `HeroPortraitModel.tsx`** — add the model path to the `MODEL_PATHS` map:
+```tsx
+// In src/components/HeroPortraitModel.tsx
+const MODEL_PATHS: Record<Race, string> = {
+  Human: "/models/hero-portrait/Human/HeroArchMage_portrait.mdx",
+  Orc: "/models/hero-portrait/Orc/HeroFarSeer_portrait.mdx",  // ← changed
+  NightElf: "/models/hero-portrait/NightElf/HeroDemonHunter_Portrait.mdx",
+  Undead: "/models/hero-portrait/Undead/HeroDeathKnight_portrait.mdx",
+};
+```
+
+### Portrait mask and frame assets
+
+Each race has portrait mask and frame PNG files used for the circular/shaped portrait window:
+
+```
+public/console/<Race>/<Race>UIPortraitWindowMask.png   ← mask shape
+public/console/<Race>/<Race>UIPortraitFrameCrop.png    ← frame overlay
+```
+
+These are standard PNGs (not BLP) and are used with CSS `mask-image` for the portrait window shape.
+
+### Key utilities
+
+| Function | Import from | Purpose |
+|---|---|---|
+| `loadBlpDataUrl(path)` | `../utils/glueButton` | Decode BLP → PNG data URL (cached) |
+| `loadDataUrlImage(url)` | `../utils/glueButton` | Data URL → HTMLImageElement (cached) |
+| `drawTemplateNineSliceToCanvas()` | `../utils/glueButton` | 9-slice render for tracks/backgrounds |
+| `drawGlueNineSliceToCanvas()` | `../utils/glueButton` | 9-slice render for buttons |
+| `composeBorderImageFromAtlas()` | `../utils/glueButton` | Atlas → CSS border-image data URL |
+
+---
+
+## Quick Reference
+
+| What you want | Where to look |
+|---|---|
+| Simplest section template | `src/components/sections/FAQSection.tsx` |
+| Store with multiple values | `src/state/resources.ts` |
+| Single-value store | `src/state/race.ts` |
+| Store factory | `src/state/createStore.ts` |
+| Where sections are mounted | `src/App.tsx` ~line 3736 |
+| Page store | `src/state/page.ts` |
+| Page registry | `src/pages/index.ts` |
+| Example page | `src/pages/BuildOrderPage.tsx` |
+| Ability icons | `public/buttons/command/BTN*.blp` |
+| Hero portrait models | `public/models/hero-portrait/` |
+| BLP loader utility | `src/utils/glueButton.ts` |
+| Hero portrait component | `src/components/HeroPortraitModel.tsx` |
+| Skill order component | `src/components/SkillOrderSection.tsx` |
+| Build order data | `src/data/buildOrders.ts` |
+| All WC3 CSS variables and classes | `src/global.css` |
+| Race type definition | `src/lib/types.ts` |

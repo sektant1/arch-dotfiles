@@ -1,0 +1,153 @@
+import type { Race, TextureEntry } from '../types';
+import { RACE_PREFIXES, RACES } from '../data/races';
+import type { TextureManager } from './TextureManager';
+
+export interface RaceTextures {
+  topTile1: TextureEntry;
+  topTile2: TextureEntry;
+  topTile3: TextureEntry;
+  topTile4: TextureEntry;
+  timeSky: TextureEntry;
+  timeFrame: TextureEntry;
+  hudTile1: TextureEntry;
+  hudTile2: TextureEntry;
+  hudTile3: TextureEntry;
+  hudTile4: TextureEntry;
+  upperBtn: TextureEntry;
+  gold: TextureEntry;
+  lumber: TextureEntry;
+  supply: TextureEntry;
+  escBtnBg: TextureEntry;
+  escBtnBorder: TextureEntry;
+  escBtnHighlight: TextureEntry;
+  escMenuBg: TextureEntry;
+  escMenuBorder: TextureEntry;
+  cbBg: TextureEntry;
+  cbCheck: TextureEntry;
+  cbDepressed: TextureEntry;
+  rbBg: TextureEntry;
+  rbDot: TextureEntry;
+  sliderBg: TextureEntry;
+  sliderBorder: TextureEntry;
+  sliderKnob: TextureEntry;
+  ebBg: TextureEntry;
+  ebBorder: TextureEntry;
+  tooltipBg: TextureEntry;
+  healthFill: TextureEntry;
+  manaFill: TextureEntry;
+  xpFill: TextureEntry;
+  xpBorder: TextureEntry;
+  buildFill: TextureEntry;
+  buildBorder: TextureEntry;
+  loadBg: TextureEntry;
+  loadFill: TextureEntry;
+  loadBorder: TextureEntry;
+  loadGlass: TextureEntry;
+  glueBg: TextureEntry;
+  glueBorder: TextureEntry;
+  glueBgDown: TextureEntry;
+  glueBorderDown: TextureEntry;
+  glueBgDisabled: TextureEntry;
+  glueBorderDisabled: TextureEntry;
+  glueHighlight: TextureEntry;
+  glueBorderedBorder: TextureEntry;
+  glueBorderedBorderDown: TextureEntry;
+  glueMenuFrame: TextureEntry;
+  cursor: TextureEntry;
+  // Tiled versions
+  escBtnBgTiled: TextureEntry;
+  escMenuBgTiled: TextureEntry;
+  tooltipBgTiled: TextureEntry;
+  glueBgTiled: TextureEntry;
+  glueBgDownTiled: TextureEntry;
+  glueBgDisabledTiled: TextureEntry;
+  [key: string]: TextureEntry;
+}
+
+export function raceTexturePaths(race: Race): Record<string, string> {
+  const rp = RACE_PREFIXES[race];
+  const c = `war3/Console/${race}/`;
+  const e = `war3/Widgets/EscMenu/${race}/`;
+  const eH = `war3/Widgets/EscMenu/Human/`;
+
+  return {
+    topTile1: c + rp.tile + 'UITile01.png',
+    topTile2: c + rp.tile + 'UITile02.png',
+    topTile3: c + rp.tile + 'UITile03.png',
+    topTile4: c + rp.tile + 'UITile04.png',
+    timeSky: c + rp.tile + 'UITile-TimeIndicator.png',
+    timeFrame: c + rp.tile + 'UITile-TimeIndicatorFrame.png',
+    hudTile1: c + rp.tile + 'UITile01.png',
+    hudTile2: c + rp.tile + 'UITile02.png',
+    hudTile3: c + rp.tile + 'UITile03.png',
+    hudTile4: c + rp.tile + 'UITile04.png',
+    upperBtn: `war3/Widgets/Console/${race}/${rp.lower}-console-buttonstates2.png`,
+    gold: 'war3/Feedback/Resources/ResourceGold.png',
+    lumber: 'war3/Feedback/Resources/ResourceLumber.png',
+    supply: `war3/Feedback/Resources/Resource${race}.png`,
+    escBtnBg: (race === 'Human')
+      ? eH + 'human-options-menu-background.png'
+      : e + rp.esc + '-options-button-background.png',
+    escBtnBorder: eH + 'human-options-button-border-up.png',
+    escBtnHighlight: e + rp.esc + '-options-button-highlight.png',
+    escMenuBg: e + rp.esc + '-options-menu-background.png',
+    escMenuBorder: e + rp.esc + '-options-menu-border.png',
+    cbBg: eH + 'checkbox-background.png',
+    cbCheck: (race === 'Human') ? eH + 'checkbox-check.png'
+           : (race === 'Undead') ? 'war3/Widgets/EscMenu/Undead/undead-checkbox-check.png'
+           : 'war3/Widgets/Glues/GlueScreen-Checkbox-Check.png',
+    cbDepressed: (race === 'Human') ? eH + 'checkbox-depressed.png'
+               : e + rp.esc + '-checkbox-depressed.png',
+    rbBg: eH + 'radiobutton-background.png',
+    rbDot: eH + 'radiobutton-button.png',
+    sliderBg: eH + 'slider-background.png',
+    sliderBorder: eH + 'slider-border.png',
+    sliderKnob: (race === 'Human') ? eH + 'slider-knob.png' : e + rp.esc + '-slider-knob.png',
+    ebBg: eH + 'editbox-background.png',
+    ebBorder: eH + 'editbox-border.png',
+    tooltipBg: 'war3/Widgets/ToolTips/Human/human-tooltip-background.png',
+    healthFill: `war3/Feedback/HPBarConsole/${rp.lower}-healthbar-fill.png`,
+    manaFill: `war3/Feedback/ManaBarConsole/${rp.lower}-manabar-fill.png`,
+    xpFill: `war3/Feedback/XpBar/${rp.lower}-bigbar-fill.png`,
+    xpBorder: `war3/Feedback/XpBar/${rp.lower}-xpbar-border.png`,
+    buildFill: `war3/Feedback/BuildProgressBar/${rp.lower}-buildprogressbar-fill.png`,
+    buildBorder: `war3/Feedback/BuildProgressBar/${rp.lower}-buildprogressbar-border.png`,
+    loadBg: 'war3/Glues/Loading/LoadBar/Loading-BarBackground.png',
+    loadFill: 'war3/Glues/Loading/LoadBar/Loading-BarFill.png',
+    loadBorder: 'war3/Glues/Loading/LoadBar/Loading-BarBorder.png',
+    loadGlass: 'war3/Glues/Loading/LoadBar/Loading-BarGlass.png',
+    glueBg: 'war3/Widgets/Glues/GlueScreen-Button1-BackdropBackground.png',
+    glueBorder: 'war3/Widgets/Glues/GlueScreen-Button1-BackdropBorder.png',
+    glueBgDown: 'war3/Widgets/Glues/GlueScreen-Button1-BackdropBackground-Down.png',
+    glueBorderDown: 'war3/Widgets/Glues/GlueScreen-Button1-BackdropBorder-Down.png',
+    glueBgDisabled: 'war3/Widgets/Glues/GlueScreen-Button1-BackdropBackground-Disabled.png',
+    glueBorderDisabled: 'war3/Widgets/Glues/GlueScreen-Button1-BackdropBorder-Disabled.png',
+    glueHighlight: 'war3/Widgets/BattleNet/bnet-button01-highlight-mouse.png',
+    glueBorderedBorder: 'war3/Widgets/Glues/GlueScreen-Button1-BorderedBackdropBorder.png',
+    glueBorderedBorderDown: 'war3/Widgets/Glues/GlueScreen-Button1-BorderedBackdropBorder-Down.png',
+    glueMenuFrame: 'war3/Widgets/Glues/GlueScreen-Button1-Border.png',
+    cursor: `war3/Cursor/${race}Cursor.png`,
+  };
+}
+
+export function loadRaceTextures(race: Race, texManager: TextureManager): RaceTextures {
+  const paths = raceTexturePaths(race);
+  const tex: any = {};
+  for (const [key, path] of Object.entries(paths)) {
+    tex[key] = texManager.load(path);
+  }
+  tex.escBtnBgTiled = texManager.loadRepeat(paths.escBtnBg);
+  tex.escMenuBgTiled = texManager.loadRepeat(paths.escMenuBg);
+  tex.tooltipBgTiled = texManager.loadRepeat(paths.tooltipBg);
+  tex.glueBgTiled = texManager.loadRepeat(paths.glueBg);
+  tex.glueBgDownTiled = texManager.loadRepeat(paths.glueBgDown);
+  tex.glueBgDisabledTiled = texManager.loadRepeat(paths.glueBgDisabled);
+  return tex as RaceTextures;
+}
+
+export function preloadAllRaces(texManager: TextureManager) {
+  RACES.forEach(r => {
+    const paths = raceTexturePaths(r);
+    Object.values(paths).forEach(p => texManager.load(p));
+  });
+}

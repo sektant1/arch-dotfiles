@@ -1,0 +1,78 @@
+#include <rts/platform/window.hpp>
+#include <rts/core/logger.hpp>
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
+#include <stdexcept>
+
+namespace rts {
+
+GlfwWindow::GlfwWindow(const WindowConfig& config)
+    : m_width(config.width), m_height(config.height) {
+    if (!glfwInit()) {
+        throw std::runtime_error("Failed to initialize GLFW");
+    }
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    m_window = glfwCreateWindow(
+        static_cast<int>(m_width),
+        static_cast<int>(m_height),
+        config.title.c_str(),
+        nullptr, nullptr
+    );
+
+    if (!m_window) {
+        glfwTerminate();
+        throw std::runtime_error("Failed to create GLFW window");
+    }
+
+    glfwMakeContextCurrent(m_window);
+
+    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) {
+        glfwDestroyWindow(m_window);
+        glfwTerminate();
+        throw std::runtime_error("Failed to initialize glad");
+    }
+
+    if (config.vsync) {
+        glfwSwapInterval(1);
+    }
+
+    glfwSetWindowUserPointer(m_window, this);
+
+    glfwSetFramebufferSizeCallback(m_window, [](GLFWwindow* win, int w, int h) {
+        auto* self = static_cast<GlfwWindow*>(glfwGetWindowUserPointer(win));
+        self->m_width  = static_cast<u32>(w);
+        self->m_height = static_cast<u32>(h);
+        glViewport(0, 0, w, h);
+    });
+
+    RTS_LOG_INFO("Window created: {}x{}", m_width, m_height);
+}
+
+GlfwWindow::~GlfwWindow() {
+    if (m_window) {
+        glfwDestroyWindow(m_window);
+    }
+    glfwTerminate();
+}
+
+bool GlfwWindow::should_close() const {
+    return glfwWindowShouldClose(m_window);
+}
+
+void GlfwWindow::poll_events() {
+    glfwPollEvents();
+}
+
+void GlfwWindow::swap_buffers() {
+    glfwSwapBuffers(m_window);
+}
+
+u32 GlfwWindow::width()  const { return m_width; }
+u32 GlfwWindow::height() const { return m_height; }
+GLFWwindow* GlfwWindow::native_handle() const { return m_window; }
+
+}  // namespace rts

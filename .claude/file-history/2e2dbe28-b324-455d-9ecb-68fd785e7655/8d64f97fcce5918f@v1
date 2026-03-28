@@ -1,0 +1,5236 @@
+import { useState, useEffect, useRef } from "react";
+import TimeIndicatorModel from "./components/TimeIndicatorModel";
+import TopHudWebGL from "./components/TopHudWebGL";
+import { decodeBLP, getBLPImageData } from "war3-model";
+import { useCurrentRace, RACE_PREFIXES, setCurrentRace } from "./state/race";
+import { getCount  } from "./state/counter";
+import { usePage, setPage } from "./state/page";
+import type { Race } from "./lib/types";
+import {
+  ButtonsSection,
+  ControlsSection,
+  ButtonShowcaseSection,
+  ResourceCounterSection,
+  CommandCardSection,
+  UnitQueueSection,
+  TooltipSection,
+  PortraitFrameSection,
+  BarsSection,
+} from "./components/sections/ShowcaseSection";
+import DesignTokensSection from "./components/sections/DesignTokensSection";
+import AccessibilitySection from "./components/sections/AccessibilitySection";
+import GlueSmallButton from "./components/GlueSmallButton";
+import BundleSizeSection from "./components/sections/BundleSizeSection";
+import FAQSection from "./components/sections/FAQSection";
+import FooterSection from "./components/sections/FooterSection";
+import BordersSection from "./components/sections/BordersSection";
+import { PAGE_REGISTRY } from "./pages";
+import LoadingScreen from "./components/LoadingScreen";
+
+const topHudHeightVw = 4;
+const clockWidthVw = 16;
+const raceButtons: Race[] = ["Human", "Orc", "NightElf", "Undead"];
+const compactTopHudBreakpointPx = 600;
+const menuFrameVariantOrder: Record<string, number> = {
+  Border: 0,
+  BorderSingle: 1,
+  Large: 2,
+  LargeSingle: 3,
+  Small: 4,
+  SmallSingle: 5,
+  Multiplayer: 6,
+  Tiny: 7,
+};
+
+const upperButtonLeftVw = 0.25; // 0.002 * 125 from UpperButtonBar.fdf
+const upperButtonTopVw = 0;
+const upperButtonWidthVw = 10.625; // 0.085 * 125
+const upperButtonHeightVw = 2.75; // 0.022 * 125
+const upperButtonTexWidth = 0.6640625;
+const upperButtonTexHeight = 0.171875;
+const upperButtonBgSizeX = (1 / upperButtonTexWidth) * 100;
+const upperButtonBgSizeY = (1 / upperButtonTexHeight) * 100;
+const upperButtonPressedOffsetX = 0.125; // 0.001 * 125
+const upperButtonPressedOffsetY = -0.125; // -0.001 * 125
+const glueButtonPressedOffsetXPx = -2; // FDF ButtonPushedTextOffset X -0.002f
+const glueButtonPressedOffsetYPx = 3; // FDF ButtonPushedTextOffset Y -0.003f (down in screen space)
+const escButtonPressedOffsetXPx = 2; // FDF ButtonPushedTextOffset X 0.002f
+const escButtonPressedOffsetYPx = 2; // FDF ButtonPushedTextOffset Y -0.002f (down in screen space)
+
+function upperButtonPosY(offset: number): string {
+  return `${(offset / (1 - upperButtonTexHeight)) * 100}%`;
+}
+
+const upperButtonNormalPosY = upperButtonPosY(0);
+const upperButtonPushedPosY = upperButtonPosY(0.25);
+const upperButtonHighlightPosY = upperButtonPosY(0.75);
+
+const resourceBarWidthVw = 42.28515625; // 0.33828125 * 125 (same UI scale used by top HUD tiles)
+const resourceBarHeightOfTopHud = 0.68125; // 0.0218 / 0.032 from ResourceBar.fdf + ConsoleUI.fdf
+const resourceTextHeightOfTopHud = 0.3125; // 0.01 / 0.032
+const resourceBarTopOffsetOfTopHud = 0.0;
+const resourceBarRightOffsetVw = 0.390625; // 0.003125 * 125
+const iconSizePercentOfBarHeight = 75.258;
+const iconTopPercentOfBarHeight = 14.335;
+const goldIconLeftPercent = 0;
+const lumberIconLeftPercent = 25.404157;
+const supplyIconLeftPercent = 51.039261;
+const goldTextRightEdgePercent = 21.709007;
+const lumberTextRightEdgePercent = 47.344111;
+const supplyTextRightEdgePercent = 72.979215;
+const upkeepRightPercent = 0.923788;
+const upkeepWidthPercent = 22.401848;
+const resourceBarHeightVw = topHudHeightVw * resourceBarHeightOfTopHud;
+const resourceIconSizeVw =
+  resourceBarHeightVw * (iconSizePercentOfBarHeight / 100);
+const resourceIconTopVw =
+  resourceBarHeightVw * (iconTopPercentOfBarHeight / 100);
+const resourceTextTopVw = resourceIconTopVw + 0.35;
+
+const goldTickMs = 1500;
+const lumberTickMs = 2300;
+const supplyTickMs = 6500;
+const supplyCapTickMs = 45000;
+const resourceStep = 10;
+const maxResourceValue = 99999;
+const maxSupplyCap = 100;
+const progressAnimTickMs = 33;
+const progressAnimCycleMs = 12000;
+const xpPhaseOffsetMs = 0;
+const progressPhaseOffsetMs = progressAnimCycleMs / 3;
+const buildPhaseOffsetMs = (progressAnimCycleMs * 2) / 3;
+const loadingMinFillPct = 1.23442;
+const loadingPhaseOffsetMs = progressAnimCycleMs / 6;
+const loadingSmoothToStutterMs = 8400;
+const loadingStutterDurationMs = 1000;
+const loadingStutterStartPct = 82;
+const loadingStutterEndPct = 90;
+const loadingGlowInsetLeftPct = 5.919;
+const loadingGlowInsetTopPct = -19.58;
+const loadingGlowInsetBottomPct = -19.49;
+const loadingGlowSpanPct = 93.631;
+const escSliderTrackWidthPx = 220;
+const escSliderThumbWidthPx = 28;
+const glueScrollTrackHeightPx = 132;
+const glueScrollThumbHeightPx = 16;
+const escTextAreaScrollTrackTopPx = 8;
+const escTextAreaScrollTrackHeightPx = 134;
+const escTextAreaScrollThumbHeightPx = 18;
+const glueListScrollTrackHeightPx = 96;
+const glueListScrollThumbHeightPx = 16;
+// Keep these values in sync with `.esc-textarea-mask` / `.esc-textarea-content` in `src/global.css`.
+const escTextAreaShellHeightPx = 150;
+const escTextAreaMaskInsetTopPx = 11;
+const escTextAreaMaskInsetBottomPx = 11;
+const escTextAreaContentPaddingTopPx = 2;
+const escTextAreaContentPaddingBottomPx = 2;
+// Keep ESC decorated text inputs slightly inset so the dark interior does not bleed through edge alpha.
+const escEditboxCanvasFillInsetPx = 2;
+// Canvas fill inset for the decorated text area shell; keep <= mask inset so no page background leaks through.
+const escTextAreaCanvasFillInsetPx = escTextAreaMaskInsetTopPx - 2;
+// Keep these values in sync with `.wc3-listbox-mask` / `.wc3-listbox-items` in `src/global.css`.
+const glueListBoxShellHeightPx = 136;
+const glueListBoxMaskInsetTopPx = 16;
+const glueListBoxMaskInsetBottomPx = 16;
+const glueListBoxContentPaddingTopPx = 2;
+const glueListBoxContentPaddingBottomPx = 2;
+// Canvas fill inset for listbox shell; slight underlap avoids bright seams when page bg is high-contrast.
+const glueListBoxCanvasFillInsetPx = glueListBoxMaskInsetTopPx - 2;
+// ESC edit/input shells read cleaner with a slightly squarer interior fill than the default template cap.
+const escControlFillCornerCapPx = 6;
+const loadingTrackInsetLeftPct = 5.859375;
+const loadingTrackInsetRightPct = 6.4453125;
+const loadingTrackInsetTopPct = 26.5625;
+const loadingTrackInsetBottomPct = 26.5625;
+const popupOptions = ["Low", "Medium", "High", "Ultra"] as const;
+const healthBarSamples = [98, 84, 67, 49, 31, 18, 39, 63, 81] as const;
+const manaBarSamples = [92, 88, 72, 58, 44, 36, 51, 69, 83] as const;
+const escTextAreaViewportPx =
+  escTextAreaShellHeightPx -
+  escTextAreaMaskInsetTopPx -
+  escTextAreaMaskInsetBottomPx;
+const escTextAreaLineHeightPx = 18;
+const glueListBoxLineHeightPx = 20;
+const glueListBoxViewportPx =
+  glueListBoxShellHeightPx -
+  glueListBoxMaskInsetTopPx -
+  glueListBoxMaskInsetBottomPx;
+const escControlCornerRatio = 0.0125 / 0.04;
+const escControlInsetRatio = 0.005 / 0.04;
+const bnetControlCornerRatio = 0.032 / 0.04;
+const bnetControlInsetRatio = 0.004 / 0.04;
+const escScrollCornerRatio = 0.006 / 0.012;
+const escScrollInsetRatio = 0.0025 / 0.012;
+const glueScrollCornerRatio = 0.008 / 0.0165;
+const glueScrollInsetRatio = 0.004 / 0.0165;
+const glueListBoxItems = [
+  "Slow",
+  "Normal",
+  "Fast",
+  "Faster",
+  "Ludicrous",
+  "Insane",
+  "Observer",
+  "Random",
+] as const;
+const escTextAreaLines = [
+  "[00:31] Quest updated: Defend the village gates.",
+  "[00:42] Hint: Keep militia near the lumber line.",
+  "[00:58] Footman training complete.",
+  "[01:04] Arcane Tower construction started.",
+  "[01:12] No Upkeep active.",
+  "[01:25] Peasant assigned to Gold Mine.",
+  "[01:33] Scout report: enemy units sighted in the north.",
+  "[01:48] Town Hall upgrade queued.",
+  "[02:03] Warning: You are under attack!",
+  "[02:21] Militia duration expired.",
+  "[02:39] Lumber total reached 120.",
+  "[02:56] Defend researched at Barracks.",
+] as const;
+
+interface StatusBarFillProfile {
+  fillToFrameWidth: number;
+  minScaleX: number;
+  maxScaleX: number;
+}
+
+// HPBarConsoleSmall/ManaBarConsoleSmall:
+// fill geoset width 0.02793, frame geoset width 0.04065, Health Meter scale keys 0.037246 -> 1.44899.
+const unitBarFillProfile: StatusBarFillProfile = {
+  fillToFrameWidth: 0.02793 / 0.04065,
+  minScaleX: 0.037246,
+  maxScaleX: 1.44899,
+};
+
+// XpBarConsole / TimerBar:
+// fill geoset width 0.26408, frame geoset width 0.17776, Experience Meter scale keys 0.014839 -> 0.64512.
+const compactBarFillProfile: StatusBarFillProfile = {
+  fillToFrameWidth: 0.26408 / 0.17776,
+  minScaleX: 0.014839,
+  maxScaleX: 0.64512,
+};
+
+// BuildProgressBar:
+// fill geoset width 0.26413, frame geoset width 0.10538, Experience Meter scale keys 0.014839 -> 0.389779.
+const buildBarFillProfile: StatusBarFillProfile = {
+  fillToFrameWidth: 0.26413 / 0.10538,
+  minScaleX: 0.014839,
+  maxScaleX: 0.389779,
+};
+
+interface BlademasterCommandCardIcons {
+  windWalk: string;
+  mirrorImage: string;
+  criticalStrike: string;
+  bladestorm: string;
+  skillz: string;
+  attack: string;
+  move: string;
+  stop: string;
+  holdPosition: string;
+  patrol: string;
+}
+
+const EMPTY_BLADEMASTER_COMMAND_CARD_ICONS: BlademasterCommandCardIcons = {
+  windWalk: "",
+  mirrorImage: "",
+  criticalStrike: "",
+  bladestorm: "",
+  skillz: "",
+  attack: "",
+  move: "",
+  stop: "",
+  holdPosition: "",
+  patrol: "",
+};
+
+const iconDataUrlCache = new Map<string, Promise<string>>();
+const decodedImageCache = new Map<string, Promise<HTMLImageElement>>();
+const cursorFrameDataUrlCache = new Map<Race, Promise<string>>();
+
+interface EscButtonSkin {
+  bg: string;
+  bgDown: string;
+  bgDisabled: string;
+  border: string;
+  borderDown: string;
+  borderDisabled: string;
+  hover: string;
+}
+
+interface MenuFrameVariantDef {
+  label: string;
+  source: string;
+  fdfSize: string;
+  src: string;
+  widthPx: number;
+  heightPx: number;
+  atlasRows?: number;
+  atlasRow?: number;
+  innerTemplate?: "standard" | "tiny";
+  buttonPlacement: {
+    backdropW: number;
+    backdropH: number;
+    buttonW: number;
+    buttonH: number;
+    anchor: "top-right" | "top-left";
+    offsetX: number;
+    offsetY: number;
+  };
+  buttonText: string;
+  buttonHotkey: string;
+}
+
+interface CroppedFrameRowResult {
+  url: string;
+  width: number;
+  height: number;
+}
+
+const croppedFrameRowCache = new Map<string, Promise<CroppedFrameRowResult>>();
+const croppedImageRegionCache = new Map<string, Promise<string>>();
+
+function shouldForceOpaqueOnZeroAlpha(path: string): boolean {
+  return /\/buttons\/esc\/[^/]+\/[^/]+-options-button-background(?:-down|-disabled)?\.blp$/i.test(
+    path,
+  );
+}
+
+function shouldApplyBlackColorKey(path: string): boolean {
+  return /\/resources\/Resource(?:Lumber|Supply|Human|Orc|NightElf|Undead)\.blp$/i.test(
+    path,
+  );
+}
+
+function sliderThumbCenterPercent(
+  valuePct: number,
+  trackPx: number,
+  thumbPx: number,
+): string {
+  const clamped = Math.max(0, Math.min(100, valuePct));
+  const min = thumbPx * 0.5;
+  const max = Math.max(min, trackPx - thumbPx * 0.5);
+  const center = min + ((max - min) * clamped) / 100;
+  return `${(center / trackPx) * 100}%`;
+}
+
+function verticalThumbCenterPx(
+  valuePct: number,
+  trackTopPx: number,
+  trackHeightPx: number,
+  thumbPx: number,
+): string {
+  const clamped = Math.max(0, Math.min(100, valuePct));
+  const min = trackTopPx + thumbPx * 0.5;
+  const max = Math.max(min, trackTopPx + trackHeightPx - thumbPx * 0.5);
+  const center = min + ((max - min) * clamped) / 100;
+  return `${center}px`;
+}
+
+function getEscButtonSkin(race: Race): EscButtonSkin {
+  const humanBorder = "./buttons/esc/human/human-options-button-border-up.blp";
+  const humanBorderDown =
+    "./buttons/esc/human/human-options-button-border-down.blp";
+  const humanDisabledBg =
+    "./buttons/esc/human/human-options-button-background-disabled.blp";
+
+  if (race === "Human") {
+    return {
+      bg: "./buttons/esc/human/human-options-menu-background.blp",
+      bgDown: "./buttons/esc/human/human-options-menu-background.blp",
+      bgDisabled: humanDisabledBg,
+      border: humanBorder,
+      borderDown: humanBorderDown,
+      borderDisabled: humanBorder,
+      hover: "./buttons/esc/human/human-options-button-highlight.blp",
+    };
+  }
+
+  if (race === "Orc") {
+    return {
+      bg: "./buttons/esc/orc/orc-options-button-background.blp",
+      bgDown: "./buttons/esc/orc/orc-options-button-background-down.blp",
+      bgDisabled: humanDisabledBg,
+      border: humanBorder,
+      borderDown: humanBorderDown,
+      borderDisabled: humanBorder,
+      hover: "./buttons/esc/orc/orc-options-button-highlight.blp",
+    };
+  }
+
+  if (race === "NightElf") {
+    return {
+      bg: "./buttons/esc/nightelf/nightelf-options-button-background.blp",
+      bgDown:
+        "./buttons/esc/nightelf/nightelf-options-button-background-down.blp",
+      bgDisabled: humanDisabledBg,
+      border: humanBorder,
+      borderDown: humanBorderDown,
+      borderDisabled: humanBorder,
+      hover: "./buttons/esc/nightelf/nightelf-options-button-highlight.blp",
+    };
+  }
+
+  return {
+    bg: "./buttons/esc/undead/undead-options-button-background.blp",
+    bgDown: "/buttons/esc/undead/undead-options-button-background-down.blp",
+    bgDisabled:
+      "./buttons/esc/undead/undead-options-button-background-disabled.blp",
+    border: humanBorder,
+    borderDown: humanBorderDown,
+    borderDisabled: humanBorder,
+    hover: "./buttons/esc/undead/undead-options-button-highlight.blp",
+  };
+}
+
+function getCheckboxDepressedPath(race: Race): string {
+  if (race === "Orc") return "./buttons/checkbox/orc-checkbox-depressed.blp";
+  if (race === "NightElf")
+    return "./buttons/checkbox/nightelf-checkbox-depressed.blp";
+  if (race === "Undead")
+    return "./buttons/checkbox/undead-checkbox-depressed.blp";
+  return "./buttons/checkbox/checkbox-depressed.blp";
+}
+
+function getEscSliderKnobPath(race: Race): string {
+  if (race === "Orc") return "./buttons/slider/orc-slider-knob.blp";
+  if (race === "NightElf") return "./buttons/slider/nightelf-slider-knob.blp";
+  if (race === "Undead") return "./buttons/slider/undead-slider-knob.blp";
+  return "./buttons/slider/slider-knob.blp";
+}
+
+function getEscMenuBackgroundPath(race: Race): string {
+  if (race === "Orc") return "./buttons/esc/orc/orc-options-menu-background.blp";
+  if (race === "NightElf")
+    return "./buttons/esc/nightelf/nightelf-options-menu-background.blp";
+  if (race === "Undead")
+    return "./buttons/esc/undead/undead-options-menu-background.blp";
+  return "./buttons/esc/human/human-options-menu-background.blp";
+}
+
+function getCardSectionBorderPath(race: Race): string {
+  if (race === "Orc") return "/buttons/esc/orc/orc-options-menu-border.blp";
+  if (race === "NightElf")
+    return "./buttons/esc/nightelf/nightelf-options-menu-border.blp";
+  if (race === "Undead")
+    return "./buttons/esc/undead/undead-options-menu-border.blp";
+  return "./buttons/esc/human/human-options-menu-border.blp";
+}
+
+async function loadBlpDataUrl(path: string): Promise<string> {
+  const cached = iconDataUrlCache.get(path);
+  if (cached) return cached;
+
+  const promise = (async () => {
+    const res = await fetch(path);
+    if (!res.ok) throw new Error(`Failed to fetch icon ${path}`);
+    const ab = await res.arrayBuffer();
+    const blp = decodeBLP(ab);
+    const img = getBLPImageData(blp, 0);
+    const pixelData = new Uint8ClampedArray(img.data);
+    if (shouldForceOpaqueOnZeroAlpha(path)) {
+      let allAlphaZero = true;
+      for (let i = 3; i < pixelData.length; i += 4) {
+        if (pixelData[i] !== 0) {
+          allAlphaZero = false;
+          break;
+        }
+      }
+      if (allAlphaZero) {
+        for (let i = 3; i < pixelData.length; i += 4) {
+          pixelData[i] = 255;
+        }
+      }
+    }
+    if (shouldApplyBlackColorKey(path)) {
+      for (let i = 0; i < pixelData.length; i += 4) {
+        const r = pixelData[i];
+        const g = pixelData[i + 1];
+        const b = pixelData[i + 2];
+        const a = pixelData[i + 3];
+        if (a > 224 && r <= 10 && g <= 10 && b <= 10) {
+          pixelData[i + 3] = 0;
+        }
+      }
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error(`Failed to decode icon ${path}`);
+    ctx.putImageData(new ImageData(pixelData, img.width, img.height), 0, 0);
+    return canvas.toDataURL("image/png");
+  })();
+
+  iconDataUrlCache.set(path, promise);
+  return promise;
+}
+
+async function loadDataUrlImage(url: string): Promise<HTMLImageElement> {
+  const cached = decodedImageCache.get(url);
+  if (cached) return cached;
+  const promise = new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Failed to load image ${url}`));
+    img.src = url;
+  });
+  decodedImageCache.set(url, promise);
+  return promise;
+}
+
+async function cropFrameRowToDataUrl(
+  src: string,
+  atlasRows = 1,
+  atlasRow = 0,
+): Promise<CroppedFrameRowResult> {
+  const key = `${src}|${atlasRows}|${atlasRow}`;
+  const cached = croppedFrameRowCache.get(key);
+  if (cached) return cached;
+
+  const promise = (async () => {
+    const img = await loadDataUrlImage(src);
+    const rows = Math.max(1, Math.floor(atlasRows));
+    const rowHeight = Math.max(1, Math.floor(img.height / rows));
+    const rowIndex = Math.max(0, Math.min(rows - 1, Math.floor(atlasRow)));
+    const srcY = rowIndex * rowHeight;
+
+    const rowCanvas = document.createElement("canvas");
+    rowCanvas.width = img.width;
+    rowCanvas.height = rowHeight;
+    const rowCtx = rowCanvas.getContext("2d");
+    if (!rowCtx) {
+      return { url: src, width: img.width, height: rowHeight };
+    }
+
+    rowCtx.clearRect(0, 0, rowCanvas.width, rowCanvas.height);
+    rowCtx.drawImage(
+      img,
+      0,
+      srcY,
+      img.width,
+      rowHeight,
+      0,
+      0,
+      img.width,
+      rowHeight,
+    );
+    // Keep the full row including transparent gutters.
+    // Template offsets are authored against the uncropped backdrop texture space.
+    return {
+      url: rowCanvas.toDataURL("image/png"),
+      width: rowCanvas.width,
+      height: rowCanvas.height,
+    };
+  })();
+
+  croppedFrameRowCache.set(key, promise);
+  return promise;
+}
+
+async function cropImageRegionToDataUrl(
+  src: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): Promise<string> {
+  const key = `${src}|${x}|${y}|${width}|${height}`;
+  const cached = croppedImageRegionCache.get(key);
+  if (cached) return cached;
+
+  const promise = (async () => {
+    const img = await loadDataUrlImage(src);
+    const sx = Math.max(0, Math.min(img.width - 1, Math.floor(x)));
+    const sy = Math.max(0, Math.min(img.height - 1, Math.floor(y)));
+    const sw = Math.max(1, Math.min(img.width - sx, Math.floor(width)));
+    const sh = Math.max(1, Math.min(img.height - sy, Math.floor(height)));
+    const cropCanvas = document.createElement("canvas");
+    cropCanvas.width = sw;
+    cropCanvas.height = sh;
+    const cropCtx = cropCanvas.getContext("2d");
+    if (!cropCtx) return src;
+    cropCtx.clearRect(0, 0, sw, sh);
+    cropCtx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+    return cropCanvas.toDataURL("image/png");
+  })();
+
+  croppedImageRegionCache.set(key, promise);
+  return promise;
+}
+
+async function loadRaceCursorFrameDataUrl(race: Race): Promise<string> {
+  const cached = cursorFrameDataUrlCache.get(race);
+  if (cached) return cached;
+
+  const promise = (async () => {
+    const atlasDataUrl = await loadBlpDataUrl(`./cursor/${race}Cursor.blp`);
+    const atlas = await loadDataUrlImage(atlasDataUrl);
+    const columns = 8;
+    const rows = 4;
+    const frameW = Math.max(1, Math.floor(atlas.width / columns));
+    const frameH = Math.max(1, Math.floor(atlas.height / rows));
+    const canvas = document.createElement("canvas");
+    canvas.width = frameW;
+    canvas.height = frameH;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return atlasDataUrl;
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, frameW, frameH);
+    ctx.drawImage(atlas, 0, 0, frameW, frameH, 0, 0, frameW, frameH);
+    return canvas.toDataURL("image/png");
+  })();
+
+  cursorFrameDataUrlCache.set(race, promise);
+  return promise;
+}
+
+function rotateCellClockwise(
+  atlas: HTMLImageElement,
+  cellIndex: number,
+  cellW: number,
+  cellH: number,
+): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = cellH;
+  canvas.height = cellW;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+  ctx.translate(cellH, 0);
+  ctx.rotate(Math.PI / 2);
+  ctx.drawImage(atlas, cellIndex * cellW, 0, cellW, cellH, 0, 0, cellW, cellH);
+  return canvas;
+}
+
+function drawGlueNineSliceToCanvas(
+  canvas: HTMLCanvasElement,
+  bgImg: HTMLImageElement,
+  borderImg: HTMLImageElement,
+  hoverImg: HTMLImageElement | null,
+  hovered: boolean,
+) {
+  const cssW = Math.max(1, canvas.clientWidth || 1);
+  const cssH = Math.max(1, canvas.clientHeight || 1);
+  const dpr = window.devicePixelRatio || 1;
+  const pxW = Math.max(1, Math.round(cssW * dpr));
+  const pxH = Math.max(1, Math.round(cssH * dpr));
+  if (canvas.width !== pxW || canvas.height !== pxH) {
+    canvas.width = pxW;
+    canvas.height = pxH;
+  }
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const atlasW = borderImg.width;
+  const atlasH = borderImg.height;
+  const cellW = atlasW / 8;
+  const corner = Math.max(
+    1,
+    Math.floor(Math.min(cellW, cssH * 0.35, cssW / 2, cssH / 2)),
+  );
+  const inset = Math.max(1, Math.round(corner * 0.25));
+
+  // Fill inner area with opaque black before pattern to handle textures with alpha
+  // (NightElf/Undead bg textures use DXT3/5 with alpha; game renders on opaque framebuffer)
+  ctx.fillStyle = "#000";
+  ctx.fillRect(inset, inset, cssW - inset * 2, cssH - inset * 2);
+
+  const pattern = ctx.createPattern(bgImg, "repeat");
+  if (pattern) {
+    ctx.fillStyle = pattern;
+    ctx.fillRect(inset, inset, cssW - inset * 2, cssH - inset * 2);
+  }
+
+  const drawCell = (
+    idx: number,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ) => {
+    ctx.drawImage(borderImg, idx * cellW, 0, cellW, atlasH, x, y, w, h);
+  };
+
+  drawCell(4, 0, 0, corner, corner);
+  drawCell(5, cssW - corner, 0, corner, corner);
+  drawCell(6, 0, cssH - corner, corner, corner);
+  drawCell(7, cssW - corner, cssH - corner, corner, corner);
+
+  const edgeH = cssH - corner * 2;
+  if (edgeH > 0) {
+    drawCell(0, 0, corner, corner, edgeH);
+    drawCell(1, cssW - corner, corner, corner, edgeH);
+  }
+
+  const edgeW = cssW - corner * 2;
+  if (edgeW > 0) {
+    const topRot = rotateCellClockwise(borderImg, 2, cellW, atlasH);
+    const bottomRot = rotateCellClockwise(borderImg, 3, cellW, atlasH);
+    ctx.drawImage(topRot, corner, 0, edgeW, corner);
+    ctx.drawImage(bottomRot, corner, cssH - corner, edgeW, corner);
+  }
+
+  if (hovered && hoverImg) {
+    const temp = document.createElement("canvas");
+    temp.width = pxW;
+    temp.height = pxH;
+    const tCtx = temp.getContext("2d");
+    if (tCtx) {
+      tCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      tCtx.drawImage(canvas, 0, 0, cssW, cssH);
+      tCtx.globalCompositeOperation = "source-in";
+      tCtx.drawImage(hoverImg, 0, 0, cssW, cssH);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.drawImage(temp, 0, 0, cssW, cssH);
+      ctx.restore();
+    }
+  }
+}
+
+interface NineSliceTemplateOptions {
+  cornerPx: number;
+  insetPx: number;
+  tileBackground?: boolean;
+  tileHorizontalEdges?: boolean;
+  opaqueBaseFill?: string | null;
+  fillCornerMaxPx?: number;
+}
+
+function drawHorizontallyTiledEdge(
+  ctx: CanvasRenderingContext2D,
+  tile: HTMLCanvasElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  if (width <= 0 || height <= 0) return;
+
+  let drawn = 0;
+  while (drawn < width) {
+    const segmentW = Math.min(height, width - drawn);
+    const srcW = (segmentW / height) * tile.width;
+    ctx.drawImage(
+      tile,
+      0,
+      0,
+      srcW,
+      tile.height,
+      x + drawn,
+      y,
+      segmentW,
+      height,
+    );
+    drawn += segmentW;
+  }
+}
+
+function drawTemplateNineSliceToCanvas(
+  canvas: HTMLCanvasElement,
+  bgImg: HTMLImageElement,
+  borderImg: HTMLImageElement,
+  options: NineSliceTemplateOptions,
+) {
+  const cssW = Math.max(1, canvas.clientWidth || 1);
+  const cssH = Math.max(1, canvas.clientHeight || 1);
+  const dpr = window.devicePixelRatio || 1;
+  const pxW = Math.max(1, Math.round(cssW * dpr));
+  const pxH = Math.max(1, Math.round(cssH * dpr));
+  if (canvas.width !== pxW || canvas.height !== pxH) {
+    canvas.width = pxW;
+    canvas.height = pxH;
+  }
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const atlasW = borderImg.width;
+  const atlasH = borderImg.height;
+  const cellW = atlasW / 8;
+  const sourceCornerMax = Math.max(1, Math.floor(Math.min(cellW, atlasH)));
+  const corner = Math.max(
+    1,
+    Math.floor(Math.min(options.cornerPx, sourceCornerMax, cssW / 2, cssH / 2)),
+  );
+  const inset = Math.max(
+    0,
+    Math.floor(Math.min(options.insetPx, cssW / 2, cssH / 2)),
+  );
+  const innerX = inset;
+  const innerY = inset;
+  const innerW = Math.max(0, cssW - inset * 2);
+  const innerH = Math.max(0, cssH - inset * 2);
+  // Large controls (textarea/listbox) reuse the same nine-slice templates; cap fill corner
+  // radius to prevent over-rounded clipping that exposes page background.
+  const fillCornerCapPx = options.fillCornerMaxPx ?? 8;
+  const fillCorner = Math.max(
+    0,
+    Math.floor(Math.min(corner, fillCornerCapPx, innerW / 2, innerH / 2)),
+  );
+
+  if (innerW > 0 && innerH > 0) {
+    ctx.save();
+    ctx.beginPath();
+    if (fillCorner > 0) {
+      ctx.roundRect(innerX, innerY, innerW, innerH, fillCorner);
+    } else {
+      ctx.rect(innerX, innerY, innerW, innerH);
+    }
+    ctx.clip();
+
+    if (options.opaqueBaseFill) {
+      ctx.fillStyle = options.opaqueBaseFill;
+      ctx.fillRect(innerX, innerY, innerW, innerH);
+    }
+    if (options.tileBackground === false) {
+      ctx.drawImage(
+        bgImg,
+        0,
+        0,
+        bgImg.width,
+        bgImg.height,
+        innerX,
+        innerY,
+        innerW,
+        innerH,
+      );
+    } else {
+      const pattern = ctx.createPattern(bgImg, "repeat");
+      if (pattern) {
+        ctx.fillStyle = pattern;
+        ctx.fillRect(innerX, innerY, innerW, innerH);
+      }
+    }
+    ctx.restore();
+  }
+
+  const drawCell = (
+    idx: number,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ) => {
+    ctx.drawImage(borderImg, idx * cellW, 0, cellW, atlasH, x, y, w, h);
+  };
+
+  drawCell(4, 0, 0, corner, corner);
+  drawCell(5, cssW - corner, 0, corner, corner);
+  drawCell(6, 0, cssH - corner, corner, corner);
+  drawCell(7, cssW - corner, cssH - corner, corner, corner);
+
+  const edgeH = cssH - corner * 2;
+  if (edgeH > 0) {
+    drawCell(0, 0, corner, corner, edgeH);
+    drawCell(1, cssW - corner, corner, corner, edgeH);
+  }
+
+  const edgeW = cssW - corner * 2;
+  if (edgeW > 0) {
+    const topRot = rotateCellClockwise(borderImg, 2, cellW, atlasH);
+    const bottomRot = rotateCellClockwise(borderImg, 3, cellW, atlasH);
+    if (options.tileHorizontalEdges) {
+      drawHorizontallyTiledEdge(ctx, topRot, corner, 0, edgeW, corner);
+      drawHorizontallyTiledEdge(
+        ctx,
+        bottomRot,
+        corner,
+        cssH - corner,
+        edgeW,
+        corner,
+      );
+    } else {
+      ctx.drawImage(topRot, corner, 0, edgeW, corner);
+      ctx.drawImage(bottomRot, corner, cssH - corner, edgeW, corner);
+    }
+  }
+}
+
+function composeBorderImageFromAtlas(atlas: HTMLImageElement): string {
+  const cellW = atlas.width / 8;
+  const cellH = atlas.height;
+  const cell = Math.max(1, Math.floor(Math.min(cellW, cellH)));
+  const canvas = document.createElement("canvas");
+  canvas.width = cell * 3;
+  canvas.height = cell * 3;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = false;
+
+  const drawCell = (idx: number, x: number, y: number) => {
+    ctx.drawImage(atlas, idx * cellW, 0, cellW, cellH, x, y, cell, cell);
+  };
+
+  drawCell(4, 0, 0);
+  drawCell(5, cell * 2, 0);
+  drawCell(6, 0, cell * 2);
+  drawCell(7, cell * 2, cell * 2);
+  drawCell(0, 0, cell);
+  drawCell(1, cell * 2, cell);
+
+  const top = rotateCellClockwise(atlas, 2, cellW, cellH);
+  const bottom = rotateCellClockwise(atlas, 3, cellW, cellH);
+  ctx.drawImage(top, cell, 0, cell, cell);
+  ctx.drawImage(bottom, cell, cell * 2, cell, cell);
+
+  return canvas.toDataURL("image/png");
+}
+
+function modelBarFillRatio(
+  valuePct: number,
+  profile: StatusBarFillProfile,
+): number {
+  const pct = Math.max(0, Math.min(100, valuePct));
+  const scaleX =
+    profile.minScaleX + ((profile.maxScaleX - profile.minScaleX) * pct) / 100;
+  return Math.max(0, Math.min(1, profile.fillToFrameWidth * scaleX));
+}
+
+const additiveSrcColorScratchCanvas = document.createElement("canvas");
+
+function compositeSrcColorAdditive(
+  dstCtx: CanvasRenderingContext2D,
+  pxW: number,
+  pxH: number,
+  dpr: number,
+  cssW: number,
+  cssH: number,
+  drawSource: (ctx: CanvasRenderingContext2D) => void,
+) {
+  if (
+    additiveSrcColorScratchCanvas.width !== pxW ||
+    additiveSrcColorScratchCanvas.height !== pxH
+  ) {
+    additiveSrcColorScratchCanvas.width = pxW;
+    additiveSrcColorScratchCanvas.height = pxH;
+  }
+
+  const srcCtx = additiveSrcColorScratchCanvas.getContext("2d");
+  if (!srcCtx) return;
+  srcCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  srcCtx.clearRect(0, 0, cssW, cssH);
+  srcCtx.imageSmoothingEnabled = true;
+  drawSource(srcCtx);
+
+  const srcImage = srcCtx.getImageData(0, 0, pxW, pxH);
+  const dstImage = dstCtx.getImageData(0, 0, pxW, pxH);
+  const src = srcImage.data;
+  const dst = dstImage.data;
+
+  // Warcraft III Additive layer mode maps to GL blendFunc(SRC_COLOR, ONE).
+  for (let i = 0; i < dst.length; i += 4) {
+    const srcR = src[i] / 255;
+    const srcG = src[i + 1] / 255;
+    const srcB = src[i + 2] / 255;
+    const srcA = src[i + 3] / 255;
+    dst[i] = Math.min(255, dst[i] + Math.round(srcR * srcR * 255));
+    dst[i + 1] = Math.min(255, dst[i + 1] + Math.round(srcG * srcG * 255));
+    dst[i + 2] = Math.min(255, dst[i + 2] + Math.round(srcB * srcB * 255));
+    dst[i + 3] = Math.min(255, dst[i + 3] + Math.round(srcA * srcA * 255));
+  }
+
+  dstCtx.putImageData(dstImage, 0, 0);
+}
+
+function drawSimpleStatusBarToCanvas(
+  canvas: HTMLCanvasElement,
+  fillImg: HTMLImageElement,
+  borderImg: HTMLImageElement,
+  highlightImg: HTMLImageElement | null,
+  valuePct: number,
+  fillProfile: StatusBarFillProfile,
+  fillTint?: string,
+) {
+  const rect = canvas.getBoundingClientRect();
+  const cssW = Math.max(1, rect.width);
+  const cssH = Math.max(1, rect.height);
+  const dpr = window.devicePixelRatio || 1;
+  const pxW = Math.max(1, Math.round(cssW * dpr));
+  const pxH = Math.max(1, Math.round(cssH * dpr));
+  if (canvas.width !== pxW || canvas.height !== pxH) {
+    canvas.width = pxW;
+    canvas.height = pxH;
+  }
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  ctx.imageSmoothingEnabled = true;
+
+  const fillW = cssW * modelBarFillRatio(valuePct, fillProfile);
+  if (fillW > 0) {
+    ctx.drawImage(
+      fillImg,
+      0,
+      0,
+      fillImg.width,
+      fillImg.height,
+      0,
+      0,
+      fillW,
+      cssH,
+    );
+    if (fillTint) {
+      ctx.save();
+      ctx.globalCompositeOperation = "multiply";
+      ctx.fillStyle = fillTint;
+      ctx.fillRect(0, 0, fillW, cssH);
+      ctx.restore();
+    }
+  }
+
+  if (highlightImg) {
+    compositeSrcColorAdditive(ctx, pxW, pxH, dpr, cssW, cssH, (srcCtx) => {
+      srcCtx.drawImage(
+        highlightImg,
+        0,
+        0,
+        highlightImg.width,
+        highlightImg.height,
+        0,
+        0,
+        cssW,
+        cssH,
+      );
+    });
+  }
+
+  ctx.drawImage(
+    borderImg,
+    0,
+    0,
+    borderImg.width,
+    borderImg.height,
+    0,
+    0,
+    cssW,
+    cssH,
+  );
+}
+
+function mixRgb(
+  a: [number, number, number],
+  b: [number, number, number],
+  t: number,
+): [number, number, number] {
+  const clamped = Math.max(0, Math.min(1, t));
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * clamped),
+    Math.round(a[1] + (b[1] - a[1]) * clamped),
+    Math.round(a[2] + (b[2] - a[2]) * clamped),
+  ];
+}
+
+function rgbHex([r, g, b]: [number, number, number]): string {
+  return `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function healthBarTint(pct: number): string {
+  const p = Math.max(0, Math.min(100, pct));
+  const low: [number, number, number] = [220, 42, 22];
+  const mid: [number, number, number] = [238, 201, 46];
+  const high: [number, number, number] = [67, 213, 61];
+
+  if (p <= 35) return rgbHex(mixRgb(low, mid, p / 35));
+  return rgbHex(mixRgb(mid, high, (p - 35) / 65));
+}
+
+function easeOutCubic(t: number): number {
+  const clamped = Math.max(0, Math.min(1, t));
+  return 1 - (1 - clamped) ** 3;
+}
+
+function interpolateKeyframes(
+  ms: number,
+  keyframes: ReadonlyArray<readonly [number, number]>,
+): number {
+  if (keyframes.length === 0) return 0;
+  if (ms <= keyframes[0][0]) return keyframes[0][1];
+  for (let i = 1; i < keyframes.length; i++) {
+    const [frameMs, frameVal] = keyframes[i];
+    const [prevMs, prevVal] = keyframes[i - 1];
+    if (ms <= frameMs) {
+      const t = (ms - prevMs) / Math.max(0.0001, frameMs - prevMs);
+      return prevVal + (frameVal - prevVal) * t;
+    }
+  }
+  return keyframes[keyframes.length - 1][1];
+}
+
+function loadingStutterPct(ms: number): number {
+  const stutterFrames = [
+    [0, 82.0],
+    [130, 82.8],
+    [230, 82.35],
+    [340, 83.95],
+    [430, 83.3],
+    [560, 85.2],
+    [650, 84.45],
+    [780, 87.25],
+    [870, 86.55],
+    [940, 88.9],
+    [1000, 90.0],
+  ] as const;
+  return interpolateKeyframes(ms, stutterFrames);
+}
+
+function loadingProgressPct(ms: number): number {
+  const cycleMs = progressAnimCycleMs;
+  const wrappedMs = ((ms % cycleMs) + cycleMs) % cycleMs;
+  const finalMs = cycleMs - loadingSmoothToStutterMs - loadingStutterDurationMs;
+
+  if (wrappedMs < loadingSmoothToStutterMs) {
+    const t = wrappedMs / loadingSmoothToStutterMs;
+    return easeOutCubic(t) * loadingStutterStartPct;
+  }
+
+  if (wrappedMs < loadingSmoothToStutterMs + loadingStutterDurationMs) {
+    return loadingStutterPct(wrappedMs - loadingSmoothToStutterMs);
+  }
+
+  const finalT =
+    (wrappedMs - loadingSmoothToStutterMs - loadingStutterDurationMs) /
+    Math.max(1, finalMs);
+  return (
+    loadingStutterEndPct + easeOutCubic(finalT) * (100 - loadingStutterEndPct)
+  );
+}
+
+function loadingGlowAlphaPct(pct: number): number {
+  const clampedPct = Math.max(0, Math.min(100, pct));
+  // LoadBar.mdx (Birth sequence) glow alpha keys:
+  // frame 3333:0, 13333:0, 26667:1, 26800:0.
+  const glowAlphaFrames = [
+    [0, 0],
+    [42.6135, 0],
+    [99.4332, 1],
+    [100, 0],
+  ] as const;
+  return interpolateKeyframes(clampedPct, glowAlphaFrames);
+}
+
+interface MenuFrameVariantCardProps {
+  variant: MenuFrameVariantDef;
+  glueBgUrl: string;
+  glueBgDownUrl: string;
+  glueBorderUrl: string;
+  glueBorderDownUrl: string;
+  glueHoverUrl: string;
+}
+
+function MenuFrameVariantCard(props: MenuFrameVariantCardProps) {
+  const buttonCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const [frameSrc, setFrameSrc] = useState("");
+
+  const buttonTextAfterHotkey = (() => {
+    const text = props.variant.buttonText;
+    const hotkey = props.variant.buttonHotkey;
+    if (!hotkey) return text;
+    if (text.toLowerCase().startsWith(hotkey.toLowerCase())) {
+      return text.slice(hotkey.length);
+    }
+    return text;
+  })();
+
+  const buttonPlacementStyle = (() => {
+    const p = props.variant.buttonPlacement;
+    const leftPct =
+      p.anchor === "top-left"
+        ? (p.offsetX / p.backdropW) * 100
+        : 100 - ((p.offsetX + p.buttonW) / p.backdropW) * 100;
+    const rightPct = 100 - leftPct - (p.buttonW / p.backdropW) * 100;
+    const topPct = (p.offsetY / p.backdropH) * 100;
+    const bottomPct = 100 - topPct - (p.buttonH / p.backdropH) * 100;
+    return {
+      left: `${leftPct}%`,
+      right: `${rightPct}%`,
+      top: `${topPct}%`,
+      bottom: `${bottomPct}%`,
+    } as const;
+  })();
+
+  useEffect(() => {
+    const src = props.variant.src;
+    if (!src) {
+      setFrameSrc("");
+      return;
+    }
+    let cancelled = false;
+
+    void cropFrameRowToDataUrl(
+      src,
+      props.variant.atlasRows ?? 1,
+      props.variant.atlasRow ?? 0,
+    )
+      .then((result) => {
+        if (cancelled) return;
+        setFrameSrc(result.url);
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [props.variant.src, props.variant.atlasRows, props.variant.atlasRow]);
+
+  useEffect(() => {
+    const canvas = buttonCanvasRef.current;
+    const bgUrl = pressed ? props.glueBgDownUrl : props.glueBgUrl;
+    const borderUrl = pressed ? props.glueBorderDownUrl : props.glueBorderUrl;
+    const hoverActive = hovered && !pressed;
+    const hoverUrl = props.glueHoverUrl;
+    if (!canvas || !bgUrl || !borderUrl) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrl),
+      loadDataUrlImage(borderUrl),
+      hoverUrl ? loadDataUrlImage(hoverUrl) : Promise.resolve(null),
+    ])
+      .then(([bgImg, borderImg, hoverImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(
+          canvas,
+          bgImg,
+          borderImg,
+          hoverImg,
+          hoverActive,
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    pressed,
+    hovered,
+    props.glueBgUrl,
+    props.glueBgDownUrl,
+    props.glueBorderUrl,
+    props.glueBorderDownUrl,
+    props.glueHoverUrl,
+  ]);
+
+  return (
+    <div className="button-preview-col">
+      <div
+        className="menu-frame-variant-shell"
+        style={{
+          width: `${props.variant.widthPx}px`,
+          height: `${props.variant.heightPx}px`,
+        }}
+      >
+        {frameSrc && (
+          <img src={frameSrc} alt="" className="menu-frame-variant-image" />
+        )}
+        <button
+          type="button"
+          className={`menu-button-inner menu-frame-variant-inner${props.variant.innerTemplate === "tiny" ? " menu-frame-variant-inner--tiny" : ""}`}
+          style={buttonPlacementStyle}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => {
+            setHovered(false);
+            setPressed(false);
+          }}
+          onMouseDown={() => setPressed(true)}
+          onMouseUp={() => setPressed(false)}
+        >
+          <canvas ref={buttonCanvasRef} className="menu-button-canvas" />
+          <span
+            className="menu-button-label"
+            style={{
+              transform: pressed
+                ? `translate(${glueButtonPressedOffsetXPx}px, ${glueButtonPressedOffsetYPx}px)`
+                : "none",
+            }}
+          >
+            {props.variant.buttonHotkey && (
+              <span className="button-hotkey">
+                {props.variant.buttonHotkey}
+              </span>
+            )}
+            {buttonTextAfterHotkey}
+          </span>
+        </button>
+      </div>
+      <div className="button-state-label">{props.variant.label}</div>
+    </div>
+  );
+}
+
+export default function App() {
+  const glueScreenButtonCanvasRef = useRef<HTMLCanvasElement>(null);
+  const glueDisabledCanvasRef = useRef<HTMLCanvasElement>(null);
+  const glueBorderedCanvasRef = useRef<HTMLCanvasElement>(null);
+  const glueBorderedDisabledCanvasRef = useRef<HTMLCanvasElement>(null);
+  const glueSmallCanvasRef = useRef<HTMLCanvasElement>(null);
+  const glueSmallDisabledCanvasRef = useRef<HTMLCanvasElement>(null);
+  const campaignButtonCanvasRef = useRef<HTMLCanvasElement>(null);
+  const campaignDisabledCanvasRef = useRef<HTMLCanvasElement>(null);
+  const popupTriggerCanvasRef = useRef<HTMLCanvasElement>(null);
+  const popupTriggerDisabledCanvasRef = useRef<HTMLCanvasElement>(null);
+  const popupMenuCanvasRef = useRef<HTMLCanvasElement>(null);
+  const healthBarCanvasRef = useRef<HTMLCanvasElement>(null);
+  const manaBarCanvasRef = useRef<HTMLCanvasElement>(null);
+  const xpBarCanvasRef = useRef<HTMLCanvasElement>(null);
+  const progressBarCanvasRef = useRef<HTMLCanvasElement>(null);
+  const buildProgressCanvasRef = useRef<HTMLCanvasElement>(null);
+  const escSliderCanvasRef = useRef<HTMLCanvasElement>(null);
+  const escSliderDisabledCanvasRef = useRef<HTMLCanvasElement>(null);
+  const menuButtonCanvasRef = useRef<HTMLCanvasElement>(null);
+  const menuSingleCanvasRef = useRef<HTMLCanvasElement>(null);
+  const menuSingleDisabledCanvasRef = useRef<HTMLCanvasElement>(null);
+  const menuDisabledCanvasRef = useRef<HTMLCanvasElement>(null);
+  const escButtonCanvasRef = useRef<HTMLCanvasElement>(null);
+  const escButtonDisabledCanvasRef = useRef<HTMLCanvasElement>(null);
+  const escEditboxCanvasRef = useRef<HTMLCanvasElement>(null);
+  const escEditboxDisabledCanvasRef = useRef<HTMLCanvasElement>(null);
+  const bnetEditboxCanvasRef = useRef<HTMLCanvasElement>(null);
+  const escTextAreaCanvasRef = useRef<HTMLCanvasElement>(null);
+  const escTextAreaScrollCanvasRef = useRef<HTMLCanvasElement>(null);
+  const glueScrollBarCanvasRef = useRef<HTMLCanvasElement>(null);
+  const glueScrollBarDisabledCanvasRef = useRef<HTMLCanvasElement>(null);
+  const glueListBoxCanvasRef = useRef<HTMLCanvasElement>(null);
+  const glueListBoxScrollCanvasRef = useRef<HTMLCanvasElement>(null);
+  const heroGetStartedCanvasRef = useRef<HTMLCanvasElement>(null);
+  const counterCanvasRef = useRef<HTMLCanvasElement>(null);
+  const heroInstallEditboxCanvasRef = useRef<HTMLCanvasElement>(null);
+  const race = useCurrentRace();
+  const activePage = usePage();
+  const [showLoading, setShowLoading] = useState(true);
+  const [upperButtonAtlasUrl, setUpperButtonAtlasUrl] = useState("");
+  const [glueBgUrl, setGlueBgUrl] = useState("");
+  const [glueBgDownUrl, setGlueBgDownUrl] = useState("");
+  const [glueBorderUrl, setGlueBorderUrl] = useState("");
+  const [glueBorderDownUrl, setGlueBorderDownUrl] = useState("");
+  const [glueFrameUrl, setGlueFrameUrl] = useState("");
+  const [glueFrameSingleUrl, setGlueFrameSingleUrl] = useState("");
+  const [cardBorderAtlasUrl, setCardBorderAtlasUrl] = useState("");
+  const [cardBorderImageUrl, setCardBorderImageUrl] = useState("");
+  const [glueFrameLargeUrl, setGlueFrameLargeUrl] = useState("");
+  const [glueFrameLargeSingleUrl, setGlueFrameLargeSingleUrl] = useState("");
+  const [glueFrameSmallUrl, setGlueFrameSmallUrl] = useState("");
+  const [glueFrameSmallSingleUrl, setGlueFrameSmallSingleUrl] = useState("");
+  const [glueFrameTinyUrl, setGlueFrameTinyUrl] = useState("");
+  const [glueFrameMultiplayerUrl, setGlueFrameMultiplayerUrl] = useState("");
+  const [glueHoverUrl, setGlueHoverUrl] = useState("");
+  const [glueBgDisabledUrl, setGlueBgDisabledUrl] = useState("");
+  const [glueBorderDisabledUrl, setGlueBorderDisabledUrl] = useState("");
+  const [glueBorderedBorderUrl, setGlueBorderedBorderUrl] = useState("");
+  const [glueBorderedBorderDownUrl, setGlueBorderedBorderDownUrl] =
+    useState("");
+  const [glueBorderedBorderDisabledUrl, setGlueBorderedBorderDisabledUrl] =
+    useState("");
+  const [campaignBgUrl, setCampaignBgUrl] = useState("");
+  const [campaignBgDownUrl, setCampaignBgDownUrl] = useState("");
+  const [campaignBgDisabledUrl, setCampaignBgDisabledUrl] = useState("");
+  const [campaignBorderUrl, setCampaignBorderUrl] = useState("");
+  const [campaignBorderDownUrl, setCampaignBorderDownUrl] = useState("");
+  const [campaignBorderDisabledUrl, setCampaignBorderDisabledUrl] =
+    useState("");
+  const [popupBgUrl, setPopupBgUrl] = useState("");
+  const [popupArrowUrl, setPopupArrowUrl] = useState("");
+  const [sliderBgUrl, setSliderBgUrl] = useState("");
+  const [sliderBorderUrl, setSliderBorderUrl] = useState("");
+  const [sliderBorderDisabledUrl, setSliderBorderDisabledUrl] = useState("");
+  const [sliderKnobUrl, setSliderKnobUrl] = useState("");
+  const [sliderKnobDisabledUrl, setSliderKnobDisabledUrl] = useState("");
+  const [healthFillUrl, setHealthFillUrl] = useState("");
+  const [manaFillUrl, setManaFillUrl] = useState("");
+  const [unitBarFillUrl, setUnitBarFillUrl] = useState("");
+  const [progressFillUrl, setProgressFillUrl] = useState("");
+  const [buildFillUrl, setBuildFillUrl] = useState("");
+  const [barTrackUrl, setBarTrackUrl] = useState("");
+  const [barBorderUrl, setBarBorderUrl] = useState("");
+  const [progressBorderUrl, setProgressBorderUrl] = useState("");
+  const [barHighlightUrl, setBarHighlightUrl] = useState("");
+  const [buildBorderUrl, setBuildBorderUrl] = useState("");
+  const [loadingBgUrl, setLoadingBgUrl] = useState("");
+  const [loadingFillUrl, setLoadingFillUrl] = useState("");
+  const [loadingBorderUrl, setLoadingBorderUrl] = useState("");
+  const [loadingGlassUrl, setLoadingGlassUrl] = useState("");
+  const [loadingGlowUrl, setLoadingGlowUrl] = useState("");
+  const [tooltipBgUrl, setTooltipBgUrl] = useState("");
+  const [tooltipBorderAtlasUrl, setTooltipBorderAtlasUrl] = useState("");
+  const [tooltipBorderImageUrl, setTooltipBorderImageUrl] = useState("");
+  const [tooltipGoldIconUrl, setTooltipGoldIconUrl] = useState("");
+  const [tooltipLumberIconUrl, setTooltipLumberIconUrl] = useState("");
+  const [tooltipSupplyIconUrl, setTooltipSupplyIconUrl] = useState("");
+  const [escBgUrl, setEscBgUrl] = useState("");
+  const [escBgDownUrl, setEscBgDownUrl] = useState("");
+  const [escBgDisabledUrl, setEscBgDisabledUrl] = useState("");
+  const [escBorderUrl, setEscBorderUrl] = useState("");
+  const [escBorderDownUrl, setEscBorderDownUrl] = useState("");
+  const [escBorderDisabledUrl, setEscBorderDisabledUrl] = useState("");
+  const [escHoverUrl, setEscHoverUrl] = useState("");
+  const [escMenuBgUrl, setEscMenuBgUrl] = useState("");
+  const [escMenuBorderUrl, setEscMenuBorderUrl] = useState("");
+  const [factionBorderUrls, setFactionBorderUrls] = useState<
+    Record<string, string>
+  >({});
+  const [goldIconUrl, setGoldIconUrl] = useState("");
+  const [lumberIconUrl, setLumberIconUrl] = useState("");
+  const [supplyIconUrl, setSupplyIconUrl] = useState("");
+  const [supplyDrumstickUrl, setSupplyDrumstickUrl] = useState("");
+  const [bnetInputBgUrl, setBnetInputBgUrl] = useState("");
+  const [bnetInputBorderUrl, setBnetInputBorderUrl] = useState("");
+  const [glueScrollBgUrl, setGlueScrollBgUrl] = useState("");
+  const [glueScrollBorderUrl, setGlueScrollBorderUrl] = useState("");
+  const [glueScrollUpArrowUrl, setGlueScrollUpArrowUrl] = useState("");
+  const [glueScrollDownArrowUrl, setGlueScrollDownArrowUrl] = useState("");
+  const [glueScrollKnobUrl, setGlueScrollKnobUrl] = useState("");
+  const [glueScrollKnobDisabledUrl, setGlueScrollKnobDisabledUrl] =
+    useState("");
+  const [goldValue, setGoldValue] = useState(0);
+  const [lumberValue, setLumberValue] = useState(0);
+  const [supplyUsed, setSupplyUsed] = useState(0);
+  const [supplyCap, setSupplyCap] = useState(10);
+  const [viewportWidth, setViewportWidth] = useState(Number.POSITIVE_INFINITY);
+  const [hoveredRace, setHoveredRace] = useState<Race | null>(null);
+  const [pressedRace, setPressedRace] = useState<Race | null>(null);
+  const [glueScreenButtonHovered, setGlueScreenButtonHovered] = useState(false);
+  const [glueScreenButtonPressed, setGlueScreenButtonPressed] = useState(false);
+  const [menuButtonHovered, setMenuButtonHovered] = useState(false);
+  const [menuButtonPressed, setMenuButtonPressed] = useState(false);
+  const [menuSingleHovered, setMenuSingleHovered] = useState(false);
+  const [menuSinglePressed, setMenuSinglePressed] = useState(false);
+  const [topTabHovered, setTopTabHovered] = useState(false);
+  const [topTabPressed, setTopTabPressed] = useState(false);
+  const [escButtonHovered, setEscButtonHovered] = useState(false);
+  const [escButtonPressed, setEscButtonPressed] = useState(false);
+  const [heroGetStartedHovered, setHeroGetStartedHovered] = useState(false);
+  const [heroGetStartedPressed, setHeroGetStartedPressed] = useState(false);
+  const [counterHovered, setCounterHovered] = useState(false);
+  const [counterPressed, setCounterPressed] = useState(false);
+  const [counterCount, setCounterCount] = useState(0);
+  const [cmdBtnIconUrl, setCmdBtnIconUrl] = useState("");
+  const [cmdBtnDisabledIconUrl, setCmdBtnDisabledIconUrl] = useState("");
+  const [cmdBtnHighlightUrl, setCmdBtnHighlightUrl] = useState("");
+  const [blademasterCmdIconUrls, setBlademasterCmdIconUrls] =
+    useState<BlademasterCommandCardIcons>(EMPTY_BLADEMASTER_COMMAND_CARD_ICONS);
+  const [blademasterCmdDisabledIconUrls, setBlademasterCmdDisabledIconUrls] =
+    useState<BlademasterCommandCardIcons>(EMPTY_BLADEMASTER_COMMAND_CARD_ICONS);
+  const [cmdGroupBorderUrl, setCmdGroupBorderUrl] = useState("");
+  const [unitQueueBorderUrl, setUnitQueueBorderUrl] = useState("");
+  const [unitQueuePeonIconUrl, setUnitQueuePeonIconUrl] = useState("");
+  const [cmdHeroGlowUrl, setCmdHeroGlowUrl] = useState("");
+  const [cmdLevelOverlayUrl, setCmdLevelOverlayUrl] = useState("");
+  const [cmdSubgroupBgUrl, setCmdSubgroupBgUrl] = useState("");
+  const [cmdBtnHovered, setCmdBtnHovered] = useState(false);
+  const [cmdBtnPressed, setCmdBtnPressed] = useState(false);
+  const [checkboxBgUrl, setCheckboxBgUrl] = useState("");
+  const [checkboxDepressedUrl, setCheckboxDepressedUrl] = useState("");
+  const [checkboxCheckUrl, setCheckboxCheckUrl] = useState("");
+  const [checkboxDisabledBgUrl, setCheckboxDisabledBgUrl] = useState("");
+  const [radioBgUrl, setRadioBgUrl] = useState("");
+  const [radioDisabledBgUrl, setRadioDisabledBgUrl] = useState("");
+  const [radioDotUrl, setRadioDotUrl] = useState("");
+  const [radioDisabledDotUrl, setRadioDisabledDotUrl] = useState("");
+  const [checkboxChecked, setCheckboxChecked] = useState(false);
+  const [checkboxPressed, setCheckboxPressed] = useState(false);
+  const [radioSelected, setRadioSelected] = useState(0);
+  const [glueBorderedHovered, setGlueBorderedHovered] = useState(false);
+  const [glueBorderedPressed, setGlueBorderedPressed] = useState(false);
+  const [glueSmallHovered, setGlueSmallHovered] = useState(false);
+  const [glueSmallPressed, setGlueSmallPressed] = useState(false);
+  const [campaignHovered, setCampaignHovered] = useState(false);
+  const [campaignPressed, setCampaignPressed] = useState(false);
+  const [popupHovered, setPopupHovered] = useState(false);
+  const [popupOpen, setPopupOpen] = useState(false);
+  const [popupSelection, setPopupSelection] =
+    useState<(typeof popupOptions)[number]>("High");
+  const [escSliderValue, setEscSliderValue] = useState(55);
+  const [escInputValue, setEscInputValue] = useState("PlayerOne");
+  const [bnetInputValue, setBnetInputValue] = useState("Azeroth-1");
+  const [escTextScrollValue, setEscTextScrollValue] = useState(18);
+  const [glueScrollValue, setGlueScrollValue] = useState(38);
+  const [listBoxSelected, setListBoxSelected] =
+    useState<(typeof glueListBoxItems)[number]>("Normal");
+  const [listBoxScrollValue, setListBoxScrollValue] = useState(12);
+  const [barCycle, setBarCycle] = useState(0);
+  const [progressAnimMs, setProgressAnimMs] = useState(0);
+
+  const upkeepLabel = (() => {
+    const used = supplyUsed;
+    if (used > 80) return { text: "High Upkeep", color: "#c84848" };
+    if (used > 50) return { text: "Low Upkeep", color: "#d6b34a" };
+    return { text: "No Upkeep", color: "#58d869" };
+  })();
+  const compactTopHud = viewportWidth <= compactTopHudBreakpointPx;
+
+  const healthBarPct = healthBarSamples[barCycle % healthBarSamples.length];
+  const manaBarPct = manaBarSamples[barCycle % manaBarSamples.length];
+  const phasedProgressPct = (phaseMs: number) => {
+    const wrapped = (progressAnimMs + phaseMs) % progressAnimCycleMs;
+    return (wrapped / progressAnimCycleMs) * 100;
+  };
+  const xpBarPct = phasedProgressPct(xpPhaseOffsetMs);
+  const progressBarPct = phasedProgressPct(progressPhaseOffsetMs);
+  const buildBarPct = phasedProgressPct(buildPhaseOffsetMs);
+  const loadingBarPct = loadingProgressPct(
+    progressAnimMs + loadingPhaseOffsetMs,
+  );
+  const loadingFillPct = Math.max(loadingMinFillPct, loadingBarPct);
+  const loadingGlowOpacity = loadingGlowAlphaPct(loadingBarPct);
+  const loadingGlowWidthPct = (loadingFillPct / 100) * loadingGlowSpanPct;
+  const escSliderKnobLeft = sliderThumbCenterPercent(
+    escSliderValue,
+    escSliderTrackWidthPx,
+    escSliderThumbWidthPx,
+  );
+  const escSliderDisabledKnobLeft = sliderThumbCenterPercent(
+    65,
+    escSliderTrackWidthPx,
+    escSliderThumbWidthPx,
+  );
+  const glueScrollThumbTop = sliderThumbCenterPercent(
+    glueScrollValue,
+    glueScrollTrackHeightPx,
+    glueScrollThumbHeightPx,
+  );
+  const glueScrollDisabledThumbTop = sliderThumbCenterPercent(
+    58,
+    glueScrollTrackHeightPx,
+    glueScrollThumbHeightPx,
+  );
+  const escTextAreaScrollThumbTop = verticalThumbCenterPx(
+    escTextScrollValue,
+    escTextAreaScrollTrackTopPx,
+    escTextAreaScrollTrackHeightPx,
+    escTextAreaScrollThumbHeightPx,
+  );
+  const glueListScrollThumbTop = sliderThumbCenterPercent(
+    listBoxScrollValue,
+    glueListScrollTrackHeightPx,
+    glueListScrollThumbHeightPx,
+  );
+  const escTextAreaContentHeightPx =
+    escTextAreaLines.length * escTextAreaLineHeightPx +
+    escTextAreaContentPaddingTopPx +
+    escTextAreaContentPaddingBottomPx;
+  const escTextAreaMaxScrollPx = Math.max(
+    0,
+    escTextAreaContentHeightPx - escTextAreaViewportPx,
+  );
+  const escTextAreaOffsetPx = (() => {
+    if (escTextAreaMaxScrollPx <= 0) return 0;
+    const rawOffset = (escTextScrollValue / 100) * escTextAreaMaxScrollPx;
+    const snappedOffset =
+      Math.round(rawOffset / escTextAreaLineHeightPx) * escTextAreaLineHeightPx;
+    return Math.max(0, Math.min(escTextAreaMaxScrollPx, snappedOffset));
+  })();
+
+  const currentCount = getCount(); // read without subscribing
+
+  const glueListBoxVisibleRows = Math.max(
+    1,
+    Math.floor(
+      (glueListBoxViewportPx -
+        glueListBoxContentPaddingTopPx -
+        glueListBoxContentPaddingBottomPx) /
+        glueListBoxLineHeightPx,
+    ),
+  );
+  const glueListBoxMaxScrollRows = Math.max(
+    0,
+    glueListBoxItems.length - glueListBoxVisibleRows,
+  );
+  const glueListBoxMaxScrollPx =
+    glueListBoxMaxScrollRows * glueListBoxLineHeightPx;
+  const glueListBoxOffsetPx = (() => {
+    if (glueListBoxMaxScrollRows <= 0) return 0;
+    const snappedRows = Math.round(
+      (listBoxScrollValue / 100) * glueListBoxMaxScrollRows,
+    );
+    return snappedRows * glueListBoxLineHeightPx;
+  })();
+  const bumpGlueScroll = (delta: number) => {
+    setGlueScrollValue((prev: number) =>
+      Math.max(0, Math.min(100, prev + delta)),
+    );
+  };
+  const bumpListBoxScroll = (delta: number) => {
+    setListBoxScrollValue((prev: number) =>
+      Math.max(0, Math.min(100, prev + delta)),
+    );
+  };
+  const menuFrameVariants: MenuFrameVariantDef[] = [
+    {
+      label: "Border",
+      source: "StandardMenuButtonBaseBackdrop",
+      fdfSize: "0.256 x 0.064",
+      widthPx: 256,
+      heightPx: 64,
+      atlasRows: 1,
+      atlasRow: 0,
+      src: glueFrameUrl,
+      innerTemplate: "standard",
+      buttonPlacement: {
+        backdropW: 0.256,
+        backdropH: 0.064,
+        buttonW: 0.179,
+        buttonH: 0.031,
+        anchor: "top-right",
+        offsetX: 0.012,
+        offsetY: 0.0165,
+      },
+      buttonText: "Single Player",
+      buttonHotkey: "S",
+    },
+    {
+      label: "BorderSingle",
+      source: "StandardMenuSingleButtonBaseBackdrop",
+      fdfSize: "0.256 x 0.064",
+      widthPx: 256,
+      heightPx: 64,
+      atlasRows: 1,
+      atlasRow: 0,
+      src: glueFrameSingleUrl,
+      innerTemplate: "standard",
+      buttonPlacement: {
+        backdropW: 0.256,
+        backdropH: 0.064,
+        buttonW: 0.159,
+        buttonH: 0.031,
+        anchor: "top-right",
+        offsetX: 0.032,
+        offsetY: 0.015625,
+      },
+      buttonText: "OK",
+      buttonHotkey: "O",
+    },
+    {
+      label: "Large",
+      source: "StandardMenuLargeButtonBaseBackdrop",
+      fdfSize: "0.256 x 0.064",
+      widthPx: 256,
+      heightPx: 64,
+      atlasRows: 1,
+      atlasRow: 0,
+      src: glueFrameLargeUrl,
+      innerTemplate: "standard",
+      buttonPlacement: {
+        backdropW: 0.256,
+        backdropH: 0.064,
+        // LargeBorder has a materially wider carved slot than StandardMenuButtonBaseBackdrop.
+        // Match the actual texture aperture, not StandardButtonTemplate's nominal width.
+        buttonW: 0.2085,
+        buttonH: 0.031,
+        anchor: "top-right",
+        offsetX: 0.012,
+        offsetY: 0.0165,
+      },
+      buttonText: "Campaign",
+      buttonHotkey: "C",
+    },
+    {
+      label: "LargeSingle",
+      source: "StandardMenuSingleLargeButtonBaseBackdrop",
+      fdfSize: "0.256 x 0.064",
+      widthPx: 256,
+      heightPx: 64,
+      atlasRows: 1,
+      atlasRow: 0,
+      src: glueFrameLargeSingleUrl,
+      innerTemplate: "standard",
+      buttonPlacement: {
+        backdropW: 0.256,
+        backdropH: 0.064,
+        buttonW: 0.187,
+        buttonH: 0.031,
+        anchor: "top-right",
+        offsetX: 0.032,
+        offsetY: 0.015625,
+      },
+      buttonText: "Accept",
+      buttonHotkey: "A",
+    },
+    {
+      label: "Small",
+      source: "StandardMenuSmallButtonBaseBackdrop",
+      fdfSize: "0.256 x 0.064",
+      widthPx: 256,
+      heightPx: 64,
+      atlasRows: 1,
+      atlasRow: 0,
+      src: glueFrameSmallUrl,
+      innerTemplate: "standard",
+      buttonPlacement: {
+        backdropW: 0.256,
+        backdropH: 0.064,
+        // Typical in-game usage (mirrored small menu buttons) uses a narrower inner button.
+        buttonW: 0.128,
+        buttonH: 0.031,
+        anchor: "top-right",
+        offsetX: 0.012,
+        offsetY: 0.0165,
+      },
+      buttonText: "Replay",
+      buttonHotkey: "R",
+    },
+    {
+      label: "SmallSingle",
+      source: "StandardMenuSingleSmallButtonBaseBackdrop",
+      fdfSize: "0.256 x 0.064",
+      widthPx: 256,
+      heightPx: 64,
+      atlasRows: 1,
+      atlasRow: 0,
+      src: glueFrameSmallSingleUrl,
+      innerTemplate: "standard",
+      buttonPlacement: {
+        backdropW: 0.256,
+        backdropH: 0.064,
+        // SmallBorderSingle is effectively a compact single-button socket.
+        // Keep the inner control to the narrow carved center slot.
+        buttonW: 0.1035,
+        buttonH: 0.031,
+        anchor: "top-right",
+        offsetX: 0.035,
+        offsetY: 0.015625,
+      },
+      buttonText: "Back",
+      buttonHotkey: "B",
+    },
+    {
+      label: "Tiny",
+      source: "StandardMenuTinyButtonBaseBackdrop",
+      fdfSize: "0.11 x 0.055",
+      widthPx: 110,
+      heightPx: 55,
+      atlasRows: 1,
+      atlasRow: 0,
+      src: glueFrameTinyUrl,
+      innerTemplate: "tiny",
+      buttonPlacement: {
+        backdropW: 0.11,
+        backdropH: 0.055,
+        buttonW: 0.03,
+        buttonH: 0.026,
+        anchor: "top-right",
+        offsetX: 0.009,
+        offsetY: 0.014,
+      },
+      buttonText: "G",
+      buttonHotkey: "",
+    },
+    {
+      label: "Multiplayer",
+      source: "Unreferenced FDF (2-row atlas)",
+      fdfSize: "top row shown",
+      widthPx: 256,
+      heightPx: 64,
+      atlasRows: 2,
+      atlasRow: 0,
+      src: glueFrameMultiplayerUrl,
+      innerTemplate: "standard",
+      buttonPlacement: {
+        backdropW: 0.256,
+        backdropH: 0.064,
+        buttonW: 0.179,
+        buttonH: 0.031,
+        anchor: "top-right",
+        offsetX: 0.012,
+        offsetY: 0.0165,
+      },
+      buttonText: "Battle.net",
+      buttonHotkey: "B",
+    },
+  ];
+
+  // Effect: cursor
+  useEffect(() => {
+    let cancelled = false;
+
+    void loadRaceCursorFrameDataUrl(race)
+      .then((cursorFrameUrl) => {
+        if (cancelled) return;
+        document.documentElement.style.setProperty(
+          "--wc3-game-cursor",
+          `url("${cursorFrameUrl}") 2 2, auto`,
+        );
+      })
+      .catch((err) => {
+        console.error(err);
+        document.documentElement.style.setProperty("--wc3-game-cursor", "auto");
+      });
+
+    return () => {
+      cancelled = true;
+      document.documentElement.style.setProperty("--wc3-game-cursor", "auto");
+    };
+  }, [race]);
+
+  // Effect: load main BLP textures
+  useEffect(() => {
+    const raceTile = RACE_PREFIXES[race].tile;
+    let cancelled = false;
+    const escSkin = getEscButtonSkin(race);
+
+    void Promise.all([
+      loadBlpDataUrl(
+        `./console-buttons/${RACE_PREFIXES[race].lower}-console-buttonstates2.blp`,
+      ),
+      loadBlpDataUrl("./buttons/glue/GlueScreen-Button1-BackdropBackground.blp"),
+      loadBlpDataUrl(
+        "./buttons/glue/GlueScreen-Button1-BackdropBackground-Down.blp",
+      ),
+      loadBlpDataUrl("./buttons/glue/GlueScreen-Button1-BackdropBorder.blp"),
+      loadBlpDataUrl(
+        "./buttons/glue/GlueScreen-Button1-BackdropBorder-Down.blp",
+      ),
+      loadBlpDataUrl("./buttons/glue/GlueScreen-Button1-Border.blp"),
+      loadBlpDataUrl("./borders/glue/GlueScreen-Button1-BorderSingle.blp"),
+      loadBlpDataUrl(getCardSectionBorderPath(race)),
+      loadBlpDataUrl("./borders/glue/GlueScreen-Button1-LargeBorder.blp"),
+      loadBlpDataUrl("./borders/glue/GlueScreen-Button1-LargeBorderSingle.blp"),
+      loadBlpDataUrl("./borders/glue/GlueScreen-Button1-SmallBorder.blp"),
+      loadBlpDataUrl("./borders/glue/GlueScreen-Button1-SmallBorderSingle.blp"),
+      loadBlpDataUrl("./borders/glue/GlueScreen-Button1-TinyBorder.blp"),
+      loadBlpDataUrl("./borders/glue/GlueScreen-Button1-MultiplayerBorder.blp"),
+      loadBlpDataUrl("./buttons/glue/bnet-button01-highlight-mouse.blp"),
+      loadBlpDataUrl(
+        "./buttons/glue/GlueScreen-Button1-BackdropBackground-Disabled.blp",
+      ),
+      loadBlpDataUrl(
+        "./buttons/glue/GlueScreen-Button1-BackdropBorder-Disabled.blp",
+      ),
+      loadBlpDataUrl(escSkin.bg),
+      loadBlpDataUrl(escSkin.bgDown),
+      loadBlpDataUrl(escSkin.bgDisabled),
+      loadBlpDataUrl(escSkin.border),
+      loadBlpDataUrl(escSkin.borderDown),
+      loadBlpDataUrl(escSkin.borderDisabled),
+      loadBlpDataUrl(escSkin.hover),
+      loadBlpDataUrl("./borders/esc/editbox-background.blp"),
+      loadBlpDataUrl("./borders/esc/editbox-border.blp"),
+      loadBlpDataUrl("./resources/ResourceGold.blp"),
+      loadBlpDataUrl("./resources/ResourceLumber.blp"),
+      loadBlpDataUrl(`./resources/Resource${raceTile}.blp`),
+      loadBlpDataUrl("./resources/ResourceSupply.blp"),
+      loadBlpDataUrl("./buttons/command/BTNHolyBolt.blp"),
+      loadBlpDataUrl("./buttons/command/DISBTNHolyBolt.blp"),
+      loadBlpDataUrl("./buttons/command/human-activebutton.blp"),
+      loadBlpDataUrl("./buttons/checkbox/checkbox-background.blp"),
+      loadBlpDataUrl(getCheckboxDepressedPath(race)),
+      loadBlpDataUrl("./buttons/checkbox/checkbox-check.blp"),
+      loadBlpDataUrl("./buttons/checkbox/checkbox-background-disabled.blp"),
+      loadBlpDataUrl("./buttons/radio/radiobutton-background.blp"),
+      loadBlpDataUrl("./buttons/radio/radiobutton-background-disabled.blp"),
+      loadBlpDataUrl("./buttons/radio/radiobutton-button.blp"),
+      loadBlpDataUrl("./buttons/radio/radiobutton-buttondisabled.blp"),
+    ])
+      .then(
+        ([
+          upperButtons,
+          glueBg,
+          glueBgDown,
+          glueBorder,
+          glueBorderDown,
+          glueFrame,
+          glueFrameSingle,
+          cardBorderAtlas,
+          glueFrameLarge,
+          glueFrameLargeSingle,
+          glueFrameSmall,
+          glueFrameSmallSingle,
+          glueFrameTiny,
+          glueFrameMultiplayer,
+          glueHover,
+          glueBgDisabled,
+          glueBorderDisabled,
+          escBg,
+          escBgDown,
+          escBgDisabled,
+          escBorder,
+          escBorderDown,
+          escBorderDisabled,
+          escHover,
+          escMenuBg,
+          escMenuBorder,
+          gold,
+          lumber,
+          supply,
+          supplyDrumstick,
+          cmdBtnIcon,
+          cmdBtnDisabledIcon,
+          cmdBtnHighlight,
+          cbBg,
+          cbDepressed,
+          cbCheck,
+          cbDisabledBg,
+          rbBg,
+          rbDisabledBg,
+          rbDot,
+          rbDisabledDot,
+        ]) => {
+          if (cancelled) return;
+          setUpperButtonAtlasUrl(upperButtons);
+          setGlueBgUrl(glueBg);
+          setGlueBgDownUrl(glueBgDown);
+          setGlueBorderUrl(glueBorder);
+          setGlueBorderDownUrl(glueBorderDown);
+          setGlueFrameUrl(glueFrame);
+          setGlueFrameSingleUrl(glueFrameSingle);
+          setCardBorderAtlasUrl(cardBorderAtlas);
+          setGlueFrameLargeUrl(glueFrameLarge);
+          setGlueFrameLargeSingleUrl(glueFrameLargeSingle);
+          setGlueFrameSmallUrl(glueFrameSmall);
+          setGlueFrameSmallSingleUrl(glueFrameSmallSingle);
+          setGlueFrameTinyUrl(glueFrameTiny);
+          setGlueFrameMultiplayerUrl(glueFrameMultiplayer);
+          setGlueHoverUrl(glueHover);
+          setGlueBgDisabledUrl(glueBgDisabled);
+          setGlueBorderDisabledUrl(glueBorderDisabled);
+          setEscBgUrl(escBg);
+          setEscBgDownUrl(escBgDown);
+          setEscBgDisabledUrl(escBgDisabled);
+          setEscBorderUrl(escBorder);
+          setEscBorderDownUrl(escBorderDown);
+          setEscBorderDisabledUrl(escBorderDisabled);
+          setEscHoverUrl(escHover);
+          setEscMenuBgUrl(escMenuBg);
+          setEscMenuBorderUrl(escMenuBorder);
+          setGoldIconUrl(gold);
+          setLumberIconUrl(lumber);
+          setSupplyIconUrl(supply);
+          setSupplyDrumstickUrl(supplyDrumstick);
+          setCmdBtnIconUrl(cmdBtnIcon);
+          setCmdBtnDisabledIconUrl(cmdBtnDisabledIcon);
+          setCmdBtnHighlightUrl(cmdBtnHighlight);
+          setCheckboxBgUrl(cbBg);
+          setCheckboxDepressedUrl(cbDepressed);
+          setCheckboxCheckUrl(cbCheck);
+          setCheckboxDisabledBgUrl(cbDisabledBg);
+          setRadioBgUrl(rbBg);
+          setRadioDisabledBgUrl(rbDisabledBg);
+          setRadioDotUrl(rbDot);
+          setRadioDisabledDotUrl(rbDisabledDot);
+        },
+      )
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [race]);
+
+  // Effect: card border image from atlas
+  useEffect(() => {
+    if (!cardBorderAtlasUrl) {
+      setCardBorderImageUrl("");
+      return;
+    }
+    let cancelled = false;
+
+    void loadDataUrlImage(cardBorderAtlasUrl)
+      .then((atlasImg) => {
+        if (cancelled) return;
+        setCardBorderImageUrl(composeBorderImageFromAtlas(atlasImg));
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cardBorderAtlasUrl]);
+
+  // Effect: tooltip border image from atlas
+  useEffect(() => {
+    if (!tooltipBorderAtlasUrl) {
+      setTooltipBorderImageUrl("");
+      return;
+    }
+    let cancelled = false;
+
+    void loadDataUrlImage(tooltipBorderAtlasUrl)
+      .then((atlasImg) => {
+        if (cancelled) return;
+        setTooltipBorderImageUrl(composeBorderImageFromAtlas(atlasImg));
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tooltipBorderAtlasUrl]);
+
+  // Effect: load second batch of BLP textures
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.all([
+      loadBlpDataUrl(
+        "./buttons/glue/GlueScreen-Button1-BorderedBackdropBorder.blp",
+      ),
+      loadBlpDataUrl(
+        "./buttons/glue/GlueScreen-Button1-BorderedBackdropBorder-Down.blp",
+      ),
+      loadBlpDataUrl(
+        "./buttons/glue/GlueScreen-Button1-BorderedBackdropBorder-Disabled.blp",
+      ),
+      loadBlpDataUrl(
+        "./buttons/campaign/GlueScreen-CampaignButton-BackdropBackground.blp",
+      ),
+      loadBlpDataUrl(
+        "./buttons/campaign/GlueScreen-CampaignButton-BackdropBackground-Down.blp",
+      ),
+      loadBlpDataUrl(
+        "./buttons/campaign/GlueScreen-CampaignButton-BackdropBackground-Disabled.blp",
+      ),
+      loadBlpDataUrl(
+        "./buttons/campaign/GlueScreen-CampaignButton-BackdropBorder.blp",
+      ),
+      loadBlpDataUrl(
+        "./buttons/campaign/GlueScreen-CampaignButton-BackdropBorder-Down.blp",
+      ),
+      loadBlpDataUrl(
+        "./buttons/campaign/GlueScreen-CampaignButton-BackdropBorder-Disabled.blp",
+      ),
+      loadBlpDataUrl(
+        "./buttons/popup/GlueScreen-Pulldown-BackdropBackground.blp",
+      ),
+      loadBlpDataUrl("./buttons/popup/GlueScreen-Pulldown-Arrow.blp"),
+      loadBlpDataUrl("./buttons/slider/slider-background.blp"),
+      loadBlpDataUrl("./buttons/slider/slider-border.blp"),
+      loadBlpDataUrl("./buttons/slider/slider-borderdisabled.blp"),
+      loadBlpDataUrl(getEscSliderKnobPath(race)),
+      loadBlpDataUrl("./buttons/slider/slider-knobdisabled.blp"),
+      loadBlpDataUrl("./bars/human-healthbar-fill.blp"),
+      loadBlpDataUrl("./bars/human-manabar-fill.blp"),
+      loadBlpDataUrl("./bars/human-bigbar-fill.blp"),
+      loadBlpDataUrl("./bars/human-buildprogressbar-fill.blp"),
+      loadBlpDataUrl("./bars/human-statbar-color2.blp"),
+      loadBlpDataUrl("./bars/human-statbar-color.blp"),
+      loadBlpDataUrl("./bars/human-statbar-edge.blp"),
+      loadBlpDataUrl("./bars/human-statbar-highlight.blp"),
+      loadBlpDataUrl("./bars/human-xpbar-border.blp"),
+      loadBlpDataUrl("./bars/human-buildprogressbar-border.blp"),
+      loadBlpDataUrl("./loading/Loading-BarBackground.blp"),
+      loadBlpDataUrl("./loading/Loading-BarFill.blp"),
+      loadBlpDataUrl("./loading/Loading-BarBorder.blp"),
+      loadBlpDataUrl("./loading/Loading-BarGlass.blp"),
+      loadBlpDataUrl("./loading/Loading-BarGlow.blp"),
+      loadBlpDataUrl("./tooltips/human-tooltip-background.blp"),
+      loadBlpDataUrl("./tooltips/human-tooltip-border.blp"),
+      loadBlpDataUrl("./tooltips/ToolTipGoldIcon.blp"),
+      loadBlpDataUrl("./tooltips/ToolTipLumberIcon.blp"),
+      loadBlpDataUrl("./tooltips/ToolTipSupplyIcon.blp"),
+      loadBlpDataUrl("./buttons/command/human-multipleselection-border.blp"),
+      loadBlpDataUrl("./borders/console/human-unitqueue-border.blp").then(
+        (src) => cropImageRegionToDataUrl(src, 7, 18, 241, 93),
+      ),
+      loadBlpDataUrl("./buttons/command/BTNPeon.blp"),
+      loadBlpDataUrl("./buttons/command/human-multipleselection-heroglow.blp"),
+      loadBlpDataUrl("./buttons/command/human-button-lvls-overlay.blp"),
+      loadBlpDataUrl("./buttons/command/human-subgroup-background.blp"),
+      loadBlpDataUrl("./buttons/editbox/bnet-inputbox-back.blp"),
+      loadBlpDataUrl("./buttons/editbox/bnet-inputbox-border.blp"),
+      loadBlpDataUrl(
+        "./buttons/scrollbar/GlueScreen-Scrollbar-BackdropBackground.blp",
+      ),
+      loadBlpDataUrl(
+        "./buttons/scrollbar/GlueScreen-Scrollbar-BackdropBorder.blp",
+      ),
+      loadBlpDataUrl("./buttons/scrollbar/GlueScreen-Scrollbar-UpArrow.blp"),
+      loadBlpDataUrl("./buttons/scrollbar/GlueScreen-Scrollbar-DownArrow.blp"),
+      loadBlpDataUrl(
+        "./buttons/scrollbar/SinglePlayerSkirmish-ScrollBarKnob.blp",
+      ),
+      loadBlpDataUrl(
+        "./buttons/scrollbar/SinglePlayerSkirmish-ScrollBarKnobDisabled.blp",
+      ),
+    ])
+      .then(
+        ([
+          glueBordered,
+          glueBorderedDown,
+          glueBorderedDisabled,
+          campaignBg,
+          campaignBgDown,
+          campaignBgDisabled,
+          campaignBorder,
+          campaignBorderDown,
+          campaignBorderDisabled,
+          popupBg,
+          popupArrow,
+          sliderBg,
+          sliderBorder,
+          sliderBorderDisabled,
+          sliderKnob,
+          sliderKnobDisabled,
+          healthFill,
+          manaFill,
+          progressFill,
+          buildFill,
+          barTrack,
+          unitBarFill,
+          barBorder,
+          barHighlight,
+          progressBorder,
+          buildBorder,
+          loadingBg,
+          loadingFill,
+          loadingBorder,
+          loadingGlass,
+          loadingGlow,
+          tooltipBg,
+          tooltipBorder,
+          tooltipGold,
+          tooltipLumber,
+          tooltipSupply,
+          cmdGroupBorder,
+          unitQueueBorder,
+          unitQueuePeon,
+          cmdHeroGlow,
+          cmdLevelOverlay,
+          cmdSubgroupBg,
+          bnetInputBg,
+          bnetInputBorder,
+          glueScrollBg,
+          glueScrollBorder,
+          glueScrollUp,
+          glueScrollDown,
+          glueScrollKnob,
+          glueScrollKnobDisabled,
+        ]) => {
+          if (cancelled) return;
+          setGlueBorderedBorderUrl(glueBordered);
+          setGlueBorderedBorderDownUrl(glueBorderedDown);
+          setGlueBorderedBorderDisabledUrl(glueBorderedDisabled);
+          setCampaignBgUrl(campaignBg);
+          setCampaignBgDownUrl(campaignBgDown);
+          setCampaignBgDisabledUrl(campaignBgDisabled);
+          setCampaignBorderUrl(campaignBorder);
+          setCampaignBorderDownUrl(campaignBorderDown);
+          setCampaignBorderDisabledUrl(campaignBorderDisabled);
+          setPopupBgUrl(popupBg);
+          setPopupArrowUrl(popupArrow);
+          setSliderBgUrl(sliderBg);
+          setSliderBorderUrl(sliderBorder);
+          setSliderBorderDisabledUrl(sliderBorderDisabled);
+          setSliderKnobUrl(sliderKnob);
+          setSliderKnobDisabledUrl(sliderKnobDisabled);
+          setHealthFillUrl(healthFill);
+          setManaFillUrl(manaFill);
+          setProgressFillUrl(progressFill);
+          setBuildFillUrl(buildFill);
+          setBarTrackUrl(barTrack);
+          setUnitBarFillUrl(unitBarFill);
+          setBarBorderUrl(barBorder);
+          setProgressBorderUrl(progressBorder);
+          setBarHighlightUrl(barHighlight);
+          setBuildBorderUrl(buildBorder);
+          setLoadingBgUrl(loadingBg);
+          setLoadingFillUrl(loadingFill);
+          setLoadingBorderUrl(loadingBorder);
+          setLoadingGlassUrl(loadingGlass);
+          setLoadingGlowUrl(loadingGlow);
+          setTooltipBgUrl(tooltipBg);
+          setTooltipBorderAtlasUrl(tooltipBorder);
+          setTooltipGoldIconUrl(tooltipGold);
+          setTooltipLumberIconUrl(tooltipLumber);
+          setTooltipSupplyIconUrl(tooltipSupply);
+          setCmdGroupBorderUrl(cmdGroupBorder);
+          setUnitQueueBorderUrl(unitQueueBorder);
+          setUnitQueuePeonIconUrl(unitQueuePeon);
+          setCmdHeroGlowUrl(cmdHeroGlow);
+          setCmdLevelOverlayUrl(cmdLevelOverlay);
+          setCmdSubgroupBgUrl(cmdSubgroupBg);
+          setBnetInputBgUrl(bnetInputBg);
+          setBnetInputBorderUrl(bnetInputBorder);
+          setGlueScrollBgUrl(glueScrollBg);
+          setGlueScrollBorderUrl(glueScrollBorder);
+          setGlueScrollUpArrowUrl(glueScrollUp);
+          setGlueScrollDownArrowUrl(glueScrollDown);
+          setGlueScrollKnobUrl(glueScrollKnob);
+          setGlueScrollKnobDisabledUrl(glueScrollKnobDisabled);
+        },
+      )
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [race]);
+
+  // Effect: load blademaster command card icons (once)
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.all([
+      loadBlpDataUrl("./buttons/command/BTNWindWalkOn.blp"),
+      loadBlpDataUrl("./buttons/command/BTNMirrorImage.blp"),
+      loadBlpDataUrl("./buttons/command/BTNCriticalStrike.blp"),
+      loadBlpDataUrl("./buttons/command/BTNWhirlwind.blp"),
+      loadBlpDataUrl("./buttons/command/BTNSkillz.blp"),
+      loadBlpDataUrl("./buttons/command/BTNAttack.blp"),
+      loadBlpDataUrl("./buttons/command/BTNMove.blp"),
+      loadBlpDataUrl("./buttons/command/BTNStop.blp"),
+      loadBlpDataUrl("./buttons/command/BTNHoldPosition.blp"),
+      loadBlpDataUrl("./buttons/command/BTNPatrol.blp"),
+      loadBlpDataUrl("./buttons/command/DISBTNWindWalkOn.blp"),
+      loadBlpDataUrl("./buttons/command/DISBTNMirrorImage.blp"),
+      loadBlpDataUrl("./buttons/command/DISBTNCriticalStrike.blp"),
+      loadBlpDataUrl("./buttons/command/DISBTNWhirlwind.blp"),
+      loadBlpDataUrl("./buttons/command/DISBTNSkillz.blp"),
+      loadBlpDataUrl("./buttons/command/DISBTNAttack.blp"),
+      loadBlpDataUrl("./buttons/command/DISBTNMove.blp"),
+      loadBlpDataUrl("./buttons/command/DISBTNStop.blp"),
+      loadBlpDataUrl("./buttons/command/DISBTNHoldPosition.blp"),
+      loadBlpDataUrl("./buttons/command/DISBTNPatrol.blp"),
+    ])
+      .then(
+        ([
+          windWalk,
+          mirrorImage,
+          criticalStrike,
+          bladestorm,
+          skillz,
+          attack,
+          move,
+          stop,
+          holdPosition,
+          patrol,
+          disWindWalk,
+          disMirrorImage,
+          disCriticalStrike,
+          disBladestorm,
+          disSkillz,
+          disAttack,
+          disMove,
+          disStop,
+          disHoldPosition,
+          disPatrol,
+        ]) => {
+          if (cancelled) return;
+          setBlademasterCmdIconUrls({
+            windWalk,
+            mirrorImage,
+            criticalStrike,
+            bladestorm,
+            skillz,
+            attack,
+            move,
+            stop,
+            holdPosition,
+            patrol,
+          });
+          setBlademasterCmdDisabledIconUrls({
+            windWalk: disWindWalk,
+            mirrorImage: disMirrorImage,
+            criticalStrike: disCriticalStrike,
+            bladestorm: disBladestorm,
+            skillz: disSkillz,
+            attack: disAttack,
+            move: disMove,
+            stop: disStop,
+            holdPosition: disHoldPosition,
+            patrol: disPatrol,
+          });
+        },
+      )
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Effect: glue screen button canvas
+  useEffect(() => {
+    const canvas = glueScreenButtonCanvasRef.current;
+    const bgUrlVal = glueScreenButtonPressed ? glueBgDownUrl : glueBgUrl;
+    const borderUrlVal = glueScreenButtonPressed
+      ? glueBorderDownUrl
+      : glueBorderUrl;
+    const hoverActive = glueScreenButtonHovered && !glueScreenButtonPressed;
+    const hoverUrlVal = glueHoverUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      hoverUrlVal ? loadDataUrlImage(hoverUrlVal) : Promise.resolve(null),
+    ])
+      .then(([bgImg, borderImg, hoverImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(
+          canvas,
+          bgImg,
+          borderImg,
+          hoverImg,
+          hoverActive,
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    glueScreenButtonPressed,
+    glueScreenButtonHovered,
+    glueBgUrl,
+    glueBgDownUrl,
+    glueBorderUrl,
+    glueBorderDownUrl,
+    glueHoverUrl,
+    activePage,
+  ]);
+
+  // Effect: glue bordered canvas
+  useEffect(() => {
+    const canvas = glueBorderedCanvasRef.current;
+    const bgUrlVal = glueBorderedPressed ? glueBgDownUrl : glueBgUrl;
+    const borderUrlVal = glueBorderedPressed
+      ? glueBorderedBorderDownUrl
+      : glueBorderedBorderUrl;
+    const hoverActive = glueBorderedHovered && !glueBorderedPressed;
+    const hoverUrlVal = glueHoverUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      hoverUrlVal ? loadDataUrlImage(hoverUrlVal) : Promise.resolve(null),
+    ])
+      .then(([bgImg, borderImg, hoverImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(
+          canvas,
+          bgImg,
+          borderImg,
+          hoverImg,
+          hoverActive,
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    glueBorderedPressed,
+    glueBorderedHovered,
+    glueBgUrl,
+    glueBgDownUrl,
+    glueBorderedBorderUrl,
+    glueBorderedBorderDownUrl,
+    glueHoverUrl,
+    activePage,
+  ]);
+
+  // Effect: glue bordered disabled canvas
+  useEffect(() => {
+    const canvas = glueBorderedDisabledCanvasRef.current;
+    const bgUrlVal = glueBgDisabledUrl;
+    const borderUrlVal = glueBorderedBorderDisabledUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(canvas, bgImg, borderImg, null, false);
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [glueBgDisabledUrl, glueBorderedBorderDisabledUrl, activePage]);
+
+  // Effect: glue small canvas
+  useEffect(() => {
+    const canvas = glueSmallCanvasRef.current;
+    const bgUrlVal = glueSmallPressed ? glueBgDownUrl : glueBgUrl;
+    const borderUrlVal = glueSmallPressed ? glueBorderDownUrl : glueBorderUrl;
+    const hoverActive = glueSmallHovered && !glueSmallPressed;
+    const hoverUrlVal = glueHoverUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      hoverUrlVal ? loadDataUrlImage(hoverUrlVal) : Promise.resolve(null),
+    ])
+      .then(([bgImg, borderImg, hoverImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(
+          canvas,
+          bgImg,
+          borderImg,
+          hoverImg,
+          hoverActive,
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    glueSmallPressed,
+    glueSmallHovered,
+    glueBgUrl,
+    glueBgDownUrl,
+    glueBorderUrl,
+    glueBorderDownUrl,
+    glueHoverUrl,
+    activePage,
+  ]);
+
+  // Effect: glue small disabled canvas
+  useEffect(() => {
+    const canvas = glueSmallDisabledCanvasRef.current;
+    const bgUrlVal = glueBgDisabledUrl;
+    const borderUrlVal = glueBorderDisabledUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(canvas, bgImg, borderImg, null, false);
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [glueBgDisabledUrl, glueBorderDisabledUrl, activePage]);
+
+  // Effect: campaign button canvas
+  useEffect(() => {
+    const canvas = campaignButtonCanvasRef.current;
+    const bgUrlVal = campaignPressed ? campaignBgDownUrl : campaignBgUrl;
+    const borderUrlVal = campaignPressed
+      ? campaignBorderDownUrl
+      : campaignBorderUrl;
+    const hoverActive = campaignHovered && !campaignPressed;
+    const hoverUrlVal = glueHoverUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      hoverUrlVal ? loadDataUrlImage(hoverUrlVal) : Promise.resolve(null),
+    ])
+      .then(([bgImg, borderImg, hoverImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(
+          canvas,
+          bgImg,
+          borderImg,
+          hoverImg,
+          hoverActive,
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    campaignPressed,
+    campaignHovered,
+    campaignBgUrl,
+    campaignBgDownUrl,
+    campaignBorderUrl,
+    campaignBorderDownUrl,
+    glueHoverUrl,
+    activePage,
+  ]);
+
+  // Effect: campaign disabled canvas
+  useEffect(() => {
+    const canvas = campaignDisabledCanvasRef.current;
+    const bgUrlVal = campaignBgDisabledUrl;
+    const borderUrlVal = campaignBorderDisabledUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(canvas, bgImg, borderImg, null, false);
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignBgDisabledUrl, campaignBorderDisabledUrl, activePage]);
+
+  // Effect: popup trigger canvas
+  useEffect(() => {
+    const canvas = popupTriggerCanvasRef.current;
+    const bgUrlVal = popupOpen ? glueBgDownUrl : glueBgUrl;
+    const borderUrlVal = popupOpen
+      ? glueBorderedBorderDownUrl
+      : glueBorderedBorderUrl;
+    const hoverActive = popupHovered && !popupOpen;
+    const hoverUrlVal = glueHoverUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      hoverUrlVal ? loadDataUrlImage(hoverUrlVal) : Promise.resolve(null),
+    ])
+      .then(([bgImg, borderImg, hoverImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(
+          canvas,
+          bgImg,
+          borderImg,
+          hoverImg,
+          hoverActive,
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    popupOpen,
+    popupHovered,
+    glueBgUrl,
+    glueBgDownUrl,
+    glueBorderedBorderUrl,
+    glueBorderedBorderDownUrl,
+    glueHoverUrl,
+    activePage,
+  ]);
+
+  // Effect: popup trigger disabled canvas
+  useEffect(() => {
+    const canvas = popupTriggerDisabledCanvasRef.current;
+    const bgUrlVal = glueBgDisabledUrl;
+    const borderUrlVal = glueBorderedBorderDisabledUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(canvas, bgImg, borderImg, null, false);
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [glueBgDisabledUrl, glueBorderedBorderDisabledUrl, activePage]);
+
+  // Effect: popup menu canvas
+  useEffect(() => {
+    const canvas = popupMenuCanvasRef.current;
+    const bgUrlVal = popupBgUrl || glueBgUrl;
+    const borderUrlVal = glueBorderedBorderUrl;
+    if (!popupOpen || !canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(canvas, bgImg, borderImg, null, false);
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [popupOpen, popupBgUrl, glueBgUrl, glueBorderedBorderUrl, activePage]);
+
+  // Effect: health bar canvas
+  useEffect(() => {
+    const canvas = healthBarCanvasRef.current;
+    const fillUrlVal = unitBarFillUrl;
+    const borderUrlVal = barBorderUrl;
+    const highlightUrlVal = barHighlightUrl;
+    const value = healthBarPct;
+    if (!canvas || !fillUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(fillUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      highlightUrlVal
+        ? loadDataUrlImage(highlightUrlVal)
+        : Promise.resolve(null),
+    ])
+      .then(([fillImg, borderImg, highlightImg]) => {
+        if (cancelled) return;
+        drawSimpleStatusBarToCanvas(
+          canvas,
+          fillImg,
+          borderImg,
+          highlightImg,
+          value,
+          unitBarFillProfile,
+          healthBarTint(value),
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [unitBarFillUrl, barBorderUrl, barHighlightUrl, healthBarPct, activePage]);
+
+  // Effect: mana bar canvas
+  useEffect(() => {
+    const canvas = manaBarCanvasRef.current;
+    const fillUrlVal = unitBarFillUrl;
+    const borderUrlVal = barBorderUrl;
+    const highlightUrlVal = barHighlightUrl;
+    const value = manaBarPct;
+    if (!canvas || !fillUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(fillUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      highlightUrlVal
+        ? loadDataUrlImage(highlightUrlVal)
+        : Promise.resolve(null),
+    ])
+      .then(([fillImg, borderImg, highlightImg]) => {
+        if (cancelled) return;
+        drawSimpleStatusBarToCanvas(
+          canvas,
+          fillImg,
+          borderImg,
+          highlightImg,
+          value,
+          unitBarFillProfile,
+          "#2f4fd4",
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [unitBarFillUrl, barBorderUrl, barHighlightUrl, manaBarPct, activePage]);
+
+  // Effect: xp bar canvas
+  useEffect(() => {
+    const canvas = xpBarCanvasRef.current;
+    const fillUrlVal = progressFillUrl;
+    const borderUrlVal = progressBorderUrl;
+    const highlightUrlVal = barHighlightUrl;
+    const value = xpBarPct;
+    if (!canvas || !fillUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(fillUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      highlightUrlVal
+        ? loadDataUrlImage(highlightUrlVal)
+        : Promise.resolve(null),
+    ])
+      .then(([fillImg, borderImg, highlightImg]) => {
+        if (cancelled) return;
+        drawSimpleStatusBarToCanvas(
+          canvas,
+          fillImg,
+          borderImg,
+          highlightImg,
+          value,
+          compactBarFillProfile,
+          "#7f49b5",
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [progressFillUrl, progressBorderUrl, barHighlightUrl, xpBarPct, activePage]);
+
+  // Effect: progress bar canvas
+  useEffect(() => {
+    const canvas = progressBarCanvasRef.current;
+    const fillUrlVal = progressFillUrl;
+    const borderUrlVal = progressBorderUrl;
+    const highlightUrlVal = barHighlightUrl;
+    const value = progressBarPct;
+    if (!canvas || !fillUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(fillUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      highlightUrlVal
+        ? loadDataUrlImage(highlightUrlVal)
+        : Promise.resolve(null),
+    ])
+      .then(([fillImg, borderImg, highlightImg]) => {
+        if (cancelled) return;
+        drawSimpleStatusBarToCanvas(
+          canvas,
+          fillImg,
+          borderImg,
+          highlightImg,
+          value,
+          compactBarFillProfile,
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [progressFillUrl, progressBorderUrl, barHighlightUrl, progressBarPct, activePage]);
+
+  // Effect: build progress canvas
+  useEffect(() => {
+    const canvas = buildProgressCanvasRef.current;
+    const fillUrlVal = buildFillUrl;
+    const borderUrlVal = buildBorderUrl;
+    const highlightUrlVal = barHighlightUrl;
+    const value = buildBarPct;
+    if (!canvas || !fillUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(fillUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      highlightUrlVal
+        ? loadDataUrlImage(highlightUrlVal)
+        : Promise.resolve(null),
+    ])
+      .then(([fillImg, borderImg, highlightImg]) => {
+        if (cancelled) return;
+        drawSimpleStatusBarToCanvas(
+          canvas,
+          fillImg,
+          borderImg,
+          highlightImg,
+          value,
+          buildBarFillProfile,
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [buildFillUrl, buildBorderUrl, barHighlightUrl, buildBarPct, activePage]);
+
+  // Effect: esc slider canvas
+  useEffect(() => {
+    const canvas = escSliderCanvasRef.current;
+    const bgUrlVal = sliderBgUrl;
+    const borderUrlVal = sliderBorderUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(canvas, bgImg, borderImg, null, false);
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sliderBgUrl, sliderBorderUrl, activePage]);
+
+  // Effect: esc slider disabled canvas
+  useEffect(() => {
+    const canvas = escSliderDisabledCanvasRef.current;
+    const bgUrlVal = sliderBgUrl;
+    const borderUrlVal = sliderBorderDisabledUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(canvas, bgImg, borderImg, null, false);
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sliderBgUrl, sliderBorderDisabledUrl, activePage]);
+
+  // Effect: esc editbox canvas
+  useEffect(() => {
+    const canvas = escEditboxCanvasRef.current;
+    const bgUrlVal = escMenuBgUrl;
+    const borderUrlVal = escMenuBorderUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        const h = canvas.clientHeight || 1;
+        drawTemplateNineSliceToCanvas(canvas, bgImg, borderImg, {
+          cornerPx: h * escControlCornerRatio,
+          insetPx: escEditboxCanvasFillInsetPx,
+          tileBackground: true,
+          tileHorizontalEdges: true,
+          opaqueBaseFill: "#000",
+          fillCornerMaxPx: escControlFillCornerCapPx,
+        });
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [escMenuBgUrl, escMenuBorderUrl, activePage]);
+
+  // Effect: esc editbox disabled canvas
+  useEffect(() => {
+    const canvas = escEditboxDisabledCanvasRef.current;
+    const bgUrlVal = escMenuBgUrl;
+    const borderUrlVal = escMenuBorderUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        const h = canvas.clientHeight || 1;
+        drawTemplateNineSliceToCanvas(canvas, bgImg, borderImg, {
+          cornerPx: h * escControlCornerRatio,
+          insetPx: h * escControlInsetRatio,
+          tileBackground: true,
+          tileHorizontalEdges: true,
+          opaqueBaseFill: "#000",
+          fillCornerMaxPx: escControlFillCornerCapPx,
+        });
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [escMenuBgUrl, escMenuBorderUrl, activePage]);
+
+  // Effect: bnet editbox canvas
+  useEffect(() => {
+    const canvas = bnetEditboxCanvasRef.current;
+    const bgUrlVal = bnetInputBgUrl;
+    const borderUrlVal = bnetInputBorderUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        const h = canvas.clientHeight || 1;
+        drawTemplateNineSliceToCanvas(canvas, bgImg, borderImg, {
+          cornerPx: h * bnetControlCornerRatio,
+          insetPx: h * bnetControlInsetRatio,
+          tileBackground: true,
+          tileHorizontalEdges: true,
+          opaqueBaseFill: "#000",
+        });
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bnetInputBgUrl, bnetInputBorderUrl, activePage]);
+
+  // Effect: hero install editbox canvas
+  useEffect(() => {
+    const canvas = heroInstallEditboxCanvasRef.current;
+    const bgUrlVal = escMenuBgUrl;
+    const borderUrlVal = escMenuBorderUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        const h = canvas.clientHeight || 1;
+        drawTemplateNineSliceToCanvas(canvas, bgImg, borderImg, {
+          cornerPx: h * escControlCornerRatio,
+          insetPx: escEditboxCanvasFillInsetPx,
+          tileBackground: true,
+          tileHorizontalEdges: true,
+          opaqueBaseFill: "#000",
+          fillCornerMaxPx: escControlFillCornerCapPx,
+        });
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [escMenuBgUrl, escMenuBorderUrl, activePage]);
+
+  // Effect: esc text area canvas
+  useEffect(() => {
+    const canvas = escTextAreaCanvasRef.current;
+    const bgUrlVal = escMenuBgUrl;
+    const borderUrlVal = escMenuBorderUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        const h = canvas.clientHeight || 1;
+        drawTemplateNineSliceToCanvas(canvas, bgImg, borderImg, {
+          cornerPx: h * escControlCornerRatio,
+          insetPx: escTextAreaCanvasFillInsetPx,
+          tileBackground: true,
+          tileHorizontalEdges: true,
+          opaqueBaseFill: "#000",
+          fillCornerMaxPx: escControlFillCornerCapPx,
+        });
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [escMenuBgUrl, escMenuBorderUrl, activePage]);
+
+  // Effect: esc text area scroll canvas
+  useEffect(() => {
+    const canvas = escTextAreaScrollCanvasRef.current;
+    const bgUrlVal = sliderBgUrl;
+    const borderUrlVal = sliderBorderUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        const w = canvas.clientWidth || 1;
+        drawTemplateNineSliceToCanvas(canvas, bgImg, borderImg, {
+          cornerPx: w * escScrollCornerRatio,
+          insetPx: w * escScrollInsetRatio,
+          tileBackground: true,
+          opaqueBaseFill: "#000",
+        });
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sliderBgUrl, sliderBorderUrl, activePage]);
+
+  // Effect: glue scroll bar canvas
+  useEffect(() => {
+    const canvas = glueScrollBarCanvasRef.current;
+    const bgUrlVal = glueScrollBgUrl;
+    const borderUrlVal = glueScrollBorderUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        const w = canvas.clientWidth || 1;
+        drawTemplateNineSliceToCanvas(canvas, bgImg, borderImg, {
+          cornerPx: w * glueScrollCornerRatio,
+          insetPx: w * glueScrollInsetRatio,
+          tileBackground: true,
+          opaqueBaseFill: "#000",
+        });
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [glueScrollBgUrl, glueScrollBorderUrl, activePage]);
+
+  // Effect: glue scroll bar disabled canvas
+  useEffect(() => {
+    const canvas = glueScrollBarDisabledCanvasRef.current;
+    const bgUrlVal = glueScrollBgUrl;
+    const borderUrlVal = glueScrollBorderUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        const w = canvas.clientWidth || 1;
+        drawTemplateNineSliceToCanvas(canvas, bgImg, borderImg, {
+          cornerPx: w * glueScrollCornerRatio,
+          insetPx: w * glueScrollInsetRatio,
+          tileBackground: true,
+          opaqueBaseFill: "#000",
+        });
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [glueScrollBgUrl, glueScrollBorderUrl, activePage]);
+
+  // Effect: glue list box canvas
+  useEffect(() => {
+    const canvas = glueListBoxCanvasRef.current;
+    const bgUrlVal = bnetInputBgUrl;
+    const borderUrlVal = bnetInputBorderUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        const h = canvas.clientHeight || 1;
+        drawTemplateNineSliceToCanvas(canvas, bgImg, borderImg, {
+          cornerPx: h * bnetControlCornerRatio,
+          insetPx: glueListBoxCanvasFillInsetPx,
+          tileBackground: true,
+          tileHorizontalEdges: true,
+          opaqueBaseFill: "#000",
+        });
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bnetInputBgUrl, bnetInputBorderUrl, activePage]);
+
+  // Effect: glue list box scroll canvas
+  useEffect(() => {
+    const canvas = glueListBoxScrollCanvasRef.current;
+    const bgUrlVal = glueScrollBgUrl;
+    const borderUrlVal = glueScrollBorderUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        const w = canvas.clientWidth || 1;
+        drawTemplateNineSliceToCanvas(canvas, bgImg, borderImg, {
+          cornerPx: w * glueScrollCornerRatio,
+          insetPx: w * glueScrollInsetRatio,
+          tileBackground: true,
+          opaqueBaseFill: "#000",
+        });
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [glueScrollBgUrl, glueScrollBorderUrl, activePage]);
+
+  // Effect: menu button canvas
+  useEffect(() => {
+    const canvas = menuButtonCanvasRef.current;
+    const bgUrlVal = menuButtonPressed ? glueBgDownUrl : glueBgUrl;
+    const borderUrlVal = menuButtonPressed ? glueBorderDownUrl : glueBorderUrl;
+    const hoverActive = menuButtonHovered && !menuButtonPressed;
+    const hoverUrlVal = glueHoverUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      hoverUrlVal ? loadDataUrlImage(hoverUrlVal) : Promise.resolve(null),
+    ])
+      .then(([bgImg, borderImg, hoverImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(
+          canvas,
+          bgImg,
+          borderImg,
+          hoverImg,
+          hoverActive,
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    menuButtonPressed,
+    menuButtonHovered,
+    glueBgUrl,
+    glueBgDownUrl,
+    glueBorderUrl,
+    glueBorderDownUrl,
+    glueHoverUrl,
+    activePage,
+  ]);
+
+  // Effect: menu single canvas
+  useEffect(() => {
+    const canvas = menuSingleCanvasRef.current;
+    const bgUrlVal = menuSinglePressed ? glueBgDownUrl : glueBgUrl;
+    const borderUrlVal = menuSinglePressed ? glueBorderDownUrl : glueBorderUrl;
+    const hoverActive = menuSingleHovered && !menuSinglePressed;
+    const hoverUrlVal = glueHoverUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      hoverUrlVal ? loadDataUrlImage(hoverUrlVal) : Promise.resolve(null),
+    ])
+      .then(([bgImg, borderImg, hoverImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(
+          canvas,
+          bgImg,
+          borderImg,
+          hoverImg,
+          hoverActive,
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    menuSinglePressed,
+    menuSingleHovered,
+    glueBgUrl,
+    glueBgDownUrl,
+    glueBorderUrl,
+    glueBorderDownUrl,
+    glueHoverUrl,
+    activePage,
+  ]);
+
+  // Effect: menu single disabled canvas
+  useEffect(() => {
+    const canvas = menuSingleDisabledCanvasRef.current;
+    const bgUrlVal = glueBgDisabledUrl;
+    const borderUrlVal = glueBorderDisabledUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(canvas, bgImg, borderImg, null, false);
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [glueBgDisabledUrl, glueBorderDisabledUrl, activePage]);
+
+  // Effect: esc button canvas
+  useEffect(() => {
+    const canvas = escButtonCanvasRef.current;
+    const bgUrlVal = escButtonPressed ? escBgDownUrl : escBgUrl;
+    const borderUrlVal = escButtonPressed ? escBorderDownUrl : escBorderUrl;
+    const hoverActive = escButtonHovered && !escButtonPressed;
+    const hoverUrlVal = escHoverUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      hoverUrlVal ? loadDataUrlImage(hoverUrlVal) : Promise.resolve(null),
+    ])
+      .then(([bgImg, borderImg, hoverImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(
+          canvas,
+          bgImg,
+          borderImg,
+          hoverImg,
+          hoverActive,
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    escButtonPressed,
+    escButtonHovered,
+    escBgUrl,
+    escBgDownUrl,
+    escBorderUrl,
+    escBorderDownUrl,
+    escHoverUrl,
+    activePage,
+  ]);
+
+  // Effect: hero get started canvas
+  useEffect(() => {
+    const canvas = heroGetStartedCanvasRef.current;
+    const bgUrlVal = heroGetStartedPressed ? escBgDownUrl : escBgUrl;
+    const borderUrlVal = heroGetStartedPressed
+      ? escBorderDownUrl
+      : escBorderUrl;
+    const hoverActive = heroGetStartedHovered && !heroGetStartedPressed;
+    const hoverUrlVal = escHoverUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      hoverUrlVal ? loadDataUrlImage(hoverUrlVal) : Promise.resolve(null),
+    ])
+      .then(([bgImg, borderImg, hoverImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(
+          canvas,
+          bgImg,
+          borderImg,
+          hoverImg,
+          hoverActive,
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    heroGetStartedPressed,
+    heroGetStartedHovered,
+    escBgUrl,
+    escBgDownUrl,
+    escBorderUrl,
+    escBorderDownUrl,
+    escHoverUrl,
+    activePage,
+  ]);
+
+  // Effect: count canvas
+  useEffect(() => {
+    const canvas = counterCanvasRef.current;
+    const bgUrlVal = counterPressed ? escBgDownUrl : escBgUrl;
+    const borderUrlVal = counterPressed ? escBorderDownUrl : escBorderUrl;
+    const hoverActive = counterHovered && !counterPressed;
+    const hoverUrlVal = escHoverUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+      hoverUrlVal ? loadDataUrlImage(hoverUrlVal) : Promise.resolve(null),
+    ])
+      .then(([bgImg, borderImg, hoverImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(
+          canvas,
+          bgImg,
+          borderImg,
+          hoverImg,
+          hoverActive,
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    counterPressed,
+    counterHovered,
+    escBgUrl,
+    escBgDownUrl,
+    escBorderUrl,
+    escBorderDownUrl,
+    escHoverUrl,
+    activePage,
+  ]);
+
+  // Effect: esc button disabled canvas
+  useEffect(() => {
+    const canvas = escButtonDisabledCanvasRef.current;
+    const bgUrlVal = escBgDisabledUrl;
+    const borderUrlVal = escBorderDisabledUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(canvas, bgImg, borderImg, null, false);
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [escBgDisabledUrl, escBorderDisabledUrl, activePage]);
+
+  // Effect: glue disabled canvas
+  useEffect(() => {
+    const canvas = glueDisabledCanvasRef.current;
+    const bgUrlVal = glueBgDisabledUrl;
+    const borderUrlVal = glueBorderDisabledUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(canvas, bgImg, borderImg, null, false);
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [glueBgDisabledUrl, glueBorderDisabledUrl, activePage]);
+
+  // Effect: menu disabled canvas
+  useEffect(() => {
+    const canvas = menuDisabledCanvasRef.current;
+    const bgUrlVal = glueBgDisabledUrl;
+    const borderUrlVal = glueBorderDisabledUrl;
+    if (!canvas || !bgUrlVal || !borderUrlVal) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(bgUrlVal),
+      loadDataUrlImage(borderUrlVal),
+    ])
+      .then(([bgImg, borderImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(canvas, bgImg, borderImg, null, false);
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [glueBgDisabledUrl, glueBorderDisabledUrl, activePage]);
+
+  // Effect: timers, viewport width, faction border urls (onMount equivalent)
+  useEffect(() => {
+    const syncViewportWidth = () => {
+      setViewportWidth(window.innerWidth);
+    };
+    syncViewportWidth();
+    window.addEventListener("resize", syncViewportWidth);
+
+    const goldTimer = window.setInterval(() => {
+      setGoldValue((prev: number) =>
+        Math.min(maxResourceValue, prev + resourceStep),
+      );
+    }, goldTickMs);
+    const lumberTimer = window.setInterval(() => {
+      setLumberValue((prev: number) =>
+        Math.min(maxResourceValue, prev + resourceStep),
+      );
+    }, lumberTickMs);
+    const supplyTimer = window.setInterval(() => {
+      setSupplyUsed((prev: number) => Math.min(prev + 1, supplyCap));
+    }, supplyTickMs);
+    const supplyCapTimer = window.setInterval(() => {
+      setSupplyCap((prev: number) => Math.min(maxSupplyCap, prev + 10));
+    }, supplyCapTickMs);
+    const barsTimer = window.setInterval(() => {
+      setBarCycle((prev: number) => prev + 1);
+    }, 1400);
+    const progressAnimTimer = window.setInterval(() => {
+      setProgressAnimMs(
+        (prev: number) => (prev + progressAnimTickMs) % progressAnimCycleMs,
+      );
+    }, progressAnimTickMs);
+
+    const factionRaces: { name: string; race: Race }[] = [
+      { name: "Human", race: "Human" },
+      { name: "Orc", race: "Orc" },
+      { name: "Night Elf", race: "NightElf" },
+      { name: "Undead", race: "Undead" },
+    ];
+    void Promise.all(
+      factionRaces.map((f) => loadBlpDataUrl(getCardSectionBorderPath(f.race))),
+    ).then((urls) => {
+      const record: Record<string, string> = {};
+      factionRaces.forEach((f, i) => {
+        record[f.name] = urls[i];
+      });
+      setFactionBorderUrls(record);
+    });
+
+    return () => {
+      window.removeEventListener("resize", syncViewportWidth);
+      clearInterval(goldTimer);
+      clearInterval(lumberTimer);
+      clearInterval(supplyTimer);
+      clearInterval(supplyCapTimer);
+      clearInterval(barsTimer);
+      clearInterval(progressAnimTimer);
+    };
+  }, []);
+
+  return (
+    <>
+    {showLoading && (
+      <LoadingScreen onDone={() => setShowLoading(false)} />
+    )}
+    <div
+      style={{
+        position: "relative",
+        width: "100vw",
+        height: "100dvh",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: "0",
+          pointerEvents: "none",
+          zIndex: 20,
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: "0",
+            top: "0",
+            width: "100%",
+            height: `${topHudHeightVw}vw`,
+            overflow: "hidden",
+          }}
+        >
+          <TopHudWebGL race={race} leftOnly={compactTopHud} />
+
+          <div
+            style={{
+              position: "absolute",
+              left: compactTopHud ? "0" : `${upperButtonLeftVw}vw`,
+              top: compactTopHud ? "0" : `${upperButtonTopVw}vw`,
+              display: "flex",
+              width: compactTopHud ? "100%" : undefined,
+              height: compactTopHud
+                ? `${topHudHeightVw}vw`
+                : `${upperButtonHeightVw}vw`,
+              pointerEvents: "auto",
+            }}
+          >
+            {raceButtons.map((raceBtn) => {
+              const isActive = race === raceBtn;
+              const isPressed = pressedRace === raceBtn;
+              const showHighlight = hoveredRace === raceBtn && !isPressed;
+              const basePosY =
+                isActive || isPressed
+                  ? upperButtonPushedPosY
+                  : upperButtonNormalPosY;
+              const textColor =
+                isActive || showHighlight ? "#ffd412" : "#ffffff";
+              const textTransform = isPressed
+                ? `translate(${upperButtonPressedOffsetX}vw, ${upperButtonPressedOffsetY}vw)`
+                : "translate(0, 0)";
+
+              return (
+                <button
+                  key={raceBtn}
+                  type="button"
+                  onMouseEnter={() => setHoveredRace(raceBtn)}
+                  onMouseLeave={() => {
+                    setHoveredRace((prev: Race | null) =>
+                      prev === raceBtn ? null : prev,
+                    );
+                    setPressedRace((prev: Race | null) =>
+                      prev === raceBtn ? null : prev,
+                    );
+                  }}
+                  onMouseDown={() => setPressedRace(raceBtn)}
+                  onMouseUp={() =>
+                    setPressedRace((prev: Race | null) =>
+                      prev === raceBtn ? null : prev,
+                    )
+                  }
+                  onClick={() => setCurrentRace(raceBtn)}
+                  style={{
+                    position: "relative",
+                    width: compactTopHud
+                      ? `${100 / raceButtons.length}%`
+                      : `${upperButtonWidthVw}vw`,
+                    height: "100%",
+                    border: "none",
+                    padding: "0",
+                    margin: "0",
+                    background: "transparent",
+                    cursor: "pointer",
+                    pointerEvents: "auto",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: "0",
+                      backgroundImage: `url("${upperButtonAtlasUrl}")`,
+                      backgroundRepeat: "no-repeat",
+                      backgroundSize: `${upperButtonBgSizeX}% ${upperButtonBgSizeY}%`,
+                      backgroundPosition: `0 ${basePosY}`,
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: "0",
+                      backgroundImage: `url("${upperButtonAtlasUrl}")`,
+                      backgroundRepeat: "no-repeat",
+                      backgroundSize: `${upperButtonBgSizeX}% ${upperButtonBgSizeY}%`,
+                      backgroundPosition: `0 ${upperButtonHighlightPosY}`,
+                      opacity: showHighlight ? 1 : 0,
+                      transition: "opacity 80ms linear",
+                      pointerEvents: "none",
+                      mixBlendMode: "screen",
+                    }}
+                  />
+                  <span
+                    style={{
+                      position: "relative",
+                      display: "flex",
+                      width: "100%",
+                      height: "100%",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: textColor,
+                      fontFamily:
+                        '"Friz Quadrata", "Palatino Linotype", "Book Antiqua", Palatino, serif',
+                      fontSize: compactTopHud
+                        ? "clamp(11px, 2.2vw, 14px)"
+                        : "1.25vw",
+                      lineHeight: "1",
+                      textShadow: "1px 1px 0 rgba(0, 0, 0, 0.95)",
+                      transform: textTransform,
+                      whiteSpace: "nowrap",
+                      userSelect: "none",
+                    }}
+                  >
+                    {RACE_PREFIXES[raceBtn].display}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {!compactTopHud && (
+            <div
+              style={{
+                position: "absolute",
+                right: `${resourceBarRightOffsetVw}vw`,
+                top: `calc(${topHudHeightVw}vw * ${resourceBarTopOffsetOfTopHud})`,
+                width: `${resourceBarWidthVw}vw`,
+                height: `calc(${topHudHeightVw}vw * ${resourceBarHeightOfTopHud})`,
+                fontSize: `calc(${topHudHeightVw}vw * ${resourceTextHeightOfTopHud})`,
+                color: "#eceff7",
+                textShadow: "0 1px 2px #000, 0 0 2px #000",
+                fontFamily:
+                  '"Friz Quadrata", "Palatino Linotype", "Book Antiqua", Palatino, serif',
+                pointerEvents: "none",
+              }}
+            >
+              <img
+                src={goldIconUrl}
+                alt="Gold"
+                style={{
+                  position: "absolute",
+                  left: `${goldIconLeftPercent}%`,
+                  top: `${resourceIconTopVw}vw`,
+                  width: `${resourceIconSizeVw}vw`,
+                  height: `${resourceIconSizeVw}vw`,
+                  imageRendering: "pixelated",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  left: `${goldTextRightEdgePercent}%`,
+                  top: `${resourceTextTopVw}vw`,
+                  transform: "translateX(-100%)",
+                  lineHeight: "1",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {goldValue}
+              </div>
+
+              <img
+                src={lumberIconUrl}
+                alt="Lumber"
+                style={{
+                  position: "absolute",
+                  left: `${lumberIconLeftPercent}%`,
+                  top: `${resourceIconTopVw}vw`,
+                  width: `${resourceIconSizeVw}vw`,
+                  height: `${resourceIconSizeVw}vw`,
+                  imageRendering: "pixelated",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  left: `${lumberTextRightEdgePercent}%`,
+                  top: `${resourceTextTopVw}vw`,
+                  transform: "translateX(-100%)",
+                  lineHeight: "1",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {lumberValue}
+              </div>
+
+              <img
+                src={supplyIconUrl}
+                alt="Supply"
+                style={{
+                  position: "absolute",
+                  left: `${supplyIconLeftPercent}%`,
+                  top: `${resourceIconTopVw}vw`,
+                  width: `${resourceIconSizeVw}vw`,
+                  height: `${resourceIconSizeVw}vw`,
+                  imageRendering: "pixelated",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  left: `${supplyTextRightEdgePercent}%`,
+                  top: `${resourceTextTopVw}vw`,
+                  transform: "translateX(-100%)",
+                  lineHeight: "1",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {`${supplyUsed}/${supplyCap}`}
+              </div>
+
+              <div
+                style={{
+                  position: "absolute",
+                  right: `${upkeepRightPercent}%`,
+                  top: `${resourceTextTopVw}vw`,
+                  width: `${upkeepWidthPercent}%`,
+                  lineHeight: "1",
+                  textAlign: "center",
+                  color: upkeepLabel.color,
+                  fontWeight: 700,
+                }}
+              >
+                {upkeepLabel.text}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {!compactTopHud && (
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "0",
+            transform: "translateX(-50%)",
+            width: `${clockWidthVw}vw`,
+            height: "8vw",
+            overflow: "hidden",
+            pointerEvents: "none",
+            zIndex: 25,
+          }}
+        >
+          <TimeIndicatorModel race={race} />
+        </div>
+      )}
+
+      <div
+        className={`viewport${cardBorderImageUrl ? " viewport--race-card-borders" : ""}`}
+        style={
+          {
+            "--section-card-border-image": cardBorderImageUrl
+              ? `url("${cardBorderImageUrl}")`
+              : "",
+          } as React.CSSProperties
+        }
+      >
+        {activePage !== "showcase" && (
+          PAGE_REGISTRY[activePage] ? (() => {
+            const PageComponent = PAGE_REGISTRY[activePage];
+            return <PageComponent />;
+          })() : null
+        )}
+        <div className="tab-content tab-content--showcase-flow" style={{ display: activePage === "showcase" ? undefined : "none" }}>
+          <div className="showcase-flow-item">
+            <div className="page-nav" style={{ padding: "0.5rem 0" }}>
+              <GlueSmallButton onClick={() => setPage("home")}>Back</GlueSmallButton>
+            </div>
+          </div>
+          <div className="showcase-flow-item showcase-flow-item--buttons">
+            <ButtonsSection>
+              <div className="button-showcase-grid">
+                <ButtonShowcaseSection
+                  title="Faction Tab"
+                  description="Race selector from the top bar. Text turns gold on hover and when active."
+                >
+                  <div className="button-preview-row">
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="top-tab-preview"
+                        onMouseEnter={() => setTopTabHovered(true)}
+                        onMouseLeave={() => {
+                          setTopTabHovered(false);
+                          setTopTabPressed(false);
+                        }}
+                        onMouseDown={() => setTopTabPressed(true)}
+                        onMouseUp={() => setTopTabPressed(false)}
+                      >
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: "0",
+                            backgroundImage: `url("${upperButtonAtlasUrl}")`,
+                            backgroundRepeat: "no-repeat",
+                            backgroundSize: `${upperButtonBgSizeX}% ${upperButtonBgSizeY}%`,
+                            backgroundPosition: `0 ${topTabPressed ? upperButtonPushedPosY : upperButtonNormalPosY}`,
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: "0",
+                            backgroundImage: `url("${upperButtonAtlasUrl}")`,
+                            backgroundRepeat: "no-repeat",
+                            backgroundSize: `${upperButtonBgSizeX}% ${upperButtonBgSizeY}%`,
+                            backgroundPosition: `0 ${upperButtonHighlightPosY}`,
+                            opacity: topTabHovered && !topTabPressed ? 1 : 0,
+                            transition: "opacity 80ms linear",
+                            pointerEvents: "none",
+                            mixBlendMode: "screen",
+                          }}
+                        />
+                        <span
+                          style={{
+                            position: "relative",
+                            color:
+                              topTabHovered || topTabPressed
+                                ? "#ffd412"
+                                : "#ffffff",
+                            transform: topTabPressed
+                              ? `translate(${upperButtonPressedOffsetX}vw, ${upperButtonPressedOffsetY}vw)`
+                              : "none",
+                          }}
+                        >
+                          {RACE_PREFIXES[race].display}
+                        </span>
+                      </button>
+                      <div className="button-state-label">Normal</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <button type="button" className="top-tab-preview">
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: "0",
+                            backgroundImage: `url("${upperButtonAtlasUrl}")`,
+                            backgroundRepeat: "no-repeat",
+                            backgroundSize: `${upperButtonBgSizeX}% ${upperButtonBgSizeY}%`,
+                            backgroundPosition: `0 ${upperButtonPushedPosY}`,
+                          }}
+                        />
+                        <span
+                          style={{
+                            position: "relative",
+                            color: "#ffd412",
+                          }}
+                        >
+                          {RACE_PREFIXES[race].display}
+                        </span>
+                      </button>
+                      <div className="button-state-label">Active</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="top-tab-preview"
+                        disabled
+                        style={{ opacity: 0.5 }}
+                      >
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: "0",
+                            backgroundImage: `url("${upperButtonAtlasUrl}")`,
+                            backgroundRepeat: "no-repeat",
+                            backgroundSize: `${upperButtonBgSizeX}% ${upperButtonBgSizeY}%`,
+                            backgroundPosition: `0 ${upperButtonNormalPosY}`,
+                          }}
+                        />
+                        <span
+                          style={{
+                            position: "relative",
+                            color: "#808080",
+                          }}
+                        >
+                          {RACE_PREFIXES[race].display}
+                        </span>
+                      </button>
+                      <div className="button-state-label">Disabled</div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Options Menu Button"
+                  description="Race-themed buttons from the in-game options menu. Each faction has unique background, border, and hover textures."
+                >
+                  <div className="option-button-row">
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="esc-option-preview"
+                        onMouseEnter={() => setEscButtonHovered(true)}
+                        onMouseLeave={() => {
+                          setEscButtonHovered(false);
+                          setEscButtonPressed(false);
+                        }}
+                        onMouseDown={() => setEscButtonPressed(true)}
+                        onMouseUp={() => setEscButtonPressed(false)}
+                      >
+                        <canvas
+                          ref={escButtonCanvasRef}
+                          className="esc-option-canvas"
+                        />
+                        <span
+                          className="esc-option-label"
+                          style={{
+                            transform: escButtonPressed
+                              ? `translate(${escButtonPressedOffsetXPx}px, ${escButtonPressedOffsetYPx}px)`
+                              : "none",
+                          }}
+                        >
+                          Options
+                        </span>
+                      </button>
+                      <div className="button-state-label">Normal</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="esc-option-preview"
+                        disabled
+                      >
+                        <canvas
+                          ref={escButtonDisabledCanvasRef}
+                          className="esc-option-canvas"
+                        />
+                        <span className="esc-option-label esc-option-label-disabled">
+                          Options
+                        </span>
+                      </button>
+                      <div className="button-state-label">Disabled</div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Main Menu Button"
+                  description="Primary action button inside a decorative border frame, used for items like Single Player and Multiplayer."
+                >
+                  <div className="menu-button-showcase">
+                    <div className="button-preview-col">
+                      <div className="menu-button-shell">
+                        <img
+                          src={glueFrameUrl}
+                          alt=""
+                          className="menu-button-frame"
+                        />
+                        <button
+                          type="button"
+                          className="menu-button-inner"
+                          onMouseEnter={() => setMenuButtonHovered(true)}
+                          onMouseLeave={() => {
+                            setMenuButtonHovered(false);
+                            setMenuButtonPressed(false);
+                          }}
+                          onMouseDown={() => setMenuButtonPressed(true)}
+                          onMouseUp={() => setMenuButtonPressed(false)}
+                        >
+                          <canvas
+                            ref={menuButtonCanvasRef}
+                            className="menu-button-canvas"
+                          />
+                          <span
+                            className="menu-button-label"
+                            style={{
+                              transform: menuButtonPressed
+                                ? `translate(${glueButtonPressedOffsetXPx}px, ${glueButtonPressedOffsetYPx}px)`
+                                : "none",
+                            }}
+                          >
+                            <span className="button-hotkey">S</span>ingle Player
+                          </span>
+                        </button>
+                      </div>
+                      <div className="button-state-label">Normal</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <div className="menu-button-shell">
+                        <img
+                          src={glueFrameUrl}
+                          alt=""
+                          className="menu-button-frame"
+                        />
+                        <button
+                          type="button"
+                          className="menu-button-inner"
+                          disabled
+                        >
+                          <canvas
+                            ref={menuDisabledCanvasRef}
+                            className="menu-button-canvas"
+                          />
+                          <span
+                            className="menu-button-label"
+                            style={{ color: "#808080" }}
+                          >
+                            Single Player
+                          </span>
+                        </button>
+                      </div>
+                      <div className="button-state-label">Disabled</div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Dialog Button"
+                  description="Standalone confirm button with a narrower frame, used for single-action dialogs and prompts."
+                >
+                  <div className="menu-button-showcase">
+                    <div className="button-preview-col">
+                      <div className="menu-button-shell">
+                        <img
+                          src={glueFrameSingleUrl}
+                          alt=""
+                          className="menu-button-frame"
+                        />
+                        <button
+                          type="button"
+                          className="menu-button-inner menu-button-inner--single"
+                          onMouseEnter={() => setMenuSingleHovered(true)}
+                          onMouseLeave={() => {
+                            setMenuSingleHovered(false);
+                            setMenuSinglePressed(false);
+                          }}
+                          onMouseDown={() => setMenuSinglePressed(true)}
+                          onMouseUp={() => setMenuSinglePressed(false)}
+                        >
+                          <canvas
+                            ref={menuSingleCanvasRef}
+                            className="menu-button-canvas"
+                          />
+                          <span
+                            className="menu-button-label"
+                            style={{
+                              transform: menuSinglePressed
+                                ? `translate(${glueButtonPressedOffsetXPx}px, ${glueButtonPressedOffsetYPx}px)`
+                                : "none",
+                            }}
+                          >
+                            <span className="button-hotkey">O</span>K
+                          </span>
+                        </button>
+                      </div>
+                      <div className="button-state-label">Normal</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <div className="menu-button-shell">
+                        <img
+                          src={glueFrameSingleUrl}
+                          alt=""
+                          className="menu-button-frame"
+                        />
+                        <button
+                          type="button"
+                          className="menu-button-inner menu-button-inner--single"
+                          disabled
+                        >
+                          <canvas
+                            ref={menuSingleDisabledCanvasRef}
+                            className="menu-button-canvas"
+                          />
+                          <span
+                            className="menu-button-label"
+                            style={{ color: "#808080" }}
+                          >
+                            OK
+                          </span>
+                        </button>
+                      </div>
+                      <div className="button-state-label">Disabled</div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Button Border Variants"
+                  description="Decorative border frames in several sizes, from large multi-button panels down to tiny compact frames."
+                >
+                  <div className="menu-frame-variant-grid">
+                    {menuFrameVariants
+                      .filter((variant) => variant.src)
+                      .sort(
+                        (a, b) =>
+                          (menuFrameVariantOrder[a.label] ??
+                            Number.MAX_SAFE_INTEGER) -
+                          (menuFrameVariantOrder[b.label] ??
+                            Number.MAX_SAFE_INTEGER),
+                      )
+                      .map((variant) => (
+                        <MenuFrameVariantCard
+                          key={variant.label}
+                          variant={variant}
+                          glueBgUrl={glueBgUrl}
+                          glueBgDownUrl={glueBgDownUrl}
+                          glueBorderUrl={glueBorderUrl}
+                          glueBorderDownUrl={glueBorderDownUrl}
+                          glueHoverUrl={glueHoverUrl}
+                        />
+                      ))}
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Login Screen Button"
+                  description="Standard button from the login and menu screens. Tiled stone background with a gold border and hover glow."
+                >
+                  <div className="glue-screen-showcase">
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="glue-screen-button"
+                        onMouseEnter={() => setGlueScreenButtonHovered(true)}
+                        onMouseLeave={() => {
+                          setGlueScreenButtonHovered(false);
+                          setGlueScreenButtonPressed(false);
+                        }}
+                        onMouseDown={() => setGlueScreenButtonPressed(true)}
+                        onMouseUp={() => setGlueScreenButtonPressed(false)}
+                      >
+                        <canvas
+                          ref={glueScreenButtonCanvasRef}
+                          className="glue-screen-canvas"
+                        />
+                        <span
+                          style={{
+                            transform: glueScreenButtonPressed
+                              ? `translate(${glueButtonPressedOffsetXPx}px, ${glueButtonPressedOffsetYPx}px)`
+                              : "none",
+                          }}
+                        >
+                          <span className="button-hotkey">S</span>ingle Player
+                        </span>
+                      </button>
+                      <div className="button-state-label">Normal</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="glue-screen-button"
+                        disabled
+                      >
+                        <canvas
+                          ref={glueDisabledCanvasRef}
+                          className="glue-screen-canvas"
+                        />
+                        <span style={{ color: "#808080" }}>Single Player</span>
+                      </button>
+                      <div className="button-state-label">Disabled</div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Bordered Button"
+                  description="Button variant with a heavier decorative edge, same stone backdrop and hover glow."
+                >
+                  <div className="glue-screen-showcase">
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="glue-screen-button"
+                        onMouseEnter={() => setGlueBorderedHovered(true)}
+                        onMouseLeave={() => {
+                          setGlueBorderedHovered(false);
+                          setGlueBorderedPressed(false);
+                        }}
+                        onMouseDown={() => setGlueBorderedPressed(true)}
+                        onMouseUp={() => setGlueBorderedPressed(false)}
+                      >
+                        <canvas
+                          ref={glueBorderedCanvasRef}
+                          className="glue-screen-canvas"
+                        />
+                        <span
+                          style={{
+                            transform: glueBorderedPressed
+                              ? `translate(${glueButtonPressedOffsetXPx}px, ${glueButtonPressedOffsetYPx}px)`
+                              : "none",
+                          }}
+                        >
+                          <span className="button-hotkey">R</span>eplay
+                        </span>
+                      </button>
+                      <div className="button-state-label">Normal</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="glue-screen-button"
+                        disabled
+                      >
+                        <canvas
+                          ref={glueBorderedDisabledCanvasRef}
+                          className="glue-screen-canvas"
+                        />
+                        <span style={{ color: "#808080" }}>Replay</span>
+                      </button>
+                      <div className="button-state-label">Disabled</div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Small Button"
+                  description="Compact button for secondary actions like profile settings and realm selection."
+                >
+                  <div className="button-preview-row">
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="glue-small-button"
+                        onMouseEnter={() => setGlueSmallHovered(true)}
+                        onMouseLeave={() => {
+                          setGlueSmallHovered(false);
+                          setGlueSmallPressed(false);
+                        }}
+                        onMouseDown={() => setGlueSmallPressed(true)}
+                        onMouseUp={() => setGlueSmallPressed(false)}
+                      >
+                        <canvas
+                          ref={glueSmallCanvasRef}
+                          className="glue-screen-canvas"
+                        />
+                        <span
+                          style={{
+                            transform: glueSmallPressed
+                              ? `translate(${glueButtonPressedOffsetXPx}px, ${glueButtonPressedOffsetYPx}px)`
+                              : "none",
+                          }}
+                        >
+                          OK
+                        </span>
+                      </button>
+                      <div className="button-state-label">Normal</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="glue-small-button"
+                        disabled
+                      >
+                        <canvas
+                          ref={glueSmallDisabledCanvasRef}
+                          className="glue-screen-canvas"
+                        />
+                        <span style={{ color: "#808080" }}>OK</span>
+                      </button>
+                      <div className="button-state-label">Disabled</div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Campaign Button"
+                  description="Campaign menu button with its own unique backdrop and border textures."
+                >
+                  <div className="button-preview-row">
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="campaign-button"
+                        onMouseEnter={() => setCampaignHovered(true)}
+                        onMouseLeave={() => {
+                          setCampaignHovered(false);
+                          setCampaignPressed(false);
+                        }}
+                        onMouseDown={() => setCampaignPressed(true)}
+                        onMouseUp={() => setCampaignPressed(false)}
+                      >
+                        <canvas
+                          ref={campaignButtonCanvasRef}
+                          className="glue-screen-canvas"
+                        />
+                        <span
+                          style={{
+                            transform: campaignPressed
+                              ? "translate(-1px, 1px)"
+                              : "none",
+                          }}
+                        >
+                          <span className="button-hotkey">C</span>ampaign
+                        </span>
+                      </button>
+                      <div className="button-state-label">Normal</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="campaign-button"
+                        disabled
+                      >
+                        <canvas
+                          ref={campaignDisabledCanvasRef}
+                          className="glue-screen-canvas"
+                        />
+                        <span style={{ color: "#808080" }}>Campaign</span>
+                      </button>
+                      <div className="button-state-label">Disabled</div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Ability Button"
+                  description="Ability buttons from the in-game command card grid with pressed, disabled, and cooldown states."
+                >
+                  <div className="button-preview-row">
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className={`cmd-btn cmd-btn--showcase${cmdBtnPressed ? " cmd-btn--pressed" : ""}`}
+                        aria-label="Holy Bolt (Q)"
+                        aria-keyshortcuts="Q"
+                        onMouseEnter={() => setCmdBtnHovered(true)}
+                        onMouseLeave={() => {
+                          setCmdBtnHovered(false);
+                          setCmdBtnPressed(false);
+                        }}
+                        onMouseDown={() => setCmdBtnPressed(true)}
+                        onMouseUp={() => setCmdBtnPressed(false)}
+                      >
+                        <img
+                          src={cmdBtnIconUrl}
+                          alt=""
+                          className="cmd-btn-icon"
+                        />
+                        <div
+                          className={`cmd-btn-highlight${cmdBtnHovered && !cmdBtnPressed ? " cmd-btn-highlight--on" : ""}`}
+                          style={{
+                            backgroundImage: `url("${cmdBtnHighlightUrl}")`,
+                          }}
+                        />
+                        <span className="cmd-btn-hotkey" aria-hidden="true">
+                          Q
+                        </span>
+                      </button>
+                      <div className="button-state-label">Interactive</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="cmd-btn cmd-btn--showcase"
+                        aria-label="Holy Bolt active autocast (Q)"
+                        aria-keyshortcuts="Q"
+                        aria-pressed="true"
+                        style={{ cursor: "default" }}
+                        tabIndex={-1}
+                      >
+                        <img
+                          src={cmdBtnIconUrl}
+                          alt=""
+                          className="cmd-btn-icon"
+                        />
+                        <div
+                          className="cmd-btn-highlight cmd-btn-highlight--on"
+                          style={{
+                            backgroundImage: `url("${cmdBtnHighlightUrl}")`,
+                          }}
+                        />
+                        <span className="cmd-btn-hotkey" aria-hidden="true">
+                          Q
+                        </span>
+                      </button>
+                      <div className="button-state-label">Active</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="cmd-btn cmd-btn--showcase cmd-btn--pressed"
+                        aria-label="Holy Bolt pressed (Q)"
+                        aria-keyshortcuts="Q"
+                        style={{ cursor: "default" }}
+                        tabIndex={-1}
+                      >
+                        <img
+                          src={cmdBtnIconUrl}
+                          alt=""
+                          className="cmd-btn-icon"
+                        />
+                        <span className="cmd-btn-hotkey" aria-hidden="true">
+                          Q
+                        </span>
+                      </button>
+                      <div className="button-state-label">Pressed</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="cmd-btn cmd-btn--showcase"
+                        aria-label="Holy Bolt disabled (Q)"
+                        aria-keyshortcuts="Q"
+                        disabled
+                      >
+                        <img
+                          src={cmdBtnDisabledIconUrl || cmdBtnIconUrl}
+                          alt=""
+                          className="cmd-btn-icon"
+                        />
+                        <span className="cmd-btn-hotkey" aria-hidden="true">
+                          Q
+                        </span>
+                      </button>
+                      <div className="button-state-label">Disabled</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="cmd-btn cmd-btn--showcase"
+                        aria-label="Holy Bolt cooling down (Q)"
+                        aria-keyshortcuts="Q"
+                        aria-busy="true"
+                        disabled
+                      >
+                        <img
+                          src={cmdBtnIconUrl}
+                          alt=""
+                          className="cmd-btn-icon"
+                        />
+                        <div className="cmd-btn-cooldown" />
+                        <span className="cmd-btn-hotkey" aria-hidden="true">
+                          Q
+                        </span>
+                      </button>
+                      <div className="button-state-label">Cooldown</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="cmd-btn cmd-btn--showcase cmd-btn--no-resources"
+                        aria-label="Holy Bolt unavailable: insufficient mana (Q)"
+                        aria-keyshortcuts="Q"
+                        disabled
+                      >
+                        <img
+                          src={cmdBtnDisabledIconUrl || cmdBtnIconUrl}
+                          alt=""
+                          className="cmd-btn-icon"
+                        />
+                        <div className="cmd-btn-no-resources" />
+                        <span className="cmd-btn-hotkey" aria-hidden="true">
+                          Q
+                        </span>
+                      </button>
+                      <div className="button-state-label">No Resources</div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+              </div>
+            </ButtonsSection>
+          </div>
+          <div className="showcase-flow-item showcase-flow-item--controls">
+            <ControlsSection>
+              <div className="button-showcase-grid">
+                <ButtonShowcaseSection
+                  title="Dropdown"
+                  description="Pull-down selector with a dedicated arrow, used for option menus and popup lists."
+                >
+                  <div className="button-preview-row">
+                    <div className="button-preview-col">
+                      <div className="popup-trigger-anchor">
+                        <button
+                          type="button"
+                          className="popup-trigger-button"
+                          aria-haspopup="listbox"
+                          aria-expanded={popupOpen}
+                          onMouseEnter={() => setPopupHovered(true)}
+                          onMouseLeave={() => setPopupHovered(false)}
+                          onClick={() => setPopupOpen((prev: boolean) => !prev)}
+                        >
+                          <canvas
+                            ref={popupTriggerCanvasRef}
+                            className="popup-trigger-canvas"
+                          />
+                          <span className="popup-title-text">
+                            {popupSelection}
+                          </span>
+                          <img
+                            src={popupArrowUrl}
+                            alt=""
+                            className="popup-arrow-icon"
+                          />
+                        </button>
+                        {popupOpen && (
+                          <div className="popup-menu-demo" aria-label="Quality">
+                            <canvas
+                              ref={popupMenuCanvasRef}
+                              className="popup-menu-canvas"
+                            />
+                            {popupOptions.map((option) => (
+                              <div
+                                key={option}
+                                className={`popup-menu-option${popupSelection === option ? " selected" : ""}`}
+                                onClick={() => {
+                                  setPopupSelection(option);
+                                  setPopupOpen(false);
+                                }}
+                              >
+                                {option}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="button-state-label">Interactive</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="popup-trigger-button"
+                        disabled
+                      >
+                        <canvas
+                          ref={popupTriggerDisabledCanvasRef}
+                          className="popup-trigger-canvas"
+                        />
+                        <span className="popup-title-text popup-title-text-disabled">
+                          High
+                        </span>
+                        <img
+                          src={popupArrowUrl}
+                          alt=""
+                          className="popup-arrow-icon"
+                        />
+                      </button>
+                      <div className="button-state-label">Disabled</div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Slider"
+                  description="Options menu slider with a shared track and a race-specific thumb."
+                >
+                  <div className="button-preview-row">
+                    <div className="button-preview-col">
+                      <label className="esc-slider-demo">
+                        <span className="esc-slider-value">
+                          {escSliderValue}%
+                        </span>
+                        <div className="esc-slider-track">
+                          <canvas
+                            ref={escSliderCanvasRef}
+                            className="esc-slider-canvas"
+                          />
+                          <div
+                            className="esc-slider-knob"
+                            style={{
+                              backgroundImage: `url("${sliderKnobUrl}")`,
+                              left: escSliderKnobLeft,
+                            }}
+                          />
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={escSliderValue}
+                            aria-label="Esc menu slider"
+                            onChange={(event) =>
+                              setEscSliderValue(
+                                Number(event.currentTarget.value),
+                              )
+                            }
+                          />
+                        </div>
+                      </label>
+                      <div className="button-state-label">Interactive</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <div className="esc-slider-demo">
+                        <span
+                          className="esc-slider-value"
+                          style={{ color: "#808080" }}
+                        >
+                          65%
+                        </span>
+                        <div className="esc-slider-track">
+                          <canvas
+                            ref={escSliderDisabledCanvasRef}
+                            className="esc-slider-canvas"
+                          />
+                          <div
+                            className="esc-slider-knob"
+                            style={{
+                              backgroundImage: `url("${sliderKnobDisabledUrl}")`,
+                              left: escSliderDisabledKnobLeft,
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="button-state-label">Disabled</div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Checkbox"
+                  description="In-game option toggle. The pressed background is race-specific while the check mark and base are shared."
+                >
+                  <div
+                    className="button-preview-row"
+                    style={{ justifyContent: "space-evenly" }}
+                  >
+                    <div className="button-preview-col">
+                      <button
+                        type="button"
+                        className="esc-checkbox"
+                        aria-checked={checkboxChecked}
+                        role="checkbox"
+                        onMouseDown={() => setCheckboxPressed(true)}
+                        onMouseUp={() => setCheckboxPressed(false)}
+                        onMouseLeave={() => setCheckboxPressed(false)}
+                        onClick={() =>
+                          setCheckboxChecked((prev: boolean) => !prev)
+                        }
+                      >
+                        <img
+                          src={
+                            checkboxPressed
+                              ? checkboxDepressedUrl
+                              : checkboxBgUrl
+                          }
+                          alt=""
+                        />
+                        {checkboxChecked && (
+                          <img src={checkboxCheckUrl} alt="" />
+                        )}
+                      </button>
+                      <div className="button-state-label">Interactive</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <div
+                        className="esc-checkbox"
+                        style={{ cursor: "default" }}
+                      >
+                        <img src={checkboxBgUrl} alt="" />
+                        <img src={checkboxCheckUrl} alt="" />
+                      </div>
+                      <div className="button-state-label">Checked</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <div
+                        className="esc-checkbox"
+                        style={{ cursor: "default" }}
+                      >
+                        <img src={checkboxBgUrl} alt="" />
+                      </div>
+                      <div className="button-state-label">Unchecked</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <div
+                        className="esc-checkbox"
+                        style={{ cursor: "default" }}
+                      >
+                        <img src={checkboxDisabledBgUrl} alt="" />
+                        <img src={checkboxCheckUrl} alt="" />
+                      </div>
+                      <div className="button-state-label">Disabled Checked</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <div
+                        className="esc-checkbox"
+                        style={{ cursor: "default" }}
+                      >
+                        <img src={checkboxDisabledBgUrl} alt="" />
+                      </div>
+                      <div className="button-state-label">Disabled</div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Radio Button"
+                  description="Mutually exclusive option selector. The selected dot glows over a stone background, shared across all races."
+                >
+                  <div
+                    className="button-preview-row"
+                    style={{ justifyContent: "space-evenly" }}
+                  >
+                    <div className="button-preview-col">
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        {[0, 1, 2].map((idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            className="esc-radio"
+                            role="radio"
+                            aria-checked={radioSelected === idx}
+                            onClick={() => setRadioSelected(idx)}
+                          >
+                            <img src={radioBgUrl} alt="" />
+                            {radioSelected === idx && (
+                              <img src={radioDotUrl} alt="" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="button-state-label">
+                        Interactive Group
+                      </div>
+                    </div>
+                    <div className="button-preview-col">
+                      <div className="esc-radio" style={{ cursor: "default" }}>
+                        <img src={radioBgUrl} alt="" />
+                        <img src={radioDotUrl} alt="" />
+                      </div>
+                      <div className="button-state-label">Selected</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <div className="esc-radio" style={{ cursor: "default" }}>
+                        <img src={radioBgUrl} alt="" />
+                      </div>
+                      <div className="button-state-label">Unselected</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <div className="esc-radio" style={{ cursor: "default" }}>
+                        <img src={radioDisabledBgUrl} alt="" />
+                        <img src={radioDisabledDotUrl} alt="" />
+                      </div>
+                      <div className="button-state-label">
+                        Disabled Selected
+                      </div>
+                    </div>
+                    <div className="button-preview-col">
+                      <div className="esc-radio" style={{ cursor: "default" }}>
+                        <img src={radioDisabledBgUrl} alt="" />
+                      </div>
+                      <div className="button-state-label">Disabled</div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Text Input"
+                  description="Text fields in two styles: a decorated race-themed variant for in-game menus and a plain Battle.net variant for login screens."
+                >
+                  <div className="button-preview-row">
+                    <div className="button-preview-col">
+                      <label className="wc3-editbox wc3-editbox--esc">
+                        <canvas
+                          ref={escEditboxCanvasRef}
+                          className="wc3-editbox-canvas"
+                        />
+                        <input
+                          type="text"
+                          value={escInputValue}
+                          aria-label="Esc menu edit box"
+                          onChange={(event) =>
+                            setEscInputValue(event.currentTarget.value)
+                          }
+                        />
+                      </label>
+                      <div className="button-state-label">Esc Decorated</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <label className="wc3-editbox wc3-editbox--esc wc3-editbox--disabled">
+                        <canvas
+                          ref={escEditboxDisabledCanvasRef}
+                          className="wc3-editbox-canvas"
+                        />
+                        <input
+                          type="text"
+                          value="Unavailable"
+                          aria-label="Esc menu edit box disabled"
+                          disabled
+                          readOnly
+                        />
+                      </label>
+                      <div className="button-state-label">Esc Disabled</div>
+                    </div>
+                  </div>
+                  <div className="button-preview-row">
+                    <div className="button-preview-col">
+                      <label className="wc3-editbox wc3-editbox--bnet">
+                        <canvas
+                          ref={bnetEditboxCanvasRef}
+                          className="wc3-editbox-canvas"
+                        />
+                        <input
+                          type="text"
+                          value={bnetInputValue}
+                          aria-label="Standard glue edit box"
+                          onChange={(event) =>
+                            setBnetInputValue(event.currentTarget.value)
+                          }
+                        />
+                      </label>
+                      <div className="button-state-label">
+                        Standard (Glue/BNet)
+                      </div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Scrollbar"
+                  description="Vertical scroll track with up/down arrows and a draggable knob, from the login and menu screens."
+                >
+                  <div className="button-preview-row">
+                    <div className="button-preview-col">
+                      <div className="glue-scrollbar-demo">
+                        <button
+                          type="button"
+                          className="glue-scroll-arrow"
+                          aria-label="Scroll up"
+                          onClick={() => bumpGlueScroll(-8)}
+                        >
+                          <img src={glueScrollUpArrowUrl} alt="" />
+                        </button>
+                        <div className="glue-scroll-track">
+                          <canvas
+                            ref={glueScrollBarCanvasRef}
+                            className="glue-scroll-track-canvas"
+                          />
+                          <div
+                            className="glue-scroll-thumb"
+                            style={{
+                              backgroundImage: `url("${glueScrollKnobUrl}")`,
+                              top: glueScrollThumbTop,
+                            }}
+                          />
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={glueScrollValue}
+                            aria-label="Glue scrollbar position"
+                            onChange={(event) =>
+                              setGlueScrollValue(
+                                Number(event.currentTarget.value),
+                              )
+                            }
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="glue-scroll-arrow"
+                          aria-label="Scroll down"
+                          onClick={() => bumpGlueScroll(8)}
+                        >
+                          <img src={glueScrollDownArrowUrl} alt="" />
+                        </button>
+                      </div>
+                      <div className="button-state-label">Interactive</div>
+                    </div>
+                    <div className="button-preview-col">
+                      <div className="glue-scrollbar-demo glue-scrollbar-demo--disabled">
+                        <button
+                          type="button"
+                          className="glue-scroll-arrow"
+                          disabled
+                        >
+                          <img src={glueScrollUpArrowUrl} alt="" />
+                        </button>
+                        <div className="glue-scroll-track">
+                          <canvas
+                            ref={glueScrollBarDisabledCanvasRef}
+                            className="glue-scroll-track-canvas"
+                          />
+                          <div
+                            className="glue-scroll-thumb"
+                            style={{
+                              backgroundImage: `url("${glueScrollKnobDisabledUrl || glueScrollKnobUrl}")`,
+                              top: glueScrollDisabledThumbTop,
+                            }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="glue-scroll-arrow"
+                          disabled
+                        >
+                          <img src={glueScrollDownArrowUrl} alt="" />
+                        </button>
+                      </div>
+                      <div className="button-state-label">Disabled</div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Text Area"
+                  description="Scrollable text panel with a decorated border and attached scroll thumb, used in the options menu."
+                >
+                  <div className="button-preview-row button-preview-row--textarea">
+                    <div className="button-preview-col button-preview-col--textarea">
+                      <div className="esc-textarea-demo">
+                        <div className="esc-textarea-shell">
+                          <canvas
+                            ref={escTextAreaCanvasRef}
+                            className="esc-textarea-canvas"
+                          />
+                          <div className="esc-textarea-mask">
+                            <div
+                              className="esc-textarea-content"
+                              style={{
+                                transform: `translateY(-${escTextAreaOffsetPx}px)`,
+                                lineHeight: `${escTextAreaLineHeightPx}px`,
+                              }}
+                            >
+                              {escTextAreaLines.map((line, i) => (
+                                <div key={i}>{line}</div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="esc-textarea-scroll">
+                          <canvas
+                            ref={escTextAreaScrollCanvasRef}
+                            className="esc-textarea-scroll-canvas"
+                          />
+                          <div
+                            className="esc-textarea-scroll-thumb"
+                            style={{
+                              backgroundImage: `url("${sliderKnobUrl}")`,
+                              top: escTextAreaScrollThumbTop,
+                            }}
+                          />
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={escTextScrollValue}
+                            aria-label="Esc text area scroll position"
+                            onChange={(event) =>
+                              setEscTextScrollValue(
+                                Number(event.currentTarget.value),
+                              )
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="button-state-label">
+                        Interactive Log Panel
+                      </div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="List Box"
+                  description="Bordered scrollable list from the menu screens, pairing a text input container with a scrollbar."
+                >
+                  <div className="button-preview-row">
+                    <div className="button-preview-col">
+                      <div className="wc3-listbox-demo">
+                        <div className="wc3-listbox-shell">
+                          <canvas
+                            ref={glueListBoxCanvasRef}
+                            className="wc3-listbox-canvas"
+                          />
+                          <div className="wc3-listbox-mask">
+                            <div
+                              className="wc3-listbox-items"
+                              style={{
+                                transform: `translateY(-${glueListBoxOffsetPx}px)`,
+                                lineHeight: `${glueListBoxLineHeightPx}px`,
+                              }}
+                            >
+                              {glueListBoxItems.map((item) => (
+                                <button
+                                  key={item}
+                                  type="button"
+                                  className={`wc3-listbox-item${listBoxSelected === item ? " wc3-listbox-item--selected" : ""}`}
+                                  onClick={() => setListBoxSelected(item)}
+                                >
+                                  {item}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="wc3-listbox-scrollbar">
+                          <button
+                            type="button"
+                            className="wc3-listbox-scroll-arrow"
+                            aria-label="Listbox scroll up"
+                            onClick={() => bumpListBoxScroll(-10)}
+                          >
+                            <img src={glueScrollUpArrowUrl} alt="" />
+                          </button>
+                          <div className="wc3-listbox-scroll">
+                            <canvas
+                              ref={glueListBoxScrollCanvasRef}
+                              className="wc3-listbox-scroll-canvas"
+                            />
+                            <div
+                              className="wc3-listbox-scroll-thumb"
+                              style={{
+                                backgroundImage: `url("${glueScrollKnobUrl}")`,
+                                top: glueListScrollThumbTop,
+                              }}
+                            />
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              value={listBoxScrollValue}
+                              aria-label="Listbox scroll position"
+                              onChange={(event) =>
+                                setListBoxScrollValue(
+                                  Number(event.currentTarget.value),
+                                )
+                              }
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            className="wc3-listbox-scroll-arrow"
+                            aria-label="Listbox scroll down"
+                            onClick={() => bumpListBoxScroll(10)}
+                          >
+                            <img src={glueScrollDownArrowUrl} alt="" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="button-state-label">Selectable Items</div>
+                    </div>
+                  </div>
+                </ButtonShowcaseSection>
+              </div>
+            </ControlsSection>
+          </div>
+          <div className="showcase-flow-item showcase-flow-item--resource-counters">
+            <ResourceCounterSection>
+              <div
+                className="button-preview-row"
+                style={{ justifyContent: "space-evenly" }}
+              >
+                {/* Gold */}
+                <div className="button-preview-col">
+                  <div className="resource-counter">
+                    <img src={goldIconUrl} alt="Gold" />
+                    <span>{goldValue}</span>
+                  </div>
+                  <div className="button-state-label">Gold</div>
+                </div>
+                {/* Lumber */}
+                <div className="button-preview-col">
+                  <div className="resource-counter">
+                    <img src={lumberIconUrl} alt="Lumber" />
+                    <span>{lumberValue}</span>
+                  </div>
+                  <div className="button-state-label">Lumber</div>
+                </div>
+                {/* Supply */}
+                <div className="button-preview-col">
+                  <div className="resource-counter">
+                    <img src={supplyDrumstickUrl} alt="Supply" />
+                    <span>
+                      {supplyUsed}/{supplyCap}
+                    </span>
+                  </div>
+                  <div className="button-state-label">Supply</div>
+                </div>
+                {/* Upkeep */}
+                <div className="button-preview-col">
+                  <div
+                    className="resource-counter"
+                    style={{ color: upkeepLabel.color }}
+                  >
+                    <span>{upkeepLabel.text}</span>
+                  </div>
+                  <div className="button-state-label">Upkeep</div>
+                </div>
+              </div>
+            </ResourceCounterSection>
+          </div>
+          <div className="showcase-flow-item showcase-flow-item--command-card">
+            <CommandCardSection
+              iconUrls={blademasterCmdIconUrls}
+              disabledIconUrls={blademasterCmdDisabledIconUrls}
+              highlightUrl={cmdBtnHighlightUrl}
+              groupBorderUrl={cmdGroupBorderUrl}
+              subgroupBgUrl={cmdSubgroupBgUrl}
+            />
+          </div>
+          <div className="showcase-flow-item showcase-flow-item--unit-queue">
+            <UnitQueueSection
+              key={activePage}
+              backdropUrl={unitQueueBorderUrl}
+              iconUrl={unitQueuePeonIconUrl}
+            />
+          </div>
+          <div className="showcase-flow-item showcase-flow-item--tooltip">
+            <TooltipSection
+              backgroundUrl={tooltipBgUrl}
+              borderImageUrl={tooltipBorderImageUrl}
+              goldIconUrl={tooltipGoldIconUrl}
+              lumberIconUrl={tooltipLumberIconUrl}
+              supplyIconUrl={tooltipSupplyIconUrl}
+            />
+          </div>
+          <div className="showcase-flow-item showcase-flow-item--portrait">
+            <PortraitFrameSection />
+          </div>
+          <div className="showcase-flow-item showcase-flow-item--bars">
+            <BarsSection>
+              <div className="button-showcase-grid">
+                <ButtonShowcaseSection
+                  title="Health Bar"
+                  description="Green unit health bar from the in-game portrait panel with highlight and edge overlays."
+                >
+                  <div className="wc3-bar wc3-bar--unit wc3-bar--health">
+                    <canvas
+                      ref={healthBarCanvasRef}
+                      className="wc3-bar-canvas"
+                    />
+                    <div className="wc3-bar-text">{`${Math.round((healthBarPct * 650) / 100)} / 650`}</div>
+                  </div>
+                  <div className="button-state-label">Model-Style</div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Mana Bar"
+                  description="Blue mana bar sharing the same highlight and edge overlays as the health bar."
+                >
+                  <div className="wc3-bar wc3-bar--unit wc3-bar--mana">
+                    <canvas ref={manaBarCanvasRef} className="wc3-bar-canvas" />
+                    <div className="wc3-bar-text">{`${Math.round((manaBarPct * 300) / 100)} / 300`}</div>
+                  </div>
+                  <div className="button-state-label">Model-Style</div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="XP Bar"
+                  description="Hero experience bar with a purple fill and the classic XP border frame."
+                >
+                  <div className="wc3-bar wc3-bar--compact wc3-bar--xp">
+                    <canvas ref={xpBarCanvasRef} className="wc3-bar-canvas" />
+                    <div className="wc3-bar-text">{`Level 3 · ${Math.floor(xpBarPct)}%`}</div>
+                  </div>
+                  <div className="button-state-label">Hero XP</div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Progress Bar"
+                  description="Generic timed progress indicator for training, upgrades, and other queued actions."
+                >
+                  <div className="wc3-bar wc3-bar--compact wc3-bar--progress">
+                    <canvas
+                      ref={progressBarCanvasRef}
+                      className="wc3-bar-canvas"
+                    />
+                    <div className="wc3-bar-text">{`${Math.floor(progressBarPct)}%`}</div>
+                  </div>
+                  <div className="button-state-label">Timer</div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Build Progress"
+                  description="Construction progress indicator with its own fill and border textures."
+                >
+                  <div className="wc3-bar wc3-bar--compact wc3-bar--build">
+                    <canvas
+                      ref={buildProgressCanvasRef}
+                      className="wc3-bar-canvas"
+                    />
+                    <div className="wc3-bar-text">{`${Math.floor(buildBarPct)}%`}</div>
+                  </div>
+                  <div className="button-state-label">Build Time</div>
+                </ButtonShowcaseSection>
+
+                <ButtonShowcaseSection
+                  title="Loading Screen Bar"
+                  description="Full-width loading bar from the map load screen with a tiled track, glass border, and progress glow."
+                >
+                  <div className="loading-preview">
+                    <div className="loading-bar-composite">
+                      <div
+                        className="lb-track"
+                        style={{
+                          left: `${loadingTrackInsetLeftPct}%`,
+                          right: `${loadingTrackInsetRightPct}%`,
+                          top: `${loadingTrackInsetTopPct}%`,
+                          bottom: `${loadingTrackInsetBottomPct}%`,
+                        }}
+                      >
+                        <div
+                          className="lb-bg"
+                          style={{ backgroundImage: `url("${loadingBgUrl}")` }}
+                        />
+                        <div
+                          className="lb-fill"
+                          style={{
+                            backgroundImage: `url("${loadingFillUrl}")`,
+                            width: `${loadingFillPct}%`,
+                          }}
+                        />
+                      </div>
+                      <img
+                        className="lb-border"
+                        src={loadingBorderUrl}
+                        alt=""
+                      />
+                      <img className="lb-glass" src={loadingGlassUrl} alt="" />
+                      <img
+                        className="lb-glow"
+                        src={loadingGlowUrl}
+                        alt=""
+                        style={{
+                          left: `${loadingGlowInsetLeftPct}%`,
+                          top: `${loadingGlowInsetTopPct}%`,
+                          bottom: `${loadingGlowInsetBottomPct}%`,
+                          width: `${loadingGlowWidthPct}%`,
+                          opacity: `${loadingGlowOpacity}`,
+                        }}
+                      />
+                      <div className="lb-text">{`${Math.floor(loadingBarPct)}%`}</div>
+                    </div>
+                  </div>
+                  <div className="button-state-label">
+                    Model layering and geometry
+                  </div>
+                </ButtonShowcaseSection>
+              </div>
+            </BarsSection>
+          </div>
+          <div className="showcase-flow-item showcase-flow-item--borders">
+            <BordersSection loadBlpDataUrl={loadBlpDataUrl} />
+          </div>
+          <div className="showcase-flow-item showcase-flow-item--tokens">
+            <DesignTokensSection borderAtlasUrls={factionBorderUrls} />
+          </div>
+          <div className="showcase-flow-item showcase-flow-item--a11y">
+            <AccessibilitySection />
+          </div>
+          <div className="showcase-flow-item showcase-flow-item--bundle">
+            <BundleSizeSection
+              buildFillUrl={buildFillUrl}
+              buildBorderUrl={buildBorderUrl}
+            />
+          </div>
+          <div className="showcase-flow-item showcase-flow-item--faq">
+            <FAQSection />
+          </div>
+          <div className="showcase-flow-item showcase-flow-item--footer">
+            <FooterSection race={race} />
+          </div>
+        </div>
+      </div>
+    </div>
+    </>
+  );
+}

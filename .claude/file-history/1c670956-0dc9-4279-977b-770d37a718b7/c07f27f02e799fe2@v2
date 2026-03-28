@@ -1,0 +1,10 @@
+add_library(rts_platform STATIC
+    src/window.cpp
+    src/input.cpp
+    src/time.cpp
+)
+
+target_include_directories(rts_platform PUBLIC include)
+target_link_libraries(rts_platform PUBLIC rts::core glfw glad)
+
+add_library(rts::platform ALIAS rts_platform)

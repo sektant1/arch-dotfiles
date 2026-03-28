@@ -1,0 +1,24 @@
+#pragma once
+
+#include <spdlog/spdlog.h>
+#include <memory>
+
+namespace rts {
+
+class Logger {
+public:
+    static void init();
+    static std::shared_ptr<spdlog::logger>& get();
+
+private:
+    static std::shared_ptr<spdlog::logger> s_logger;
+};
+
+}  // namespace rts
+
+#define RTS_LOG_TRACE(...)    ::rts::Logger::get()->trace(__VA_ARGS__)
+#define RTS_LOG_DEBUG(...)    ::rts::Logger::get()->debug(__VA_ARGS__)
+#define RTS_LOG_INFO(...)     ::rts::Logger::get()->info(__VA_ARGS__)
+#define RTS_LOG_WARN(...)     ::rts::Logger::get()->warn(__VA_ARGS__)
+#define RTS_LOG_ERROR(...)    ::rts::Logger::get()->error(__VA_ARGS__)
+#define RTS_LOG_CRITICAL(...) ::rts::Logger::get()->critical(__VA_ARGS__)

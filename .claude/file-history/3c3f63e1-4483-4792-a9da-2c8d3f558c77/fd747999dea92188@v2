@@ -1,0 +1,150 @@
+import React from "react";
+
+export interface HeroAbility {
+  icon?: string;
+  disabled?: boolean;
+}
+
+export interface HeroCardProps {
+  name: string;
+  title?: string;
+  level?: number;
+  /** Portrait image URL (data URL from BLP or regular image) */
+  portraitUrl?: string;
+  hp: number;
+  maxHp: number;
+  mp: number;
+  maxMp: number;
+  stats?: { label: string; value: string | number }[];
+  abilities?: HeroAbility[];
+  className?: string;
+}
+
+/**
+ * Detailed hero information card with portrait, bars, stats grid, and ability icons.
+ */
+export function HeroCard({
+  name,
+  title,
+  level,
+  portraitUrl,
+  hp,
+  maxHp,
+  mp,
+  maxMp,
+  stats = [],
+  abilities = [],
+  className,
+}: HeroCardProps) {
+  const hpPercent = maxHp > 0 ? (hp / maxHp) * 100 : 0;
+  const mpPercent = maxMp > 0 ? (mp / maxMp) * 100 : 0;
+
+  return (
+    <div className={`hero-card-preview ${className ?? ""}`}>
+      <div className="hero-card-portrait-wrap">
+        {portraitUrl && (
+          <img
+            className="hero-card-portrait"
+            src={portraitUrl}
+            alt={name}
+          />
+        )}
+        {level != null && (
+          <span className="hero-card-level">{level}</span>
+        )}
+      </div>
+      <div className="hero-card-body">
+        <div className="hero-card-head">
+          <h4>{name}</h4>
+          {title && <span>{title}</span>}
+        </div>
+        <div className="hero-card-bars">
+          <div className="hero-card-bar">
+            <div
+              className="hero-card-bar-fill hero-card-bar-fill--hp"
+              style={{ width: `${hpPercent}%` }}
+            />
+            <span>
+              {hp} / {maxHp}
+            </span>
+          </div>
+          <div className="hero-card-bar">
+            <div
+              className="hero-card-bar-fill hero-card-bar-fill--mp"
+              style={{ width: `${mpPercent}%` }}
+            />
+            <span>
+              {mp} / {maxMp}
+            </span>
+          </div>
+        </div>
+        {stats.length > 0 && (
+          <div className="hero-card-stats">
+            {stats.map((s, i) => (
+              <div key={i}>
+                {s.label}: <b>{s.value}</b>
+              </div>
+            ))}
+          </div>
+        )}
+        {abilities.length > 0 && (
+          <div className="hero-card-abilities">
+            {abilities.map((ab, i) => (
+              <div
+                key={i}
+                className={`hero-card-ability${ab.disabled ? " hero-card-ability--disabled" : ""}`}
+              >
+                {ab.icon ? <img src={ab.icon} alt="" /> : "?"}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export interface HeroCardCompactProps {
+  name: string;
+  subtitle?: string;
+  portraitUrl?: string;
+  className?: string;
+}
+
+/**
+ * Compact inline hero card with portrait and name.
+ */
+export function HeroCardCompact({
+  name,
+  subtitle,
+  portraitUrl,
+  className,
+}: HeroCardCompactProps) {
+  return (
+    <div className={`hero-card-compact ${className ?? ""}`}>
+      {portraitUrl && (
+        <img className="hero-card-compact-portrait" src={portraitUrl} alt={name} />
+      )}
+      <div className="hero-card-compact-meta">
+        <strong>{name}</strong>
+        {subtitle && <span>{subtitle}</span>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Skeleton loading state for hero cards.
+ */
+export function HeroCardSkeleton({ className }: { className?: string }) {
+  return (
+    <div className={`hero-card-skeleton ${className ?? ""}`}>
+      <div className="hero-skeleton-avatar" />
+      <div className="hero-skeleton-lines">
+        <span />
+        <span />
+        <span />
+      </div>
+    </div>
+  );
+}

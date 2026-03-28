@@ -1,0 +1,295 @@
+import { useRef, useEffect } from 'react';
+import { ModelRenderer, decodeBLP, getBLPImageData, parseMDX } from 'war3-model';
+import { mat3, mat4, quat, vec3 } from 'gl-matrix';
+import type { Race } from '@wc3-ui/core';
+
+type ModelType = ReturnType<typeof parseMDX>;
+
+interface HeroPortraitConfig {
+  modelPath: string;
+  textures: Record<string, string>;
+}
+
+const HERO_PORTRAIT_CONFIG: Record<Race, HeroPortraitConfig> = {
+  Human: {
+    modelPath: '/models/hero-portrait/Human/HeroArchMage_portrait.mdx',
+    textures: {
+      'heroarchmage.blp': '/models/hero-portrait/textures/Human/HeroArchmage.blp',
+    },
+  },
+  Orc: {
+    modelPath: '/models/hero-portrait/Orc/HeroBladeMaster_portrait.mdx',
+    textures: {
+      'heroblademaster.blp': '/models/hero-portrait/textures/Orc/HeroBladeMaster.blp',
+    },
+  },
+  NightElf: {
+    modelPath: '/models/hero-portrait/NightElf/HeroDemonHunter_Portrait.mdx',
+    textures: {
+      'herodemonhunter.blp': '/models/hero-portrait/textures/NightElf/HeroDemonHunter.blp',
+      'black32.blp': '/models/hero-portrait/textures/NightElf/Black32.blp',
+    },
+  },
+  Undead: {
+    modelPath: '/models/hero-portrait/Undead/HeroDeathKnight_portrait.mdx',
+    textures: {
+      'herodeathknight.blp': '/models/hero-portrait/textures/Undead/HeroDeathknight.blp',
+    },
+  },
+};
+
+const modelCache = new Map<string, ModelType>();
+const blpCache = new Map<string, ImageData[]>();
+
+function normalizeTextureName(textureImage: string): string {
+  const normalized = textureImage.replaceAll('\\', '/');
+  const lastSlash = normalized.lastIndexOf('/');
+  return (lastSlash >= 0 ? normalized.slice(lastSlash + 1) : normalized).toLowerCase();
+}
+
+function getTexturePath(textureImage: string, race: Race): string | null {
+  const key = normalizeTextureName(textureImage);
+  const raceTexture = HERO_PORTRAIT_CONFIG[race].textures[key];
+  if (raceTexture) return raceTexture;
+  if (key.startsWith('teamcolor')) return '/models/hero-portrait/textures/shared/TeamColor00.blp';
+  if (key.startsWith('teamglow')) return '/models/hero-portrait/textures/shared/TeamGlow00.blp';
+  return null;
+}
+
+async function loadModel(race: Race): Promise<ModelType> {
+  const path = HERO_PORTRAIT_CONFIG[race].modelPath;
+  const cached = modelCache.get(path);
+  if (cached) return cached;
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`Failed to load hero portrait model: ${path}`);
+  const ab = await res.arrayBuffer();
+  const model = parseMDX(ab);
+  modelCache.set(path, model);
+  return model;
+}
+
+async function loadBLPMips(path: string): Promise<ImageData[]> {
+  const cached = blpCache.get(path);
+  if (cached) return cached;
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`Failed to load hero portrait texture: ${path}`);
+  const ab = await res.arrayBuffer();
+  const blp = decodeBLP(ab);
+  const mips: ImageData[] = [];
+  const maxLevels = Math.max(1, Math.floor(Math.log2(Math.max(blp.width, blp.height))) + 1);
+  for (let i = 0; i < maxLevels; i++) {
+    const w = blp.width >> i;
+    const h = blp.height >> i;
+    if (w <= 0 || h <= 0) break;
+    try {
+      const img = getBLPImageData(blp, i);
+      if (!img || !img.width || !img.height) break;
+      mips.push(new ImageData(img.data as unknown as Uint8ClampedArray<ArrayBuffer>, img.width, img.height));
+      if (img.width === 1 && img.height === 1) break;
+    } catch {
+      break;
+    }
+  }
+  if (mips.length === 0) throw new Error(`No mip levels decoded for hero portrait texture: ${path}`);
+  blpCache.set(path, mips);
+  return mips;
+}
+
+function findPortraitSequenceIndex(model: ModelType): number {
+  const sequences = model.Sequences || [];
+  if (sequences.length === 0) return 0;
+  const byName = (predicate: (name: string) => boolean) =>
+    sequences.findIndex((seq) => predicate((seq.Name || '').toLowerCase()));
+  let idx = byName((name) => name.includes('portrait') && !name.includes('talk'));
+  if (idx >= 0) return idx;
+  idx = byName((name) => name.includes('stand'));
+  if (idx >= 0) return idx;
+  idx = byName((name) => name.includes('portrait'));
+  if (idx >= 0) return idx;
+  return 0;
+}
+
+interface HeroPortraitModelProps {
+  race: Race;
+}
+
+export default function HeroPortraitModel({ race }: HeroPortraitModelProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const glRef = useRef<WebGLRenderingContext | WebGL2RenderingContext | null>(null);
+  const modelRendererRef = useRef<ModelRenderer | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const rafIdRef = useRef(0);
+  const disposedRef = useRef(false);
+  const initVersionRef = useRef(0);
+
+  // Camera state — mutable, never triggers re-render.
+  const mvMatrix = useRef(mat4.create());
+  const pMatrix = useRef(mat4.create());
+  const worldCameraMatrix = useRef(mat4.create());
+  const cameraPos = useRef(vec3.create());
+  const cameraTarget = useRef(vec3.create());
+  const cameraQuat = useRef(quat.create());
+  const cameraFovRef = useRef(0.691111);
+  const cameraNearRef = useRef(8);
+  const cameraFarRef = useRef(1800);
+
+  const destroyRenderer = () => {
+    if (!modelRendererRef.current) return;
+    try { modelRendererRef.current.destroy(); } catch (err) { console.warn('hero portrait renderer destroy failed', err); }
+    modelRendererRef.current = null;
+  };
+
+  const updateProjection = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const aspect = Math.max(1e-6, canvas.clientWidth / Math.max(1, canvas.clientHeight));
+    mat4.perspective(pMatrix.current, cameraFovRef.current, aspect, cameraNearRef.current, cameraFarRef.current);
+  };
+
+  const resizeCanvas = () => {
+    const canvas = canvasRef.current;
+    const gl = glRef.current;
+    if (!canvas || !gl) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
+    const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    gl.viewport(0, 0, w, h);
+    updateProjection();
+  };
+
+  const configureCamera = (model: ModelType) => {
+    const cam = model.Cameras?.[0];
+    if (cam) {
+      vec3.set(cameraPos.current, cam.Position[0], cam.Position[1], cam.Position[2]);
+      vec3.set(cameraTarget.current, cam.TargetPosition[0], cam.TargetPosition[1], cam.TargetPosition[2]);
+      cameraFovRef.current = Math.max(0.35, cam.FieldOfView || 0.691111);
+      cameraNearRef.current = Math.max(4, cam.NearClip || 8);
+      cameraFarRef.current = Math.max(cameraNearRef.current + 100, cam.FarClip || 1800);
+      mat4.lookAt(mvMatrix.current, cameraPos.current, cameraTarget.current, vec3.fromValues(0, 0, 1));
+    } else {
+      const min = model.Info?.MinimumExtent;
+      const max = model.Info?.MaximumExtent;
+      if (min && max) {
+        const cx = (min[0] + max[0]) * 0.5;
+        const cy = (min[1] + max[1]) * 0.5;
+        const cz = (min[2] + max[2]) * 0.5;
+        const radius = Math.max(140, model.Info?.BoundsRadius || 180);
+        vec3.set(cameraPos.current, cx + radius * 0.2, cy - radius * 1.8, cz + radius * 0.2);
+        vec3.set(cameraTarget.current, cx, cy, cz);
+      } else {
+        vec3.set(cameraPos.current, 0, -450, 120);
+        vec3.set(cameraTarget.current, 0, 0, 110);
+      }
+      cameraFovRef.current = 0.691111;
+      cameraNearRef.current = 8;
+      cameraFarRef.current = 1800;
+      mat4.lookAt(mvMatrix.current, cameraPos.current, cameraTarget.current, vec3.fromValues(0, 0, 1));
+    }
+
+    if (mat4.invert(worldCameraMatrix.current, mvMatrix.current)) {
+      const rot = mat3.create();
+      mat3.fromMat4(rot, worldCameraMatrix.current);
+      quat.fromMat3(cameraQuat.current, rot);
+      quat.normalize(cameraQuat.current, cameraQuat.current);
+    } else {
+      quat.identity(cameraQuat.current);
+    }
+  };
+
+  const startRenderLoop = () => {
+    let lastTs = performance.now();
+    const tick = (now: number) => {
+      if (disposedRef.current) return;
+      rafIdRef.current = requestAnimationFrame(tick);
+      const gl = glRef.current;
+      const modelRenderer = modelRendererRef.current;
+      if (!gl || !modelRenderer) return;
+
+      resizeCanvas();
+      const delta = Math.min(100, now - lastTs);
+      lastTs = now;
+      modelRenderer.update(delta);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      modelRenderer.render(mvMatrix.current, pMatrix.current, { env: false, wireframe: false });
+    };
+    rafIdRef.current = requestAnimationFrame(tick);
+  };
+
+  const initForRace = async (race: Race) => {
+    const version = ++initVersionRef.current;
+    const model = await loadModel(race);
+    if (disposedRef.current || version !== initVersionRef.current || !glRef.current) return;
+
+    destroyRenderer();
+    const gl = glRef.current;
+    modelRendererRef.current = new ModelRenderer(model);
+    modelRendererRef.current.initGL(gl);
+    configureCamera(model);
+    modelRendererRef.current.setCamera(cameraPos.current, cameraQuat.current);
+    modelRendererRef.current.setLightPosition(cameraPos.current);
+    modelRendererRef.current.setLightColor(vec3.fromValues(1, 1, 1));
+    modelRendererRef.current.setSequence(findPortraitSequenceIndex(model));
+
+    const texturePromises = (model.Textures || []).map(async (tex) => {
+      const texturePath = getTexturePath(tex.Image, race);
+      if (!texturePath) return;
+      const mips = await loadBLPMips(texturePath);
+      if (!disposedRef.current && version === initVersionRef.current) {
+        modelRendererRef.current!.setTextureImageData(tex.Image, mips);
+      }
+    });
+    await Promise.all(texturePromises);
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current!;
+    let gl: WebGLRenderingContext | WebGL2RenderingContext | null = canvas.getContext('webgl2', {
+      alpha: true, premultipliedAlpha: false, antialias: true, depth: true, stencil: false,
+    }) as WebGL2RenderingContext | null;
+    if (!gl) {
+      gl = canvas.getContext('webgl', {
+        alpha: true, premultipliedAlpha: false, antialias: true, depth: true, stencil: false,
+      });
+    }
+    if (!gl) return;
+
+    glRef.current = gl;
+    resizeCanvas();
+    resizeObserverRef.current = new ResizeObserver(() => resizeCanvas());
+    resizeObserverRef.current.observe(canvas);
+    startRenderLoop();
+    void initForRace(race).catch((err) => console.error(err));
+
+    return () => {
+      disposedRef.current = true;
+      initVersionRef.current++;
+      cancelAnimationFrame(rafIdRef.current);
+      resizeObserverRef.current?.disconnect();
+      destroyRenderer();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!glRef.current) return;
+    void initForRace(race).catch((err) => console.error(err));
+  }, [race]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: 'absolute',
+        inset: '0',
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        pointerEvents: 'none',
+      }}
+    />
+  );
+}

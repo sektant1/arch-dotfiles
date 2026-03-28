@@ -1,0 +1,20 @@
+import { RACE_PREFIXES } from '@wc3-ui/core';
+import type { Race } from '@wc3-ui/core';
+
+interface Props {
+  race: Race;
+}
+
+export default function BottomHud({ race }: Props) {
+  const rp = RACE_PREFIXES[race];
+  const tileSrc = (n: string) => `war3/Console/${race}/${rp.tile}UITile0${n}.png`;
+
+  return (
+    <div className="hud-bar">
+      <img className="hud-tile-01" src={tileSrc('1')} alt="Tile 01" />
+      <img className="hud-tile-02" src={tileSrc('2')} alt="Tile 02" />
+      <img className="hud-tile-03" src={tileSrc('3')} alt="Tile 03" />
+      <img className="hud-tile-04" src={tileSrc('4')} alt="Tile 04" />
+    </div>
+  );
+}

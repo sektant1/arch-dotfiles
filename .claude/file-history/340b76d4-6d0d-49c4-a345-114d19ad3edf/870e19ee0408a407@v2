@@ -1,0 +1,75 @@
+import { useRef, useState, useEffect } from 'react';
+import { useRendererRegistration } from '../hooks/useRendererRegistration';
+
+interface Props {
+  label: string;
+  initialValue?: number;
+}
+
+export default function Slider({ label, initialValue = 0.5 }: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [value, setValue] = useState(initialValue);
+  const dragging = useRef(false);
+
+  // Keep a ref so the renderer's RAF loop always reads the latest value
+  // without needing to re-register on every prop change.
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  useRendererRegistration('sliders', () => ({
+    ref: () => ref.current!,
+    value: () => valueRef.current,
+  }));
+
+  const updateFromEvent = (e: MouseEvent | TouchEvent) => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    setValue(pct);
+  };
+
+  const onMove = (e: MouseEvent | TouchEvent) => {
+    if (!dragging.current) return;
+    e.preventDefault();
+    updateFromEvent(e);
+  };
+
+  const onUp = () => {
+    dragging.current = false;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onUp);
+  };
+
+  const onDown = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    updateFromEvent(e.nativeEvent);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+  };
+
+  useEffect(() => {
+    return () => onUp();
+  }, []);
+
+  return (
+    <div className="bar-row">
+      <span className="bar-label">{label}</span>
+      <div
+        ref={ref}
+        className="wc3-slider"
+        onMouseDown={onDown}
+        onTouchStart={onDown}
+      >
+        <img className="slider-bg" src="" alt="" />
+        <img className="slider-border" src="" alt="" />
+        <img className="slider-knob" src="" alt="" style={{ left: (value * 100) + '%' }} />
+      </div>
+    </div>
+  );
+}

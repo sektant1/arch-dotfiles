@@ -1,0 +1,27 @@
+
+CREATE TABLE races (
+  id    SERIAL PRIMARY KEY,
+  name  VARCHAR(20) UNIQUE NOT NULL,  -- 'Human', 'Orc', 'Undead', 'Night Elf'
+  icon  VARCHAR(255)                   -- path or URL to race icon
+);
+
+CREATE TABLE build_orders (
+  id          SERIAL PRIMARY KEY,
+  race_id     INTEGER REFERENCES races(id) ON DELETE CASCADE,
+  name        VARCHAR(100) NOT NULL,       -- e.g. "HU Fast Expand"
+  description TEXT,
+  matchup     VARCHAR(10),                 -- e.g. "HUvOC", "ANY"
+  is_premade  BOOLEAN DEFAULT false,
+  created_at  TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE build_order_steps (
+  id              SERIAL PRIMARY KEY,
+  build_order_id  INTEGER REFERENCES build_orders(id) ON DELETE CASCADE,
+  timestamp_secs  INTEGER NOT NULL,         -- seconds from game start (170 = 2:50)
+  action          VARCHAR(200) NOT NULL,    -- "Upgrade to Castle"
+  category        VARCHAR(30),              -- 'build', 'upgrade', 'unit', 'hero', 'timing'
+  sound_cue       VARCHAR(100),             -- filename in /sounds/ (null = use TTS or default beep)
+  sort_order      INTEGER NOT NULL
+);
+```

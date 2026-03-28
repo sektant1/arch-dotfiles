@@ -1,0 +1,83 @@
+#include <gtest/gtest.h>
+#include <rts/assets/blp_loader.hpp>
+#include <fstream>
+#include <cstring>
+#include <cstdint>
+
+static void write_u32(std::vector<uint8_t>& buf, uint32_t val) {
+    buf.push_back(val & 0xFF);
+    buf.push_back((val >> 8) & 0xFF);
+    buf.push_back((val >> 16) & 0xFF);
+    buf.push_back((val >> 24) & 0xFF);
+}
+
+class BlpLoaderTest : public ::testing::Test {
+protected:
+    void create_blp1_paletted(const std::string& filename) {
+        // BLP1 paletted 1x1 pixel
+        std::vector<uint8_t> data;
+        // magic
+        for (char c : {'B','L','P','1'}) data.push_back(static_cast<uint8_t>(c));
+        write_u32(data, 1);   // compression = paletted
+        write_u32(data, 0);   // alpha_bits
+        write_u32(data, 1);   // width
+        write_u32(data, 1);   // height
+        write_u32(data, 4);   // type
+        write_u32(data, 0);   // has_mipmaps
+
+        // Calcular offset do dado: header(7*4=28) + 16 offsets + 16 sizes + palette(256*4)
+        constexpr uint32_t header_size  = 4 + 7 * 4 + 16 * 4 + 16 * 4;
+        constexpr uint32_t palette_size = 256 * 4;
+        constexpr uint32_t data_offset  = header_size + palette_size;
+
+        // 16 mipmap offsets
+        for (int i = 0; i < 16; ++i) write_u32(data, i == 0 ? data_offset : 0);
+        // 16 mipmap sizes
+        for (int i = 0; i < 16; ++i) write_u32(data, i == 0 ? 1 : 0);
+
+        // Palette BGRA: índice 0 = vermelho puro
+        uint8_t palette[256 * 4] = {};
+        palette[0] = 0x00; // B
+        palette[1] = 0x00; // G
+        palette[2] = 0xFF; // R
+        palette[3] = 0xFF; // A
+        for (auto b : palette) data.push_back(b);
+
+        // Pixel: índice 0
+        data.push_back(0);
+
+        std::ofstream f(filename, std::ios::binary);
+        f.write(reinterpret_cast<char*>(data.data()),
+                static_cast<std::streamsize>(data.size()));
+    }
+
+    void TearDown() override { std::remove("test.blp"); }
+};
+
+TEST_F(BlpLoaderTest, LoadsPalettedBlp1) {
+    create_blp1_paletted("test.blp");
+    rts::BlpLoader loader;
+    auto data = loader.load("test.blp");
+
+    EXPECT_EQ(data.width, 1u);
+    EXPECT_EQ(data.height, 1u);
+    EXPECT_EQ(data.channels, 4u);
+    ASSERT_EQ(data.pixels.size(), 4u);
+    EXPECT_EQ(data.pixels[0], 0xFF); // R
+    EXPECT_EQ(data.pixels[1], 0x00); // G
+    EXPECT_EQ(data.pixels[2], 0x00); // B
+    EXPECT_EQ(data.pixels[3], 0xFF); // A
+}
+
+TEST_F(BlpLoaderTest, ThrowsOnInvalidMagic) {
+    std::ofstream f("test.blp", std::ios::binary);
+    f.write("NOPE", 4);
+    f.close();
+    rts::BlpLoader loader;
+    EXPECT_THROW(loader.load("test.blp"), std::runtime_error);
+}
+
+TEST_F(BlpLoaderTest, ThrowsOnMissingFile) {
+    rts::BlpLoader loader;
+    EXPECT_THROW(loader.load("nonexistent.blp"), std::runtime_error);
+}

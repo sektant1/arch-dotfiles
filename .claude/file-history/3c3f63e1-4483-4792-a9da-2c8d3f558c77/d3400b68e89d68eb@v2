@@ -1,0 +1,38 @@
+export type Race = "Human" | "Orc" | "NightElf" | "Undead";
+
+export interface RaceConfig {
+  display: string;
+  key: Race;
+}
+
+export const RACES: Record<Race, RaceConfig> = {
+  Human: { display: "Human", key: "Human" },
+  Orc: { display: "Orc", key: "Orc" },
+  NightElf: { display: "Night Elf", key: "NightElf" },
+  Undead: { display: "Undead", key: "Undead" },
+};
+
+export interface CommandButtonData {
+  icon?: string;
+  disabledIcon?: string;
+  hotkey?: string;
+  label?: string;
+  disabled?: boolean;
+  passive?: boolean;
+  levelUp?: boolean;
+  noResources?: boolean;
+  cooldown?: boolean;
+}
+
+export interface TooltipCost {
+  icon: string;
+  amount: number | string;
+}
+
+export interface TooltipData {
+  title: string;
+  hotkey?: string;
+  description: string;
+  costs?: TooltipCost[];
+  error?: boolean;
+}

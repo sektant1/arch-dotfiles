@@ -1,0 +1,82 @@
+import React, { useRef, useEffect, useCallback } from "react";
+import { loadBlpImage } from "../utils/blp";
+import { EDITBOX_ASSETS } from "../utils/assets";
+
+export type EditboxVariant = "esc" | "bnet";
+
+export interface EditboxProps {
+  value: string;
+  onChange?: (value: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  /** "esc" = race-themed in-game style, "bnet" = Battle.net login style */
+  variant?: EditboxVariant;
+  className?: string;
+}
+
+/**
+ * Text input in two WC3 styles: decorated ESC menu and plain Battle.net login.
+ */
+export function Editbox({
+  value,
+  onChange,
+  placeholder,
+  disabled = false,
+  variant = "esc",
+  className,
+}: EditboxProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const draw = useCallback(async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    try {
+      const bgPath =
+        variant === "bnet"
+          ? EDITBOX_ASSETS.bnetBack
+          : EDITBOX_ASSETS.escBackground;
+      const borderPath =
+        variant === "bnet"
+          ? EDITBOX_ASSETS.bnetBorder
+          : EDITBOX_ASSETS.escBorder;
+
+      const [bg, border] = await Promise.all([
+        loadBlpImage(bgPath),
+        loadBlpImage(borderPath),
+      ]);
+
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(bg, 0, 0, w, h);
+      ctx.drawImage(border, 0, 0, w, h);
+    } catch {}
+  }, [variant]);
+
+  useEffect(() => { draw(); }, [draw]);
+
+  const variantClass = variant === "bnet" ? "wc3-editbox--bnet" : "wc3-editbox--esc";
+  const disabledClass = disabled ? " wc3-editbox--disabled" : "";
+
+  return (
+    <div className={`wc3-editbox ${variantClass}${disabledClass} ${className ?? ""}`}>
+      <canvas
+        ref={canvasRef}
+        className="wc3-editbox-canvas"
+        width={496}
+        height={92}
+      />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange?.(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+      />
+    </div>
+  );
+}

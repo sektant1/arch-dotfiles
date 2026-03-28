@@ -1,0 +1,47 @@
+#include <gtest/gtest.h>
+#include <rts/assets/asset_manager.hpp>
+#include <rts/assets/stb_loader.hpp>
+#include <fstream>
+
+class AssetManagerTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        const unsigned char png_data[] = {
+            0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A,
+            0x00,0x00,0x00,0x0D,0x49,0x48,0x44,0x52,
+            0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x01,
+            0x08,0x02,0x00,0x00,0x00,0x90,0x77,0x53,
+            0xDE,0x00,0x00,0x00,0x0C,0x49,0x44,0x41,
+            0x54,0x08,0xD7,0x63,0xF8,0xCF,0xC0,0x00,
+            0x00,0x00,0x02,0x00,0x01,0xE2,0x21,0xBC,
+            0x33,0x00,0x00,0x00,0x00,0x49,0x45,0x4E,
+            0x44,0xAE,0x42,0x60,0x82
+        };
+        std::ofstream f("test_asset.png", std::ios::binary);
+        f.write(reinterpret_cast<const char*>(png_data), sizeof(png_data));
+    }
+
+    void TearDown() override { std::remove("test_asset.png"); }
+};
+
+TEST_F(AssetManagerTest, RegisterAndUseTextureLoader) {
+    rts::AssetManager manager;
+    manager.register_texture_loader(".png", std::make_unique<rts::StbLoader>());
+    auto data = manager.load_texture("test_asset.png");
+    EXPECT_EQ(data.width, 1u);
+    EXPECT_EQ(data.height, 1u);
+}
+
+TEST_F(AssetManagerTest, CachesLoadedTextures) {
+    rts::AssetManager manager;
+    manager.register_texture_loader(".png", std::make_unique<rts::StbLoader>());
+    auto data1 = manager.load_texture("test_asset.png");
+    auto data2 = manager.load_texture("test_asset.png");
+    EXPECT_EQ(data1.width, data2.width);
+    EXPECT_EQ(data1.pixels.size(), data2.pixels.size());
+}
+
+TEST_F(AssetManagerTest, ThrowsOnUnknownExtension) {
+    rts::AssetManager manager;
+    EXPECT_THROW(manager.load_texture("file.xyz"), std::runtime_error);
+}

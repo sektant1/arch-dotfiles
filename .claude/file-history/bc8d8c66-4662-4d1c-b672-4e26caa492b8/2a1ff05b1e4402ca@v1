@@ -1,0 +1,8 @@
+export type Race = 'Human' | 'Orc' | 'NightElf' | 'Undead';
+
+export interface RacePrefix {
+  tile: string;
+  esc: string;
+  lower: string;
+  display: string;
+}

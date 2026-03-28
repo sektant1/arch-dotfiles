@@ -1,0 +1,31 @@
+import React from "react";
+
+export interface ProgressBarProps {
+  /** Progress percentage 0–100 */
+  percent: number;
+  showText?: boolean;
+  className?: string;
+}
+
+export function ProgressBar({
+  percent,
+  showText = true,
+  className,
+}: ProgressBarProps) {
+  const clamped = Math.min(100, Math.max(0, percent));
+
+  return (
+    <div className={`wc3-bar wc3-bar--compact wc3-bar--progress ${className ?? ""}`}>
+      <div
+        className="wc3-bar-fill-wrap"
+        style={{ width: `${clamped}%` }}
+      >
+        <div className="wc3-bar-fill wc3-bar-fill--progress" />
+        <div className="wc3-bar-highlight" />
+      </div>
+      {showText && (
+        <div className="wc3-bar-text">{Math.floor(clamped)}%</div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,1 @@
+- [Open-ended questions in plan mode](feedback_plan_mode_questions.md) — Use open-ended questions (not yes/no) when in plan mode

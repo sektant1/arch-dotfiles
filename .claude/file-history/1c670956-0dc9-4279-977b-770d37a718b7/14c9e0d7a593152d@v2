@@ -1,0 +1,15 @@
+#pragma once
+
+#include <rts/assets/model_data.hpp>
+#include <string>
+#include <vector>
+
+namespace rts {
+
+class IModelLoader {
+public:
+    virtual ~IModelLoader() = default;
+    virtual std::vector<ModelData> load(const std::string& path) = 0;
+};
+
+}  // namespace rts

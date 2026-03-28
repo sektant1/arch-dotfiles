@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Remove o diretório de build
+# Uso: ./scripts/clean.sh
+set -e
+
+BUILD_DIR="build"
+
+if [ -d "$BUILD_DIR" ]; then
+    echo "==> Removendo '$BUILD_DIR/'..."
+    rm -rf "$BUILD_DIR"
+    echo "==> Limpo."
+else
+    echo "==> Nada para limpar."
+fi

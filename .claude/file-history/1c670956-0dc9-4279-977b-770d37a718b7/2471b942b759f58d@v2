@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Compila o projeto
+# Uso: ./scripts/build.sh [Debug|Release] [target]
+set -e
+
+BUILD_TYPE=${1:-Debug}
+TARGET=${2:-}
+BUILD_DIR="build"
+
+if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
+    echo "==> Build não configurado. Rode './scripts/configure.sh' primeiro."
+    exit 1
+fi
+
+echo "==> Compilando ($BUILD_TYPE)..."
+if [ -n "$TARGET" ]; then
+    cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" --target "$TARGET" --parallel "$(nproc)"
+else
+    cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" --parallel "$(nproc)"
+fi
+
+echo "==> Build concluído."

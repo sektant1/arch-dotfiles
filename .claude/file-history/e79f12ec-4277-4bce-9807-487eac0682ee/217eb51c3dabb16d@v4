@@ -1,0 +1,90 @@
+import { createExternalStore } from "./createStore";
+import { BUILD_ORDERS_2026 } from "../data/buildOrders";
+import type { BuildOrder, SkillPick } from "../data/buildOrders";
+
+const VALID_RACES = new Set(["Human", "Orc", "NightElf", "Undead"]);
+
+const store = createExternalStore<BuildOrder[]>([...BUILD_ORDERS_2026]);
+
+export const useBuildOrders = store.useValue;
+export const getBuildOrders = store.get;
+
+/** Validate and add builds, returning the count of successfully imported entries. */
+export function importBuilds(data: unknown): number {
+  if (!Array.isArray(data)) {
+    // Allow a single object wrapped as an array
+    if (data && typeof data === "object" && "steps" in data) {
+      data = [data];
+    } else {
+      return 0;
+    }
+  }
+
+  const valid: BuildOrder[] = [];
+  for (const item of data as unknown[]) {
+    if (!item || typeof item !== "object") continue;
+    const obj = item as Record<string, unknown>;
+
+    if (typeof obj.name !== "string" || !obj.name) continue;
+    if (typeof obj.race !== "string" || !VALID_RACES.has(obj.race)) continue;
+    if (!Array.isArray(obj.steps) || obj.steps.length === 0) continue;
+
+    const steps: { order: number; time: string; instruction: string; food: string; isKey?: boolean; sound?: string }[] = [];
+    let stepsOk = true;
+    for (const s of obj.steps) {
+      if (!s || typeof s !== "object") { stepsOk = false; break; }
+      const st = s as Record<string, unknown>;
+      if (typeof st.order !== "number") { stepsOk = false; break; }
+      if (typeof st.time !== "string") { stepsOk = false; break; }
+      if (typeof st.instruction !== "string") { stepsOk = false; break; }
+      if (typeof st.food !== "string") { stepsOk = false; break; }
+      steps.push({
+        order: st.order,
+        time: st.time,
+        instruction: st.instruction,
+        food: st.food,
+        isKey: st.isKey === true ? true : undefined,
+        sound: typeof st.sound === "string" ? st.sound : undefined,
+      });
+    }
+    if (!stepsOk) continue;
+
+    valid.push({
+      name: obj.name,
+      race: obj.race,
+      heroes: (Array.isArray(obj.heroes)
+        ? (obj.heroes as unknown[]).filter((h): h is string => typeof h === "string")
+        : []) as BuildOrder["heroes"],
+      description: typeof obj.description === "string" ? obj.description : "",
+      vs: typeof obj.vs === "string" ? obj.vs : undefined,
+      difficulty:
+        obj.difficulty === "Beginner" ||
+        obj.difficulty === "Intermediate" ||
+        obj.difficulty === "Advanced"
+          ? obj.difficulty
+          : undefined,
+      note: typeof obj.note === "string" ? obj.note : undefined,
+      steps,
+      skillOrder: Array.isArray(obj.skillOrder)
+        ? (obj.skillOrder as unknown[])
+            .filter(
+              (s): s is SkillPick =>
+                !!s &&
+                typeof s === "object" &&
+                typeof (s as Record<string, unknown>).level === "number" &&
+                typeof (s as Record<string, unknown>).skill === "string",
+            )
+            .map((s) => ({
+              level: s.level,
+              skill: s.skill,
+              icon: typeof s.icon === "string" ? s.icon : undefined,
+            }))
+        : undefined,
+    });
+  }
+
+  if (valid.length === 0) return 0;
+
+  store.set((prev) => [...prev, ...valid]);
+  return valid.length;
+}

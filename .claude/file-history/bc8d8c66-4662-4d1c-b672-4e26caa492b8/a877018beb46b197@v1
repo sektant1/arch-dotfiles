@@ -1,0 +1,166 @@
+import { For } from 'solid-js';
+import type { Renderer } from '../../renderer/Renderer';
+import GlueButton from '../GlueButton';
+import MenuButton from '../MenuButton';
+import OptionButton from '../OptionButton';
+import { currentRace, RACE_PREFIXES } from '../../state/race';
+
+interface Props {
+  renderer: Renderer;
+}
+
+const GLUE_BG = 'war3/Widgets/Glues/GlueScreen-Button1-BackdropBackground.png';
+const GLUE_BORDER = 'war3/Widgets/Glues/GlueScreen-Button1-BackdropBorder.png';
+const GLUE_BG_DOWN = 'war3/Widgets/Glues/GlueScreen-Button1-BackdropBackground-Down.png';
+const GLUE_BORDER_DOWN = 'war3/Widgets/Glues/GlueScreen-Button1-BackdropBorder-Down.png';
+const GLUE_BORDERED = 'war3/Widgets/Glues/GlueScreen-Button1-BorderedBackdropBorder.png';
+const GLUE_BORDERED_DOWN = 'war3/Widgets/Glues/GlueScreen-Button1-BorderedBackdropBorder-Down.png';
+const GLUE_HOVER = 'war3/Widgets/BattleNet/bnet-button01-highlight-mouse.png';
+const GLUE_BG_DISABLED = 'war3/Widgets/Glues/GlueScreen-Button1-BackdropBackground-Disabled.png';
+const GLUE_BORDER_DISABLED = 'war3/Widgets/Glues/GlueScreen-Button1-BackdropBorder-Disabled.png';
+const GLUE_FRAME = 'war3/Widgets/Glues/GlueScreen-Button1-Border.png';
+
+export default function ButtonsSection(props: Props) {
+  const rp = () => RACE_PREFIXES[currentRace()];
+  const consoleBtnPath = () => {
+    const race = currentRace();
+    return `war3/Widgets/Console/${race}/${rp().lower}`;
+  };
+  const cmdBtnPath = () => `${consoleBtnPath()}-console-button`;
+
+  return (
+    <div class="tab-content">
+      {/* Glue Screen Buttons */}
+      <div class="section-card">
+        <h2>Glue Screen Buttons (9-Slice Composited)</h2>
+        <p class="section-desc">Main menu buttons use 9-slice compositing: a 32x32 tiled background + a 256x32 border atlas (8 pieces of 32x32: TL, T, TR, R, BR, B, BL, L). Shared across all races.</p>
+        <div class="glue-buttons-grid">
+          <div class="glue-btn-demo">
+            <GlueButton bgPath={GLUE_BG} borderPath={GLUE_BORDER} bgDownPath={GLUE_BG_DOWN} borderDownPath={GLUE_BORDER_DOWN} hoverPath={GLUE_HOVER} renderer={props.renderer}>
+              <div class="gb-label"><span class="hotkey">S</span>ingle Player</div>
+            </GlueButton>
+            <div class="glue-btn-state-label">Normal</div>
+          </div>
+          <div class="glue-btn-demo">
+            <GlueButton bgPath={GLUE_BG} borderPath={GLUE_BORDERED} bgDownPath={GLUE_BG_DOWN} borderDownPath={GLUE_BORDERED_DOWN} hoverPath={GLUE_HOVER} renderer={props.renderer}>
+              <div class="gb-label"><span class="hotkey">S</span>ingle Player</div>
+            </GlueButton>
+            <div class="glue-btn-state-label">Bordered</div>
+          </div>
+          <div class="glue-btn-demo">
+            <GlueButton bgPath={GLUE_BG_DISABLED} borderPath={GLUE_BORDER_DISABLED} disabled renderer={props.renderer}>
+              <div class="gb-label" style={{ opacity: 0.5 }}>Single Player</div>
+            </GlueButton>
+            <div class="glue-btn-state-label">Disabled</div>
+          </div>
+        </div>
+
+        <h3 style={{ 'margin-top': '28px', color: 'var(--wc3-gold)', 'text-shadow': 'var(--wc3-shadow)' }}>Main Menu Buttons</h3>
+        <p class="section-desc">In the game, 9-slice buttons are drawn inside pre-rendered border frames (BackdropBackground stretched with BackdropBlendAll). The GLUETEXTBUTTON is a child of the base BACKDROP frame.</p>
+        <div class="glue-menu-grid">
+          <For each={['Single Player', 'Multi Player', 'Options', 'Exit Game']}>{(label) => {
+            const hotkey = label[0];
+            const rest = label.slice(1);
+            return (
+              <MenuButton frameSrc={GLUE_FRAME} bgPath={GLUE_BG} borderPath={GLUE_BORDER} bgDownPath={GLUE_BG_DOWN} borderDownPath={GLUE_BORDER_DOWN} hoverPath={GLUE_HOVER} renderer={props.renderer}>
+                <div class="gb-label"><span class="hotkey">{hotkey}</span>{rest}</div>
+              </MenuButton>
+            );
+          }}</For>
+        </div>
+      </div>
+
+      {/* EscMenu Option Buttons */}
+      <div class="section-card">
+        <h2>EscMenu Option Buttons</h2>
+        <p class="section-desc">Race-specific option buttons with background + border + highlight layers.</p>
+        <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '8px', 'justify-content': 'center' }}>
+          <For each={['Save Game', 'Options', 'End Game']}>{(label) =>
+            <OptionButton label={label} renderer={props.renderer} />
+          }</For>
+        </div>
+      </div>
+
+      {/* Console Buttons */}
+      <div class="section-card">
+        <h2>Console Buttons</h2>
+        <p class="section-desc">Minimap controls, formation toggles, and command button grid from the in-game HUD console.</p>
+        <div class="console-buttons-grid">
+          <ConsoleButtonGroup title="Minimap - Ally" items={[
+            { src: () => `${consoleBtnPath()}-minimap-ally-active.png`, label: 'Active' },
+            { src: () => `${consoleBtnPath()}-minimap-ally-disabled.png`, label: 'Disabled' },
+            { src: () => `${consoleBtnPath()}-minimap-ally-active-down.png`, label: 'Down' },
+          ]} />
+          <ConsoleButtonGroup title="Minimap - Ping" items={[
+            { src: () => `${consoleBtnPath()}-minimap-ping-active.png`, label: 'Active' },
+            { src: () => `${consoleBtnPath()}-minimap-ping-disabled.png`, label: 'Disabled' },
+            { src: () => `${consoleBtnPath()}-minimap-ping-active-down.png`, label: 'Down' },
+          ]} />
+          <ConsoleButtonGroup title="Minimap - Terrain" items={[
+            { src: () => `${consoleBtnPath()}-minimap-terrain-active.png`, label: 'Active' },
+            { src: () => `${consoleBtnPath()}-minimap-terrain-disabled.png`, label: 'Disabled' },
+            { src: () => `${consoleBtnPath()}-minimap-terrain-active-down.png`, label: 'Down' },
+          ]} />
+          <ConsoleButtonGroup title="Formation" items={[
+            { src: () => `${consoleBtnPath()}-formation-on.png`, label: 'On' },
+            { src: () => `${consoleBtnPath()}-formation-off.png`, label: 'Off' },
+            { src: () => `${consoleBtnPath()}-formation-on-down.png`, label: 'On Down' },
+            { src: () => `${consoleBtnPath()}-formation-off-down.png`, label: 'Off Down' },
+          ]} />
+          <ConsoleButtonGroup title="Console Buttons" items={[
+            { src: () => `${cmdBtnPath()}-up.png`, label: 'Up' },
+            { src: () => `${cmdBtnPath()}-down.png`, label: 'Down' },
+            { src: () => `${cmdBtnPath()}-highlight.png`, label: 'Highlight' },
+            { src: () => `${cmdBtnPath()}-back-active.png`, label: 'Back' },
+            { src: () => `${cmdBtnPath()}-back-disabled.png`, label: 'Back Off' },
+          ]} />
+        </div>
+
+        <h3>Command Button Grid</h3>
+        <div style={{ 'text-align': 'center' }}>
+          <div class="command-grid">
+            <For each={Array(12)}>{() =>
+              <div class="command-cell">
+                <img src={`war3/Widgets/Console/${currentRace()}/CommandButton/${rp().lower}-activebutton.png`} alt="" />
+              </div>
+            }</For>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', 'justify-content': 'center', 'margin-top': '10px' }}>
+            <div class="tooltip-res-card">
+              <img src={`war3/Widgets/Console/${currentRace()}/CommandButton/${rp().lower}-activebutton.png`} style={{ width: '48px', height: '48px', border: '1px solid var(--card-border)', 'border-radius': '2px' }} />
+              <div class="res-label">Active Button</div>
+            </div>
+            <div class="tooltip-res-card">
+              <img src={`war3/Widgets/Console/${currentRace()}/CommandButton/${rp().lower}-multipleselection-border.png`} style={{ width: '48px', height: '48px', border: '1px solid var(--card-border)', 'border-radius': '2px' }} />
+              <div class="res-label">Selection</div>
+            </div>
+            <div class="tooltip-res-card">
+              <img src={`war3/Widgets/Console/${currentRace()}/CommandButton/${rp().lower}-multipleselection-heroglow.png`} style={{ width: '48px', height: '48px', border: '1px solid var(--card-border)', 'border-radius': '2px' }} />
+              <div class="res-label">Hero Glow</div>
+            </div>
+            <div class="tooltip-res-card">
+              <img src={`war3/Widgets/Console/${currentRace()}/CommandButton/${rp().lower}-subgroup-background.png`} style={{ width: '48px', height: '48px', border: '1px solid var(--card-border)', 'border-radius': '2px' }} />
+              <div class="res-label">Subgroup BG</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConsoleButtonGroup(props: { title: string; items: { src: () => string; label: string }[] }) {
+  return (
+    <div class="console-btn-group">
+      <h4>{props.title}</h4>
+      <div class="console-btn-row">
+        <For each={props.items}>{(item) =>
+          <div class="console-btn-card">
+            <img src={item.src()} alt={item.label} />
+            <div class="cb-label">{item.label}</div>
+          </div>
+        }</For>
+      </div>
+    </div>
+  );
+}

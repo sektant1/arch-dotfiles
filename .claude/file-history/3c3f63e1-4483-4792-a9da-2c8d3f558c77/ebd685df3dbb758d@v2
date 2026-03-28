@@ -1,0 +1,106 @@
+import React, { useRef, useEffect, useCallback } from "react";
+import { loadBlpImage } from "../utils/blp";
+import { SCROLLBAR_ASSETS } from "../utils/assets";
+import { useBlpTexture } from "../hooks/useBlpTexture";
+
+export interface ScrollbarProps {
+  value: number;
+  min?: number;
+  max?: number;
+  onChange?: (value: number) => void;
+  disabled?: boolean;
+  /** Track height in px */
+  height?: number;
+  className?: string;
+}
+
+/**
+ * Vertical scroll track with up/down arrows and a draggable knob,
+ * from the login and menu screens.
+ */
+export function Scrollbar({
+  value,
+  min = 0,
+  max = 100,
+  onChange,
+  disabled = false,
+  height = 132,
+  className,
+}: ScrollbarProps) {
+  const trackCanvasRef = useRef<HTMLCanvasElement>(null);
+  const upArrowUrl = useBlpTexture(SCROLLBAR_ASSETS.upArrow);
+  const downArrowUrl = useBlpTexture(SCROLLBAR_ASSETS.downArrow);
+  const knobUrl = useBlpTexture(
+    disabled ? SCROLLBAR_ASSETS.knobDisabled : SCROLLBAR_ASSETS.knob,
+  );
+
+  const drawTrack = useCallback(async () => {
+    const canvas = trackCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    try {
+      const [bg, border] = await Promise.all([
+        loadBlpImage(SCROLLBAR_ASSETS.bg),
+        loadBlpImage(SCROLLBAR_ASSETS.border),
+      ]);
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(bg, 0, 0, w, h);
+      ctx.drawImage(border, 0, 0, w, h);
+    } catch {}
+  }, []);
+
+  useEffect(() => { drawTrack(); }, [drawTrack]);
+
+  const percent = max > min ? ((value - min) / (max - min)) * 100 : 0;
+  const thumbTop = `${percent}%`;
+
+  return (
+    <div className={`glue-scrollbar-demo${disabled ? " glue-scrollbar-demo--disabled" : ""} ${className ?? ""}`}>
+      <button
+        className="glue-scroll-arrow"
+        disabled={disabled || value <= min}
+        onClick={() => onChange?.(Math.max(min, value - 1))}
+        aria-label="Scroll up"
+      >
+        {upArrowUrl && <img src={upArrowUrl} alt="" />}
+      </button>
+      <div className="glue-scroll-track" style={{ height }}>
+        <canvas
+          ref={trackCanvasRef}
+          className="glue-scroll-track-canvas"
+          width={36}
+          height={height * 2}
+        />
+        <div
+          className="glue-scroll-thumb"
+          style={{
+            top: thumbTop,
+            backgroundImage: knobUrl ? `url("${knobUrl}")` : undefined,
+          }}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          value={value}
+          onChange={(e) => onChange?.(Number(e.target.value))}
+          disabled={disabled}
+          aria-label="Scroll position"
+          style={{ writingMode: "vertical-lr" as any }}
+        />
+      </div>
+      <button
+        className="glue-scroll-arrow"
+        disabled={disabled || value >= max}
+        onClick={() => onChange?.(Math.min(max, value + 1))}
+        aria-label="Scroll down"
+      >
+        {downArrowUrl && <img src={downArrowUrl} alt="" />}
+      </button>
+    </div>
+  );
+}

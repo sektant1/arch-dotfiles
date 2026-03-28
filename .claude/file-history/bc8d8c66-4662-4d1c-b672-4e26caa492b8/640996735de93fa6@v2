@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationDir": "dist",
+    "outDir": "dist",
+    "types": []
+  },
+  "include": [
+    "src/lib.ts",
+    "src/lib",
+    "src/state",
+    "src/components/*.tsx",
+    "src/renderer"
+  ],
+  "exclude": [
+    "src/components/MenuButton.tsx",
+    "src/components/HeroGallery.tsx"
+  ]
+}

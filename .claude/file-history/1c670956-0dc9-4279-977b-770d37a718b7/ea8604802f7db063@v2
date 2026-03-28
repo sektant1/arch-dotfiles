@@ -1,0 +1,2 @@
+// EventBus is header-only (template-based).
+// This file exists for CMake target consistency.

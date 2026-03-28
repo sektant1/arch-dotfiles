@@ -1,0 +1,18 @@
+{
+  "claude-plugins-official": {
+    "source": {
+      "source": "github",
+      "repo": "anthropics/claude-plugins-official"
+    },
+    "installLocation": "/home/garrosh/.claude/plugins/marketplaces/claude-plugins-official",
+    "lastUpdated": "2026-03-28T14:09:43.699Z"
+  },
+  "citedy": {
+    "source": {
+      "source": "github",
+      "repo": "citedy/claude-plugins"
+    },
+    "installLocation": "/home/garrosh/.claude/plugins/marketplaces/citedy",
+    "lastUpdated": "2026-03-21T17:15:07.152Z"
+  }
+}

@@ -1,0 +1,31 @@
+[
+  {
+    "name": "Build Name",
+    "race": "Orc",
+    "vs": "Human",
+    "description": "Short description of the strategy and win condition.",
+    "difficulty": "Intermediate",
+    "heroes": ["Far Seer"],
+    "skillOrder": [
+      { "level": 1, "skill": "Feral Spirit" },
+      { "level": 2, "skill": "Feral Spirit" },
+      { "level": 3, "skill": "Endurance Aura" },
+      { "level": 4, "skill": "Feral Spirit" },
+      { "level": 5, "skill": "Endurance Aura" },
+      { "level": 6, "skill": "Far Sight" }
+    ],
+    "steps": [
+      { "order": 1,  "time": "0:00", "instruction": "5 Peons to gold mine",        "food": "5/10" },
+      { "order": 2,  "time": "0:05", "instruction": "Queue Peon",                  "food": "5/10" },
+      { "order": 3,  "time": "0:20", "instruction": "Build Altar of Storms",       "food": "6/10" },
+      { "order": 4,  "time": "0:30", "instruction": "Build Barracks",              "food": "6/10" },
+      { "order": 5,  "time": "1:00", "instruction": "Summon hero",                 "food": "7/10", "isKey": true },
+      { "order": 6,  "time": "1:15", "instruction": "Key action (no sound)",       "food": "7/10", "isKey": true },
+      { "order": 7,  "time": "1:30", "instruction": "Key action (custom sound)",   "food": "7/10", "isKey": true, "sound": "my_sound" },
+      { "order": 8,  "time": "2:00", "instruction": "Step 8",                      "food": "9/20" },
+      { "order": 9,  "time": "2:30", "instruction": "Step 9",                      "food": "10/20" },
+      { "order": 10, "time": "3:00", "instruction": "Step 10",                     "food": "12/20" }
+    ],
+    "note": "Optional extra note shown in the build."
+  }
+]

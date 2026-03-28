@@ -1,0 +1,50 @@
+import { createSignal } from 'solid-js';
+
+const [goldTarget, setGoldTarget] = createSignal(500);
+const [goldCurrent, setGoldCurrent] = createSignal(500);
+const [lumberTarget, setLumberTarget] = createSignal(300);
+const [lumberCurrent, setLumberCurrent] = createSignal(300);
+
+function stepCounter(current: number, target: number): number {
+  if (current === target) return current;
+  const diff = target - current;
+  const next = current + Math.sign(diff) * Math.max(1, Math.floor(Math.abs(diff) * 0.2));
+  return Math.abs(target - next) < 2 ? target : next;
+}
+
+export function tickResources() {
+  setGoldTarget(prev => Math.max(0, Math.min(9999, prev + Math.floor(Math.random() * 20) - 5)));
+  setLumberTarget(prev => Math.max(0, Math.min(9999, prev + Math.floor(Math.random() * 15) - 4)));
+}
+
+export function animateCounters() {
+  setGoldCurrent(prev => stepCounter(prev, goldTarget()));
+  setLumberCurrent(prev => stepCounter(prev, lumberTarget()));
+}
+
+export { goldCurrent, lumberCurrent, goldTarget, lumberTarget, setGoldTarget, setLumberTarget };
+
+// Cheat codes
+let cheatBuffer = '';
+const CHEATS: Record<string, () => void> = {
+  greedisgood: () => {
+    setGoldTarget(prev => Math.min(9999, prev + 500));
+    setLumberTarget(prev => Math.min(9999, prev + 500));
+  },
+  keysersoze: () => { setGoldTarget(prev => Math.min(9999, prev + 500)); },
+  leafittome: () => { setLumberTarget(prev => Math.min(9999, prev + 500)); },
+};
+
+export function handleCheatKey(key: string) {
+  if (key.length === 1 && /[a-z]/i.test(key)) {
+    cheatBuffer += key.toLowerCase();
+    if (cheatBuffer.length > 20) cheatBuffer = cheatBuffer.slice(-20);
+    for (const [code, fn] of Object.entries(CHEATS)) {
+      if (cheatBuffer.endsWith(code)) {
+        fn();
+        cheatBuffer = '';
+        break;
+      }
+    }
+  }
+}

@@ -1,0 +1,55 @@
+import React from "react";
+import { useBlpTexture } from "../hooks/useBlpTexture";
+
+export interface PortraitFrameProps {
+  /** URL to the portrait frame overlay BLP */
+  frameUrl?: string;
+  /** URL to the portrait window mask BLP (for the cutout shape) */
+  maskUrl?: string;
+  /** Content to render inside the portrait window (e.g. a canvas or image) */
+  children?: React.ReactNode;
+  className?: string;
+}
+
+/**
+ * Hero-tier avatar frame with a masked window and decorative overlay.
+ * Children are rendered inside the portrait window (masked area).
+ */
+export function PortraitFrame({
+  frameUrl,
+  maskUrl,
+  children,
+  className,
+}: PortraitFrameProps) {
+  const frameDataUrl = useBlpTexture(frameUrl);
+  const maskDataUrl = useBlpTexture(maskUrl);
+
+  return (
+    <div className={`portrait-showcase ${className ?? ""}`}>
+      <div className="portrait-stage-wrap">
+        <div className="portrait-stage">
+          <div
+            className="portrait-window"
+            style={
+              maskDataUrl
+                ? {
+                    maskImage: `url("${maskDataUrl}")`,
+                    WebkitMaskImage: `url("${maskDataUrl}")`,
+                  }
+                : undefined
+            }
+          >
+            {children}
+          </div>
+          {frameDataUrl && (
+            <img
+              className="portrait-frame-overlay"
+              src={frameDataUrl}
+              alt=""
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,587 @@
+interface BuildStep {
+  order: number;
+  time: string;
+  instruction: string;
+  food: string;
+}
+
+export interface SkillPick {
+  level: number;
+  skill: string;
+  icon?: string;
+}
+
+type Hero =
+  | "Blademaster"
+  | "Far Seer"
+  | "Shadow Hunter"
+  | "Tauren Chieftain"
+  | "Archmage"
+  | "Paladin"
+  | "Mountain King"
+  | "Blood Mage"
+  | "Demon Hunter"
+  | "Warden"
+  | "Keeper of the Grove"
+  | "Priestess of the Moon"
+  | "Death Knight"
+  | "Lich"
+  | "Crypt Lord";
+
+export interface BuildOrder {
+  name: string;
+  race: string;
+  vs?: string;
+  description: string;
+  difficulty?: "Beginner" | "Intermediate" | "Advanced";
+  keyTiming?: { minute: number; note: string };
+  steps: BuildStep[];
+  note?: string;
+
+  heroes?: Hero[];
+
+  skillOrder?: SkillPick[];
+}
+
+export const BUILD_ORDERS_2026: BuildOrder[] = [
+  // ── ORC ──────────────────────────────────────────────────────────────────
+  {
+    name: "Standard FS → Grunt / Shaman Push",
+    race: "Orc",
+    heroes: ["Far Seer"],
+    vs: "most matchups",
+    difficulty: "Beginner",
+    description:
+      "The bread-and-butter Orc opener. Far Seer scouts and harasses with Feral Spirits while you fast-tech to Tier 2 for Grunts and Shaman support. Forgiving to execute and strong in all matchups.",
+    keyTiming: { minute: 3, note: "Tier 2 should complete around 3:00–3:10" },
+    skillOrder: [
+      { level: 1, skill: "Feral Spirit" },
+      { level: 2, skill: "Feral Spirit" },
+      { level: 3, skill: "Endurance Aura" },
+      { level: 4, skill: "Feral Spirit" },
+      { level: 5, skill: "Endurance Aura" },
+      { level: 6, skill: "Far Sight" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "5 Peons to gold mine", food: "5/10" },
+      { order: 2,  time: "0:05", instruction: "Queue Peon in Great Hall", food: "5/10" },
+      { order: 3,  time: "0:20", instruction: "First free Peon → Build Altar of Storms", food: "6/10" },
+      { order: 4,  time: "0:30", instruction: "Second free Peon → Build Barracks", food: "6/10" },
+      { order: 5,  time: "0:45", instruction: "Queue 2nd Peon", food: "6/10" },
+      { order: 6,  time: "1:00", instruction: "Summon Far Seer from Altar", food: "7/10" },
+      { order: 7,  time: "1:10", instruction: "Feral Spirits — scout and harass enemy gold mine", food: "7/10" },
+      { order: 8,  time: "1:30", instruction: "Build Burrow, queue 2 Grunts", food: "9/10" },
+      { order: 9,  time: "2:00", instruction: "Build 2nd Burrow, send Peon to lumber", food: "9/20" },
+      { order: 10, time: "2:20", instruction: "Creep nearest camp with FS + Grunts", food: "10/20" },
+      { order: 11, time: "2:30", instruction: "Build Spirit Lodge → start Tier 2 upgrade", food: "10/20" },
+      { order: 12, time: "3:05", instruction: "Tier 2 complete — train Shaman", food: "12/20" },
+      { order: 13, time: "3:30", instruction: "Build 2nd Barracks, queue 2 more Grunts", food: "14/20" },
+      { order: 14, time: "4:00", instruction: "Push: FS + 4 Grunts + 2 Shaman (Purge / Bloodlust)", food: "20/30" },
+    ],
+  },
+  {
+    name: "Shadow Hunter Rush → Headhunter / Raider",
+    race: "Orc",
+    heroes: ["Shadow Hunter"],
+    vs: "Night Elf / Human",
+    difficulty: "Intermediate",
+    description:
+      "Aggressive SH opener into fast Raiders. Healing Wave keeps Headhunters alive through early skirmishes, letting you out-sustain NE Archers and Human Footmen. Raiders Ensnare airborne threats and pin retreating heroes.",
+    keyTiming: { minute: 3, note: "Raiders should be ready to push by 3:30" },
+    skillOrder: [
+      { level: 1, skill: "Healing Wave" },
+      { level: 2, skill: "Healing Wave" },
+      { level: 3, skill: "Hex" },
+      { level: 4, skill: "Healing Wave" },
+      { level: 5, skill: "Serpent Ward" },
+      { level: 6, skill: "Big Bad Voodoo" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "5 Peons to gold mine", food: "5/10" },
+      { order: 2,  time: "0:05", instruction: "Queue Peon", food: "5/10" },
+      { order: 3,  time: "0:20", instruction: "Build Altar of Storms", food: "6/10" },
+      { order: 4,  time: "0:30", instruction: "Build Barracks", food: "6/10" },
+      { order: 5,  time: "0:45", instruction: "Queue 2nd Peon", food: "6/10" },
+      { order: 6,  time: "1:00", instruction: "Summon Shadow Hunter", food: "7/10" },
+      { order: 7,  time: "1:20", instruction: "Build Burrow", food: "7/10" },
+      { order: 8,  time: "1:30", instruction: "Train 2 Headhunters", food: "9/10" },
+      { order: 9,  time: "1:50", instruction: "Build 2nd Burrow", food: "9/10" },
+      { order: 10, time: "2:00", instruction: "Creep / harass with SH + Headhunters", food: "10/20" },
+      { order: 11, time: "2:20", instruction: "Build War Mill — upgrade Headhunters", food: "10/20" },
+      { order: 12, time: "2:40", instruction: "Build Beastiary", food: "10/20" },
+      { order: 13, time: "3:00", instruction: "Train 2 Raiders", food: "14/20" },
+      { order: 14, time: "3:30", instruction: "Push: SH + 2 Raiders + 4 Headhunters (Ensnare key targets)", food: "18/20" },
+    ],
+  },
+  {
+    name: "Blademaster Harass → Grunt / Raider",
+    race: "Orc",
+    heroes: ["Blademaster"],
+    vs: "Human / Undead",
+    difficulty: "Intermediate",
+    description:
+      "Use Blademaster's Wind Walk to sneak into the enemy base and kill workers early, buying time to mass Grunts and Raiders. Critical Strike makes BM a late-game damage threat.",
+    keyTiming: { minute: 2, note: "First Wind Walk harass at 1:15 — kill 3+ workers" },
+    skillOrder: [
+      { level: 1, skill: "Wind Walk" },
+      { level: 2, skill: "Critical Strike" },
+      { level: 3, skill: "Wind Walk" },
+      { level: 4, skill: "Critical Strike" },
+      { level: 5, skill: "Wind Walk" },
+      { level: 6, skill: "Bladestorm" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "5 Peons to gold mine", food: "5/10" },
+      { order: 2,  time: "0:05", instruction: "Queue Peon", food: "5/10" },
+      { order: 3,  time: "0:15", instruction: "Build Altar of Storms", food: "6/10" },
+      { order: 4,  time: "0:25", instruction: "Build Barracks", food: "6/10" },
+      { order: 5,  time: "1:00", instruction: "Summon Blademaster", food: "7/10" },
+      { order: 6,  time: "1:15", instruction: "Wind Walk → enemy base, kill workers", food: "7/10" },
+      { order: 7,  time: "1:30", instruction: "Build Burrow, queue 2 Grunts", food: "9/10" },
+      { order: 8,  time: "2:00", instruction: "Build 2nd Burrow, build Beastiary", food: "9/20" },
+      { order: 9,  time: "2:15", instruction: "Train 2 Raiders", food: "13/20" },
+      { order: 10, time: "2:30", instruction: "Build War Mill — research Ensnare", food: "13/20" },
+      { order: 11, time: "3:00", instruction: "Wind Walk again — finish off weakened workers", food: "14/20" },
+      { order: 12, time: "3:30", instruction: "Push: BM + 2 Grunts + 2 Raiders (Ensnare fleeing heroes)", food: "18/20" },
+    ],
+  },
+  {
+    name: "Tauren Chieftain → Tauren Push",
+    race: "Orc",
+    heroes: ["Tauren Chieftain"],
+    vs: "Night Elf",
+    difficulty: "Intermediate",
+    description:
+      "TC's War Stomp disables melee clumps and Endurance Aura gives your whole army a free movement and attack speed boost. An unstoppable death ball that overpowers NE Huntress/Dryad stacks.",
+    keyTiming: { minute: 3, note: "Tier 2 + Tauren production at 3:00" },
+    skillOrder: [
+      { level: 1, skill: "War Stomp" },
+      { level: 2, skill: "Endurance Aura" },
+      { level: 3, skill: "War Stomp" },
+      { level: 4, skill: "Endurance Aura" },
+      { level: 5, skill: "War Stomp" },
+      { level: 6, skill: "Reincarnation" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "5 Peons to gold mine", food: "5/10" },
+      { order: 2,  time: "0:05", instruction: "Queue Peon", food: "5/10" },
+      { order: 3,  time: "0:15", instruction: "Build Altar of Storms", food: "6/10" },
+      { order: 4,  time: "0:25", instruction: "Build Barracks", food: "6/10" },
+      { order: 5,  time: "0:40", instruction: "Queue 2nd Peon", food: "6/10" },
+      { order: 6,  time: "1:00", instruction: "Summon Tauren Chieftain", food: "7/10" },
+      { order: 7,  time: "1:20", instruction: "Build Burrow", food: "7/10" },
+      { order: 8,  time: "1:30", instruction: "Train 2 Grunts", food: "9/10" },
+      { order: 9,  time: "2:00", instruction: "Build 2nd Burrow", food: "9/20" },
+      { order: 10, time: "2:15", instruction: "Build Spirit Lodge → Tier 2 upgrade", food: "9/20" },
+      { order: 11, time: "2:30", instruction: "Build Beastiary", food: "10/20" },
+      { order: 12, time: "3:00", instruction: "Tier 2 complete — train 2 Tauren", food: "16/20" },
+      { order: 13, time: "3:15", instruction: "Research Pulverize at Beastiary", food: "16/20" },
+      { order: 14, time: "3:45", instruction: "Push: TC + 2 Grunts + 2 Tauren (War Stomp opener)", food: "22/30" },
+    ],
+  },
+
+  // ── HUMAN ─────────────────────────────────────────────────────────────────
+  {
+    name: "Fast Rifle → Caster Push",
+    race: "Human",
+    heroes: ["Archmage"],
+    vs: "Undead / Orc",
+    difficulty: "Intermediate",
+    description:
+      "Archmage's Brilliance Aura powers constant spell-casting from Sorceresses and Priests. Pair with Riflemen for range and Defend Footmen up front. The goal is a full spell-caster army by minute 4.",
+    keyTiming: { minute: 4, note: "Full Rifle/Caster push at 4:00" },
+    skillOrder: [
+      { level: 1, skill: "Brilliance Aura" },
+      { level: 2, skill: "Water Elemental" },
+      { level: 3, skill: "Brilliance Aura" },
+      { level: 4, skill: "Water Elemental" },
+      { level: 5, skill: "Brilliance Aura" },
+      { level: 6, skill: "Mass Teleport" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "5 Peasants to gold mine", food: "5/10" },
+      { order: 2,  time: "0:05", instruction: "Queue Peasant", food: "5/10" },
+      { order: 3,  time: "0:15", instruction: "Build Altar of Kings", food: "6/10" },
+      { order: 4,  time: "0:20", instruction: "Build Barracks", food: "6/10" },
+      { order: 5,  time: "0:40", instruction: "Queue 2nd Peasant", food: "6/10" },
+      { order: 6,  time: "1:00", instruction: "Summon Archmage", food: "7/10" },
+      { order: 7,  time: "1:15", instruction: "Train 2 Footmen", food: "9/10" },
+      { order: 8,  time: "1:30", instruction: "Build Lumber Mill", food: "9/10" },
+      { order: 9,  time: "1:45", instruction: "Build Farm, train 2 Riflemen", food: "11/20" },
+      { order: 10, time: "2:00", instruction: "Research Defend at Barracks", food: "11/20" },
+      { order: 11, time: "2:20", instruction: "Upgrade to Keep (Tier 2)", food: "11/20" },
+      { order: 12, time: "2:45", instruction: "Build Arcane Sanctum", food: "12/20" },
+      { order: 13, time: "3:15", instruction: "Train 2 Sorceresses + 1 Priest", food: "15/20" },
+      { order: 14, time: "4:00", instruction: "Push: AM + 4 Rifles + 2 Footmen + Casters (Slow + Heal)", food: "22/30" },
+    ],
+  },
+  {
+    name: "Paladin First → Footman / Defend",
+    race: "Human",
+    heroes: ["Paladin"],
+    vs: "Orc / NightElf",
+    difficulty: "Beginner",
+    description:
+      "Paladin's Holy Light keeps Footmen alive through attrition and Divine Shield baits out focus fire. Defend upgrade turns Footmen near-unkillable against archers and grunts — ideal for beginners learning Human.",
+    keyTiming: { minute: 3, note: "4 Defend Footmen ready to push at 3:00" },
+    skillOrder: [
+      { level: 1, skill: "Holy Light" },
+      { level: 2, skill: "Devotion Aura" },
+      { level: 3, skill: "Holy Light" },
+      { level: 4, skill: "Devotion Aura" },
+      { level: 5, skill: "Holy Light" },
+      { level: 6, skill: "Resurrection" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "5 Peasants to gold mine", food: "5/10" },
+      { order: 2,  time: "0:05", instruction: "Queue Peasant", food: "5/10" },
+      { order: 3,  time: "0:15", instruction: "Build Altar of Kings", food: "6/10" },
+      { order: 4,  time: "0:20", instruction: "Build Barracks", food: "6/10" },
+      { order: 5,  time: "0:40", instruction: "Queue 2nd Peasant", food: "6/10" },
+      { order: 6,  time: "1:00", instruction: "Summon Paladin", food: "7/10" },
+      { order: 7,  time: "1:10", instruction: "Creep closest camp with Paladin solo (Holy Light)", food: "7/10" },
+      { order: 8,  time: "1:30", instruction: "Train 2 Footmen", food: "9/10" },
+      { order: 9,  time: "1:45", instruction: "Build Lumber Mill", food: "9/10" },
+      { order: 10, time: "2:00", instruction: "Research Defend at Lumber Mill", food: "9/10" },
+      { order: 11, time: "2:10", instruction: "Build Farm, train 2 more Footmen", food: "11/20" },
+      { order: 12, time: "2:30", instruction: "Build 2nd Barracks", food: "12/20" },
+      { order: 13, time: "3:00", instruction: "Push with Paladin + 4 Defend Footmen", food: "16/20" },
+      { order: 14, time: "3:30", instruction: "Build Arcane Sanctum for Priests (heal support)", food: "16/20" },
+    ],
+  },
+  {
+    name: "Mountain King → Footman / Priest",
+    race: "Human",
+    heroes: ["Mountain King"],
+    vs: "Orc / Undead",
+    difficulty: "Beginner",
+    description:
+      "MK's Thunder Clap devastates tightly grouped melee armies and Storm Bolt stuns key targets. Footmen absorb damage while Priests heal and dispel. One of the most durable ground armies in the game.",
+    keyTiming: { minute: 3, note: "MK level 3 + 4 Footmen ready at 3:00" },
+    skillOrder: [
+      { level: 1, skill: "Storm Bolt" },
+      { level: 2, skill: "Thunder Clap" },
+      { level: 3, skill: "Storm Bolt" },
+      { level: 4, skill: "Thunder Clap" },
+      { level: 5, skill: "Storm Bolt" },
+      { level: 6, skill: "Avatar" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "5 Peasants to gold mine", food: "5/10" },
+      { order: 2,  time: "0:05", instruction: "Queue Peasant", food: "5/10" },
+      { order: 3,  time: "0:15", instruction: "Build Altar of Kings", food: "6/10" },
+      { order: 4,  time: "0:20", instruction: "Build Barracks", food: "6/10" },
+      { order: 5,  time: "1:00", instruction: "Summon Mountain King", food: "7/10" },
+      { order: 6,  time: "1:10", instruction: "Creep nearest camp — Storm Bolt to stun", food: "7/10" },
+      { order: 7,  time: "1:30", instruction: "Train 2 Footmen", food: "9/10" },
+      { order: 8,  time: "1:50", instruction: "Build Lumber Mill + Farm", food: "9/20" },
+      { order: 9,  time: "2:15", instruction: "Train 2 more Footmen", food: "11/20" },
+      { order: 10, time: "2:30", instruction: "Build Arcane Sanctum", food: "11/20" },
+      { order: 11, time: "3:00", instruction: "Train 2 Priests", food: "13/20" },
+      { order: 12, time: "3:30", instruction: "Push: MK + 4 Footmen + 2 Priests (Thunder Clap into cluster)", food: "18/20" },
+    ],
+  },
+  {
+    name: "Blood Mage → Sorceress / Priest",
+    race: "Human",
+    heroes: ["Blood Mage"],
+    vs: "Night Elf",
+    difficulty: "Advanced",
+    description:
+      "Blood Mage's Banish into Flame Strike melts high-HP units. Pair with Sorceress Slow and Polymorph to disable key NE units, and Priests for dispel and Heal. Requires good mana management.",
+    keyTiming: { minute: 4, note: "Level 3 BM + full caster army at 4:00" },
+    skillOrder: [
+      { level: 1, skill: "Banish" },
+      { level: 2, skill: "Flame Strike" },
+      { level: 3, skill: "Banish" },
+      { level: 4, skill: "Flame Strike" },
+      { level: 5, skill: "Banish" },
+      { level: 6, skill: "Phoenix" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "5 Peasants to gold mine", food: "5/10" },
+      { order: 2,  time: "0:05", instruction: "Queue Peasant", food: "5/10" },
+      { order: 3,  time: "0:15", instruction: "Build Altar of Kings", food: "6/10" },
+      { order: 4,  time: "0:20", instruction: "Build Barracks", food: "6/10" },
+      { order: 5,  time: "1:00", instruction: "Summon Blood Mage", food: "7/10" },
+      { order: 6,  time: "1:15", instruction: "Train 2 Footmen — protect BM during creeping", food: "9/10" },
+      { order: 7,  time: "1:40", instruction: "Build Lumber Mill + Farm", food: "9/20" },
+      { order: 8,  time: "2:00", instruction: "Upgrade to Keep (Tier 2)", food: "10/20" },
+      { order: 9,  time: "2:30", instruction: "Build Arcane Sanctum", food: "10/20" },
+      { order: 10, time: "3:00", instruction: "Train 2 Sorceresses + 2 Priests", food: "14/20" },
+      { order: 11, time: "3:30", instruction: "Banish a high-HP unit → Flame Strike on top", food: "14/20" },
+      { order: 12, time: "4:00", instruction: "Push: BM + 2 Footmen + 2 Sorceresses + 2 Priests", food: "20/30" },
+    ],
+  },
+
+  // ── NIGHT ELF ─────────────────────────────────────────────────────────────
+  {
+    name: "Warden → Huntress / Dryad Pressure",
+    race: "NightElf",
+    heroes: ["Warden"],
+    vs: "Human / Orc",
+    difficulty: "Intermediate",
+    description:
+      "Warden's Fan of Knives clears tightly packed infantry and Shadow Strike burns a high-priority target over time. Huntresses provide a tanky frontline while Dryads dispel enemy buffs and slow.",
+    keyTiming: { minute: 3, note: "Dryads online + push at 3:30" },
+    skillOrder: [
+      { level: 1, skill: "Fan of Knives" },
+      { level: 2, skill: "Shadow Strike" },
+      { level: 3, skill: "Fan of Knives" },
+      { level: 4, skill: "Shadow Strike" },
+      { level: 5, skill: "Fan of Knives" },
+      { level: 6, skill: "Vengeance" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "4 Wisps to gold mine", food: "5/10" },
+      { order: 2,  time: "0:01", instruction: "5th Wisp → Build Altar of Elders", food: "5/10" },
+      { order: 3,  time: "0:05", instruction: "Build Moon Well with a gold Wisp", food: "5/10" },
+      { order: 4,  time: "0:15", instruction: "Train Wisp → gold", food: "5/10" },
+      { order: 5,  time: "0:30", instruction: "Build Ancient of War", food: "6/10" },
+      { order: 6,  time: "0:50", instruction: "Train 2 Wisps → lumber", food: "6/10" },
+      { order: 7,  time: "1:00", instruction: "Summon Warden", food: "7/10" },
+      { order: 8,  time: "1:20", instruction: "Shadow Strike a key creep or hero", food: "7/10" },
+      { order: 9,  time: "1:30", instruction: "Train 2 Huntresses", food: "9/10" },
+      { order: 10, time: "2:00", instruction: "Build 2nd Moon Well", food: "9/20" },
+      { order: 11, time: "2:20", instruction: "Upgrade to Tree of Ages (Tier 2)", food: "10/20" },
+      { order: 12, time: "2:45", instruction: "Build Ancient of Lore → train Dryad", food: "12/20" },
+      { order: 13, time: "3:30", instruction: "Push: Warden + 2 Huntresses + 2 Dryads (dispel buffs)", food: "18/20" },
+    ],
+  },
+  {
+    name: "Demon Hunter → Mass Archer",
+    race: "NightElf",
+    heroes: ["Demon Hunter"],
+    vs: "Undead",
+    difficulty: "Beginner",
+    description:
+      "The most beginner-friendly NE build. DH's Mana Burn harasses undead casters and Fiends, while mass Archers kite the enemy army from range. Marksmanship upgrade makes Archers hit extremely hard.",
+    keyTiming: { minute: 3, note: "5+ Archers + Marksmanship upgrade at 3:00" },
+    skillOrder: [
+      { level: 1, skill: "Mana Burn" },
+      { level: 2, skill: "Evasion" },
+      { level: 3, skill: "Mana Burn" },
+      { level: 4, skill: "Evasion" },
+      { level: 5, skill: "Mana Burn" },
+      { level: 6, skill: "Metamorphosis" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "4 Wisps to gold mine", food: "5/10" },
+      { order: 2,  time: "0:01", instruction: "5th Wisp → Build Altar of Elders", food: "5/10" },
+      { order: 3,  time: "0:10", instruction: "Build Moon Well", food: "5/10" },
+      { order: 4,  time: "0:15", instruction: "Train Wisp → gold", food: "5/10" },
+      { order: 5,  time: "0:30", instruction: "Build Ancient of War", food: "6/10" },
+      { order: 6,  time: "0:50", instruction: "Train 2 Wisps → lumber", food: "6/10" },
+      { order: 7,  time: "1:00", instruction: "Summon Demon Hunter", food: "7/10" },
+      { order: 8,  time: "1:15", instruction: "Creep with DH solo — Mana Burn any caster creeps", food: "7/10" },
+      { order: 9,  time: "1:30", instruction: "Train 3 Archers", food: "10/10" },
+      { order: 10, time: "2:00", instruction: "Build 2nd Moon Well", food: "10/20" },
+      { order: 11, time: "2:10", instruction: "Train 2 more Archers", food: "14/20" },
+      { order: 12, time: "2:30", instruction: "Build Hunter's Hall → Upgrade Marksmanship", food: "14/20" },
+      { order: 13, time: "3:00", instruction: "Push: DH + 5 Archers — Mana Burn UD heroes/casters", food: "18/20" },
+    ],
+  },
+  {
+    name: "Keeper of the Grove → Treant / Entangle",
+    race: "NightElf",
+    heroes: ["Keeper of the Grove"],
+    vs: "Orc / Human",
+    difficulty: "Intermediate",
+    description:
+      "Keeper summons Treants from trees to soak damage and flank. Entangling Roots pins melee heroes in place for follow-up burst. Tranquility at level 6 is a full team fight reset button.",
+    keyTiming: { minute: 3, note: "Tier 2 + Dryads supporting push at 3:30" },
+    skillOrder: [
+      { level: 1, skill: "Force of Nature" },
+      { level: 2, skill: "Entangling Roots" },
+      { level: 3, skill: "Force of Nature" },
+      { level: 4, skill: "Entangling Roots" },
+      { level: 5, skill: "Force of Nature" },
+      { level: 6, skill: "Tranquility" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "4 Wisps to gold mine", food: "5/10" },
+      { order: 2,  time: "0:01", instruction: "5th Wisp → Build Altar of Elders", food: "5/10" },
+      { order: 3,  time: "0:10", instruction: "Build Moon Well", food: "5/10" },
+      { order: 4,  time: "0:20", instruction: "Train Wisp → lumber", food: "5/10" },
+      { order: 5,  time: "0:30", instruction: "Build Ancient of War", food: "6/10" },
+      { order: 6,  time: "0:50", instruction: "Train 2 more Wisps", food: "6/10" },
+      { order: 7,  time: "1:00", instruction: "Summon Keeper of the Grove", food: "7/10" },
+      { order: 8,  time: "1:10", instruction: "Force of Nature on forest — creep with Treants", food: "7/10" },
+      { order: 9,  time: "1:40", instruction: "Train 2 Huntresses", food: "9/10" },
+      { order: 10, time: "2:00", instruction: "Build 2nd Moon Well", food: "9/20" },
+      { order: 11, time: "2:20", instruction: "Upgrade to Tree of Ages (Tier 2)", food: "10/20" },
+      { order: 12, time: "2:50", instruction: "Build Ancient of Lore → train Dryad", food: "12/20" },
+      { order: 13, time: "3:30", instruction: "Push: KotG + Treants + 2 Huntresses + 2 Dryads", food: "20/30" },
+    ],
+  },
+  {
+    name: "Priestess of the Moon → Hippo Rush",
+    race: "NightElf",
+    heroes: ["Priestess of the Moon"],
+    vs: "Undead",
+    difficulty: "Advanced",
+    description:
+      "Fast Ancient of Wind into Hippogryph Riders for an early air force. Ground armies can't respond before AA units are available. PotM's Starfall turns any losing fight into a win.",
+    keyTiming: { minute: 3, note: "4 Hippo Riders ready to strike at 3:30" },
+    note: "Scout the enemy base with PotM's Scout (owl) before committing to the air rush.",
+    skillOrder: [
+      { level: 1, skill: "Scout" },
+      { level: 2, skill: "Trueshot Aura" },
+      { level: 3, skill: "Scout" },
+      { level: 4, skill: "Trueshot Aura" },
+      { level: 5, skill: "Scout" },
+      { level: 6, skill: "Starfall" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "4 Wisps to gold mine", food: "5/10" },
+      { order: 2,  time: "0:01", instruction: "5th Wisp → Build Altar of Elders", food: "5/10" },
+      { order: 3,  time: "0:10", instruction: "Build Moon Well", food: "5/10" },
+      { order: 4,  time: "0:20", instruction: "Train 2 Wisps → lumber", food: "5/10" },
+      { order: 5,  time: "0:30", instruction: "Build Ancient of War", food: "6/10" },
+      { order: 6,  time: "1:00", instruction: "Summon Priestess of the Moon", food: "7/10" },
+      { order: 7,  time: "1:10", instruction: "Send Scout owl to enemy base — identify army comp", food: "7/10" },
+      { order: 8,  time: "1:20", instruction: "Build Ancient of Wind (Hippogryph production)", food: "7/10" },
+      { order: 9,  time: "1:30", instruction: "Train Wisp → gold", food: "7/10" },
+      { order: 10, time: "2:00", instruction: "Train 2 Hippogryphs", food: "9/20" },
+      { order: 11, time: "2:15", instruction: "Build 2nd Moon Well", food: "9/20" },
+      { order: 12, time: "2:30", instruction: "Research Hippogryph Rider upgrade", food: "11/20" },
+      { order: 13, time: "3:00", instruction: "Train 2 more Hippogryph Riders", food: "15/20" },
+      { order: 14, time: "3:30", instruction: "Air strike: PotM + 4 Hippo Riders — Starfall if focused", food: "19/20" },
+    ],
+  },
+
+  // ── UNDEAD ────────────────────────────────────────────────────────────────
+  {
+    name: "Standard DK → Fiend / Lich Push",
+    race: "Undead",
+    heroes: ["Death Knight", "Lich"],
+    vs: "all matchups",
+    difficulty: "Beginner",
+    description:
+      "The classic two-hero Undead opener. Death Knight's Death Coil heals Crypt Fiends while Lich brings Frost Nova to slow enemies and Frost Armor to protect your army. A highly durable combo.",
+    keyTiming: { minute: 3, note: "Tier 2 + Lich summoned by 3:00" },
+    skillOrder: [
+      { level: 1, skill: "Death Coil" },
+      { level: 2, skill: "Unholy Aura" },
+      { level: 3, skill: "Death Coil" },
+      { level: 4, skill: "Unholy Aura" },
+      { level: 5, skill: "Death Coil" },
+      { level: 6, skill: "Animate Dead" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "3 Acolytes to gold mine, 1 summons Ziggurat", food: "4/10" },
+      { order: 2,  time: "0:05", instruction: "Summon Altar of Darkness", food: "4/10" },
+      { order: 3,  time: "0:10", instruction: "Train 2 Acolytes → gold", food: "4/10" },
+      { order: 4,  time: "0:20", instruction: "Summon Crypt of the Damned (Barracks)", food: "5/10" },
+      { order: 5,  time: "0:30", instruction: "Summon Ziggurat → convert to Spirit Tower", food: "5/10" },
+      { order: 6,  time: "1:00", instruction: "Summon Death Knight", food: "6/10" },
+      { order: 7,  time: "1:15", instruction: "Train Ghoul + Crypt Fiend", food: "8/10" },
+      { order: 8,  time: "1:30", instruction: "Creep with DK + units — Death Coil to heal", food: "8/10" },
+      { order: 9,  time: "2:00", instruction: "Summon 2nd Ziggurat", food: "8/20" },
+      { order: 10, time: "2:15", instruction: "Summon Halls of the Dead (Tier 2)", food: "8/20" },
+      { order: 11, time: "3:00", instruction: "Tier 2 complete — summon Lich", food: "10/20" },
+      { order: 12, time: "3:15", instruction: "Train 2 more Crypt Fiends", food: "14/20" },
+      { order: 13, time: "3:45", instruction: "Push: DK + Lich + 4 Crypt Fiends (Frost Nova opener)", food: "18/20" },
+    ],
+  },
+  {
+    name: "Lich First → Fiend / Necromancer",
+    race: "Undead",
+    heroes: ["Lich"],
+    vs: "Night Elf",
+    difficulty: "Intermediate",
+    description:
+      "Lich's Frost Nova into Dark Ritual gives early mana. Frost Armor on Crypt Fiends makes them durable vs Archer fire. Necromancers raise skeletons from slain Huntresses and Archers to overwhelm with numbers.",
+    keyTiming: { minute: 3, note: "Necromancers + Skeletal Mastery upgrade at 3:30" },
+    skillOrder: [
+      { level: 1, skill: "Frost Nova" },
+      { level: 2, skill: "Frost Armor" },
+      { level: 3, skill: "Frost Nova" },
+      { level: 4, skill: "Frost Armor" },
+      { level: 5, skill: "Frost Nova" },
+      { level: 6, skill: "Death and Decay" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "3 Acolytes to gold, 1 summons Ziggurat", food: "4/10" },
+      { order: 2,  time: "0:05", instruction: "Summon Altar of Darkness", food: "4/10" },
+      { order: 3,  time: "0:10", instruction: "Train 2 Acolytes → gold", food: "4/10" },
+      { order: 4,  time: "0:20", instruction: "Summon Crypt of the Damned", food: "5/10" },
+      { order: 5,  time: "1:00", instruction: "Summon Lich", food: "6/10" },
+      { order: 6,  time: "1:15", instruction: "Frost Armor your Crypt Fiends", food: "6/10" },
+      { order: 7,  time: "1:30", instruction: "Train 2 Crypt Fiends", food: "8/10" },
+      { order: 8,  time: "1:50", instruction: "Creep with Lich + Fiends", food: "8/10" },
+      { order: 9,  time: "2:10", instruction: "Summon Halls of the Dead (Tier 2)", food: "8/20" },
+      { order: 10, time: "2:40", instruction: "Summon Slaughterhouse → train Necromancers", food: "10/20" },
+      { order: 11, time: "3:00", instruction: "Tier 2 complete — train 2 Necromancers", food: "12/20" },
+      { order: 12, time: "3:30", instruction: "Research Skeletal Mastery", food: "12/20" },
+      { order: 13, time: "4:00", instruction: "Push: Lich + 3 Fiends + 2 Necromancers (raise skeletons)", food: "18/20" },
+    ],
+  },
+  {
+    name: "Crypt Lord → Crypt Fiend Web",
+    race: "Undead",
+    heroes: ["Crypt Lord"],
+    vs: "Human / Orc",
+    difficulty: "Intermediate",
+    description:
+      "Crypt Lord's Impale knocks back and stuns entire melee lines. Pair with Crypt Fiend Web to ground air units and pin fleeing heroes for follow-up Impales. Spiked Carapace punishes melee attackers.",
+    keyTiming: { minute: 3, note: "Web upgrade + 4 Crypt Fiends at 3:00" },
+    skillOrder: [
+      { level: 1, skill: "Impale" },
+      { level: 2, skill: "Spiked Carapace" },
+      { level: 3, skill: "Impale" },
+      { level: 4, skill: "Spiked Carapace" },
+      { level: 5, skill: "Impale" },
+      { level: 6, skill: "Locust Swarm" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "3 Acolytes to gold, 1 summons Ziggurat", food: "4/10" },
+      { order: 2,  time: "0:05", instruction: "Summon Altar of Darkness", food: "4/10" },
+      { order: 3,  time: "0:10", instruction: "Train 2 Acolytes → gold", food: "4/10" },
+      { order: 4,  time: "0:20", instruction: "Summon Crypt of the Damned", food: "5/10" },
+      { order: 5,  time: "1:00", instruction: "Summon Crypt Lord", food: "6/10" },
+      { order: 6,  time: "1:15", instruction: "Impale creep group — stun the whole wave", food: "6/10" },
+      { order: 7,  time: "1:30", instruction: "Train 2 Crypt Fiends", food: "8/10" },
+      { order: 8,  time: "1:50", instruction: "Summon 2nd Ziggurat → Spirit Tower", food: "8/10" },
+      { order: 9,  time: "2:00", instruction: "Summon Halls of the Dead (Tier 2)", food: "8/20" },
+      { order: 10, time: "2:30", instruction: "Train 2 more Crypt Fiends", food: "12/20" },
+      { order: 11, time: "2:45", instruction: "Research Web on Crypt Fiends", food: "12/20" },
+      { order: 12, time: "3:00", instruction: "Tier 2 complete — summon Death Knight (2nd hero)", food: "14/20" },
+      { order: 13, time: "3:30", instruction: "Push: CL + DK + 4 Fiends (Web air, Impale melee)", food: "18/20" },
+    ],
+  },
+  {
+    name: "Fast Gargoyle Harass",
+    race: "Undead",
+    heroes: ["Death Knight"],
+    vs: "Human / Night Elf",
+    difficulty: "Advanced",
+    description:
+      "Skip most ground production and rush the Graveyard for early Gargoyles. Stone Form makes Gargoyles nearly invulnerable vs magic. Two Gargoyles can wipe an entire mineral line before anti-air exists.",
+    keyTiming: { minute: 2, note: "First 2 Gargoyles harassing at 2:00" },
+    note: "Toggle Stone Form when focused by spells — it blocks most magic damage.",
+    skillOrder: [
+      { level: 1, skill: "Death Coil" },
+      { level: 2, skill: "Unholy Aura" },
+      { level: 3, skill: "Death Coil" },
+      { level: 4, skill: "Death Pact" },
+      { level: 5, skill: "Death Coil" },
+      { level: 6, skill: "Animate Dead" },
+    ],
+    steps: [
+      { order: 1,  time: "0:00", instruction: "3 Acolytes to gold, 1 summons Ziggurat", food: "4/10" },
+      { order: 2,  time: "0:05", instruction: "Summon Altar of Darkness", food: "4/10" },
+      { order: 3,  time: "0:10", instruction: "Train 2 Acolytes → gold", food: "4/10" },
+      { order: 4,  time: "0:20", instruction: "Summon Crypt of the Damned", food: "5/10" },
+      { order: 5,  time: "0:30", instruction: "Summon Graveyard (Gargoyle production)", food: "5/10" },
+      { order: 6,  time: "1:00", instruction: "Summon Death Knight", food: "6/10" },
+      { order: 7,  time: "1:15", instruction: "Train 1 Ghoul to assist creeping", food: "7/10" },
+      { order: 8,  time: "1:30", instruction: "Train 2 Gargoyles", food: "9/10" },
+      { order: 9,  time: "2:00", instruction: "Fly Gargoyles to enemy gold mine — kill workers", food: "9/10" },
+      { order: 10, time: "2:15", instruction: "Summon 2nd Ziggurat → Spirit Tower", food: "9/20" },
+      { order: 11, time: "2:30", instruction: "Train 2 more Gargoyles", food: "13/20" },
+      { order: 12, time: "3:00", instruction: "Research Stone Form at Graveyard", food: "13/20" },
+      { order: 13, time: "3:30", instruction: "Sustained air pressure: 4 Gargoyles rotate Stone Form vs casters", food: "13/20" },
+    ],
+  },
+];

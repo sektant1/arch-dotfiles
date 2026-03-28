@@ -1,0 +1,105 @@
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { loadBlpImage } from "../utils/blp";
+import { POPUP_ASSETS } from "../utils/assets";
+import { useBlpTexture } from "../hooks/useBlpTexture";
+
+export interface DropdownProps {
+  options: string[];
+  value: string;
+  onChange?: (value: string) => void;
+  disabled?: boolean;
+  className?: string;
+}
+
+/**
+ * Pull-down selector with a dedicated arrow, used for option menus and popup lists.
+ */
+export function Dropdown({
+  options,
+  value,
+  onChange,
+  disabled = false,
+  className,
+}: DropdownProps) {
+  const [open, setOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const triggerCanvasRef = useRef<HTMLCanvasElement>(null);
+  const menuCanvasRef = useRef<HTMLCanvasElement>(null);
+  const arrowUrl = useBlpTexture(POPUP_ASSETS.arrow);
+
+  const drawCanvas = useCallback(
+    async (canvas: HTMLCanvasElement | null, url: string) => {
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      try {
+        const img = await loadBlpImage(url);
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, 0, 0, w, h);
+      } catch {}
+    },
+    [],
+  );
+
+  useEffect(() => {
+    drawCanvas(triggerCanvasRef.current, POPUP_ASSETS.bg);
+  }, [drawCanvas]);
+
+  useEffect(() => {
+    if (open) drawCanvas(menuCanvasRef.current, POPUP_ASSETS.bg);
+  }, [open, drawCanvas]);
+
+  return (
+    <div className={`popup-trigger-anchor ${className ?? ""}`}>
+      <button
+        type="button"
+        className="popup-trigger-button"
+        onClick={() => !disabled && setOpen((v) => !v)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        disabled={disabled}
+        aria-expanded={open}
+      >
+        <canvas
+          ref={triggerCanvasRef}
+          className="popup-trigger-canvas"
+          width={440}
+          height={72}
+        />
+        <span className={`popup-title-text${disabled ? " popup-title-text-disabled" : ""}`}>
+          {value}
+        </span>
+        {arrowUrl && (
+          <img className="popup-arrow-icon" src={arrowUrl} alt="" />
+        )}
+      </button>
+      {open && (
+        <div className="popup-menu-demo" aria-label={value}>
+          <canvas
+            ref={menuCanvasRef}
+            className="popup-menu-canvas"
+            width={440}
+            height={options.length * 60}
+          />
+          {options.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              className="popup-menu-option"
+              aria-selected={opt === value}
+              onClick={() => {
+                onChange?.(opt);
+                setOpen(false);
+              }}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

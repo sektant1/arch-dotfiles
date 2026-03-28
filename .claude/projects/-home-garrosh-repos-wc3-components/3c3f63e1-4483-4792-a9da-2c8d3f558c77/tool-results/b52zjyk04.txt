@@ -1,0 +1,1117 @@
+"),this.shaderProgramLocations.textureCoordAttribute=this.gl.getAttribLocation(n,"aTextureCoord"),this.shaderProgramLocations.colorAttribute=this.gl.getAttribLocation(n,"aColor"),this.shaderProgramLocations.pMatrixUniform=this.gl.getUniformLocation(n,"uPMatrix"),this.shaderProgramLocations.mvMatrixUniform=this.gl.getUniformLocation(n,"uMVMatrix"),this.shaderProgramLocations.samplerUniform=this.gl.getUniformLocation(n,"uSampler"),this.shaderProgramLocations.replaceableColorUniform=this.gl.getUniformLocation(n,"uReplaceableColor"),this.shaderProgramLocations.replaceableTypeUniform=this.gl.getUniformLocation(n,"uReplaceableType"),this.shaderProgramLocations.discardAlphaLevelUniform=this.gl.getUniformLocation(n,"uDiscardAlphaLevel")}updateParticle(e,r){r/=1e3,e.lifeSpan-=r,!(e.lifeSpan<=0)&&(e.speed[2]-=e.gravity*r,e.pos[0]+=e.speed[0]*r,e.pos[1]+=e.speed[1]*r,e.pos[2]+=e.speed[2]*r)}resizeEmitterBuffers(e,r){var n,i,o,s,a,c;if(r<=e.capacity)return;r=Math.max(r,e.baseCapacity);let u,l,d,g;e.type&De.Tail&&(u=new Float32Array(r*4*3),d=new Float32Array(r*4*2)),e.type&De.Head&&(l=new Float32Array(r*4*3),g=new Float32Array(r*4*2));const f=new Float32Array(r*4*4),h=new Uint16Array(r*6);e.capacity&&h.set(e.indices);for(let v=e.capacity;v<r;++v)h[v*6]=v*4,h[v*6+1]=v*4+1,h[v*6+2]=v*4+2,h[v*6+3]=v*4+2,h[v*6+4]=v*4+1,h[v*6+5]=v*4+3;u&&(e.tailVertices=u,e.tailTexCoords=d),l&&(e.headVertices=l,e.headTexCoords=g),e.colors=f,e.indices=h,e.capacity=r,e.indexBuffer||(this.gl?(e.type&De.Tail&&(e.tailVertexBuffer=this.gl.createBuffer(),e.tailTexCoordBuffer=this.gl.createBuffer()),e.type&De.Head&&(e.headVertexBuffer=this.gl.createBuffer(),e.headTexCoordBuffer=this.gl.createBuffer()),e.colorBuffer=this.gl.createBuffer(),e.indexBuffer=this.gl.createBuffer()):this.device&&(e.type&De.Tail&&((n=e.tailVertexGPUBuffer)==null||n.destroy(),e.tailVertexGPUBuffer=this.device.createBuffer({label:`particles tail vertex buffer ${e.index}`,size:u.byteLength,usage:GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST}),(i=e.tailTexCoordGPUBuffer)==null||i.destroy(),e.tailTexCoordGPUBuffer=this.device.createBuffer({label:`particles tail texCoords buffer ${e.index}`,size:d.byteLength,usage:GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST})),e.type&De.Head&&((o=e.headVertexGPUBuffer)==null||o.destroy(),e.headVertexGPUBuffer=this.device.createBuffer({label:`particles head vertex buffer ${e.index}`,size:l.byteLength,usage:GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST}),(s=e.headTexCoordGPUBuffer)==null||s.destroy(),e.headTexCoordGPUBuffer=this.device.createBuffer({label:`particles head texCoords buffer ${e.index}`,size:g.byteLength,usage:GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST})),(a=e.colorGPUBuffer)==null||a.destroy(),e.colorGPUBuffer=this.device.createBuffer({label:`particles color buffer ${e.index}`,size:f.byteLength,usage:GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST}),(c=e.indexGPUBuffer)==null||c.destroy(),e.indexGPUBuffer=this.device.createBuffer({label:`particles index buffer ${e.index}`,size:h.byteLength,usage:GPUBufferUsage.INDEX|GPUBufferUsage.COPY_DST})))}update(e){for(const r of this.emitters)this.updateEmitter(r,e)}render(e,r){this.gl.enable(this.gl.CULL_FACE),this.gl.useProgram(this.shaderProgram),this.gl.uniformMatrix4fv(this.shaderProgramLocations.pMatrixUniform,!1,r),this.gl.uniformMatrix4fv(this.shaderProgramLocations.mvMatrixUniform,!1,e),this.gl.enableVertexAttribArray(this.shaderProgramLocations.vertexPositionAttribute),this.gl.enableVertexAttribArray(this.shaderProgramLocations.textureCoordAttribute),this.gl.enableVertexAttribArray(this.shaderProgramLocations.colorAttribute);for(const n of this.emitters)n.particles.length&&(this.setLayerProps(n),this.setGeneralBuffers(n),n.type&De.Tail&&this.renderEmitterType(n,De.Tail),n.type&De.Head&&this.renderEmitterType(n,De.Head));this.gl.disableVertexAttribArray(this.shaderProgramLocations.vertexPositionAttribute),this.gl.disableVertexAttribArray(this.shaderProgramLocations.textureCoordAttribute),this.gl.disableVertexAttribArray(this.shaderProgramLocations.colorAttribute)}renderGPUEmitterType(e,r,n){n===De.Tail?(this.device.queue.writeBuffer(r.tailTexCoordGPUBuffer,0,r.tailTexCoords),e.setVertexBuffer(1,r.tailTexCoordGPUBuffer)):(this.device.queue.writeBuffer(r.headTexCoordGPUBuffer,0,r.headTexCoords),e.setVertexBuffer(1,r.headTexCoordGPUBuffer)),n===De.Tail?(this.device.queue.writeBuffer(r.tailVertexGPUBuffer,0,r.tailVertices),e.setVertexBuffer(0,r.tailVertexGPUBuffer)):(this.device.queue.writeBuffer(r.headVertexGPUBuffer,0,r.headVertices),e.setVertexBuffer(0,r.headVertexGPUBuffer)),e.drawIndexed(r.particles.length*6)}renderGPU(e,r,n){const i=new ArrayBuffer(128),o={mvMatrix:new Float32Array(i,0,16),pMatrix:new Float32Array(i,64,16)};o.mvMatrix.set(r),o.pMatrix.set(n),this.device.queue.writeBuffer(this.gpuVSUniformsBuffer,0,i),e.setBindGroup(0,this.gpuVSUniformsBindGroup);for(const s of this.emitters){if(!s.particles.length)continue;const a=this.gpuPipelines[s.props.FilterMode]||this.gpuPipelines[0];e.setPipeline(a);const c=s.props.TextureID,u=this.rendererData.model.Textures[c],l=new ArrayBuffer(32),d={replaceableColor:new Float32Array(l,0,3),replaceableType:new Uint32Array(l,12,1),discardAlphaLevel:new Float32Array(l,16,1)};d.replaceableColor.set(this.rendererData.teamColor),d.replaceableType.set([u.ReplaceableId||0]),s.props.FilterMode===vt.AlphaKey?d.discardAlphaLevel.set([As]):s.props.FilterMode===vt.Modulate||s.props.FilterMode===vt.Modulate2x?d.discardAlphaLevel.set([Ms]):d.discardAlphaLevel.set([0]),s.fsUniformsBuffer||(s.fsUniformsBuffer=this.device.createBuffer({label:`particles fs uniforms ${s.index}`,size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST})),this.device.queue.writeBuffer(s.fsUniformsBuffer,0,l);const g=this.device.createBindGroup({label:`particles fs uniforms ${s.index}`,layout:this.fsBindGroupLayout,entries:[{binding:0,resource:{buffer:s.fsUniformsBuffer}},{binding:1,resource:this.rendererData.gpuSamplers[c]},{binding:2,resource:(this.rendererData.gpuTextures[u.Image]||this.rendererData.gpuEmptyTexture).createView()}]});e.setBindGroup(1,g),this.device.queue.writeBuffer(s.colorGPUBuffer,0,s.colors),this.device.queue.writeBuffer(s.indexGPUBuffer,0,s.indices),e.setVertexBuffer(2,s.colorGPUBuffer),e.setIndexBuffer(s.indexGPUBuffer,"uint16"),s.type&De.Tail&&this.renderGPUEmitterType(e,s,De.Tail),s.type&De.Head&&this.renderGPUEmitterType(e,s,De.Head)}}updateEmitter(e,r){if(this.interp.animVectorVal(e.props.Visibility,1)>0){if(e.props.Squirt&&typeof e.props.EmissionRate!="number"){const i=this.interp.findKeyframes(e.props.EmissionRate);i&&i.left&&i.left.Frame!==e.squirtFrame&&(e.squirtFrame=i.left.Frame,i.left.Vector[0]>0&&(e.emission+=i.left.Vector[0]*1e3))}else{const i=this.interp.animVectorVal(e.props.EmissionRate,0);e.emission+=i*r}for(;e.emission>=1e3;)e.emission-=1e3,e.particles.push(this.createParticle(e,this.rendererData.nodes[e.props.ObjectId].matrix))}if(e.particles.length){const i=[];for(const o of e.particles)this.updateParticle(o,r),o.lifeSpan>0?i.push(o):this.particleStorage.push(o);if(e.particles=i,e.type&De.Head)if(e.props.Flags&Mn.XYQuad)dt(this.particleBaseVectors[0],-1,1,0),dt(this.particleBaseVectors[1],-1,-1,0),dt(this.particleBaseVectors[2],1,1,0),dt(this.particleBaseVectors[3],1,-1,0);else{dt(this.particleBaseVectors[0],0,-1,1),dt(this.particleBaseVectors[1],0,-1,-1),dt(this.particleBaseVectors[2],0,1,1),dt(this.particleBaseVectors[3],0,1,-1);for(let o=0;o<4;++o)cl(this.particleBaseVectors[o],this.particleBaseVectors[o],this.rendererData.cameraQuat)}this.resizeEmitterBuffers(e,e.particles.length);for(let o=0;o<e.particles.length;++o)this.updateParticleBuffers(e.particles[o],o,e)}}createParticle(e,r){let n;this.particleStorage.length?n=this.particleStorage.pop():n={emitter:null,pos:He(),angle:0,speed:He(),gravity:null,lifeSpan:null};const i=this.interp.animVectorVal(e.props.Width,0),o=this.interp.animVectorVal(e.props.Length,0);let s=this.interp.animVectorVal(e.props.Speed,0);const a=this.interp.animVectorVal(e.props.Variation,0),c=Id(this.interp.animVectorVal(e.props.Latitude,0));return n.emitter=e,n.pos[0]=e.props.PivotPoint[0]+Hr(-i,i),n.pos[1]=e.props.PivotPoint[1]+Hr(-o,o),n.pos[2]=e.props.PivotPoint[2],yt(n.pos,n.pos,r),a>0&&(s*=1+Hr(-a,a)),dt(n.speed,0,0,s),n.angle=Hr(0,Math.PI*2),$f(n.speed,n.speed,Es,Hr(0,c)),Vf(n.speed,n.speed,Es,n.angle),e.props.Flags&Mn.LineEmitter&&(n.speed[0]=0),yt(n.speed,n.speed,r),n.speed[0]-=r[12],n.speed[1]-=r[13],n.speed[2]-=r[14],n.gravity=this.interp.animVectorVal(e.props.Gravity,0),n.lifeSpan=e.props.LifeSpan,n}updateParticleBuffers(e,r,n){const i=1-e.lifeSpan/n.props.LifeSpan,o=i<n.props.Time;let s;o?s=i/n.props.Time:s=(i-n.props.Time)/(1-n.props.Time),this.updateParticleVertices(e,r,n,o,s),this.updateParticleTexCoords(r,n,o,s),this.updateParticleColor(r,n,o,s)}updateParticleVertices(e,r,n,i,o){let s,a,c;if(i?(s=n.props.ParticleScaling[0],a=n.props.ParticleScaling[1]):(s=n.props.ParticleScaling[1],a=n.props.ParticleScaling[2]),c=qi(s,a,o),n.type&De.Head){for(let u=0;u<4;++u)if(n.headVertices[r*12+u*3]=this.particleBaseVectors[u][0]*c,n.headVertices[r*12+u*3+1]=this.particleBaseVectors[u][1]*c,n.headVertices[r*12+u*3+2]=this.particleBaseVectors[u][2]*c,n.props.Flags&Mn.XYQuad){const l=n.headVertices[r*12+u*3],d=n.headVertices[r*12+u*3+1];n.headVertices[r*12+u*3]=l*Math.cos(e.angle)-d*Math.sin(e.angle),n.headVertices[r*12+u*3+1]=l*Math.sin(e.angle)+d*Math.cos(e.angle)}}n.type&De.Tail&&(Ht[0]=-e.speed[0]*n.props.TailLength,Ht[1]=-e.speed[1]*n.props.TailLength,Ht[2]=-e.speed[2]*n.props.TailLength,Rr(et,e.speed,this.rendererData.cameraPos),to(et,et),ll(et,et,c),n.tailVertices[r*12]=et[0],n.tailVertices[r*12+1]=et[1],n.tailVertices[r*12+2]=et[2],n.tailVertices[r*12+3]=-et[0],n.tailVertices[r*12+3+1]=-et[1],n.tailVertices[r*12+3+2]=-et[2],n.tailVertices[r*12+6]=et[0]+Ht[0],n.tailVertices[r*12+6+1]=et[1]+Ht[1],n.tailVertices[r*12+6+2]=et[2]+Ht[2],n.tailVertices[r*12+9]=-et[0]+Ht[0],n.tailVertices[r*12+9+1]=-et[1]+Ht[1],n.tailVertices[r*12+9+2]=-et[2]+Ht[2]);for(let u=0;u<4;++u)n.headVertices&&(n.headVertices[r*12+u*3]+=e.pos[0],n.headVertices[r*12+u*3+1]+=e.pos[1],n.headVertices[r*12+u*3+2]+=e.pos[2]),n.tailVertices&&(n.tailVertices[r*12+u*3]+=e.pos[0],n.tailVertices[r*12+u*3+1]+=e.pos[1],n.tailVertices[r*12+u*3+2]+=e.pos[2])}updateParticleTexCoords(e,r,n,i){r.type&De.Head&&this.updateParticleTexCoordsByType(e,r,n,i,De.Head),r.type&De.Tail&&this.updateParticleTexCoordsByType(e,r,n,i,De.Tail)}updateParticleTexCoordsByType(e,r,n,i,o){let s,a;o===De.Tail?(s=n?r.props.TailUVAnim:r.props.TailDecayUVAnim,a=r.tailTexCoords):(s=n?r.props.LifeSpanUVAnim:r.props.DecayUVAnim,a=r.headTexCoords);const c=s[0],u=s[1],l=Math.round(qi(c,u,i)),d=l%r.props.Columns,g=Math.floor(l/r.props.Rows),f=1/r.props.Columns,h=1/r.props.Rows;a[e*8]=d*f,a[e*8+1]=g*h,a[e*8+2]=d*f,a[e*8+3]=(1+g)*h,a[e*8+4]=(1+d)*f,a[e*8+5]=g*h,a[e*8+6]=(1+d)*f,a[e*8+7]=(1+g)*h}updateParticleColor(e,r,n,i){n?(Nt[0]=r.props.SegmentColor[0][0],Nt[1]=r.props.SegmentColor[0][1],Nt[2]=r.props.SegmentColor[0][2],Nt[3]=r.props.Alpha[0]/255,Ot[0]=r.props.SegmentColor[1][0],Ot[1]=r.props.SegmentColor[1][1],Ot[2]=r.props.SegmentColor[1][2],Ot[3]=r.props.Alpha[1]/255):(Nt[0]=r.props.SegmentColor[1][0],Nt[1]=r.props.SegmentColor[1][1],Nt[2]=r.props.SegmentColor[1][2],Nt[3]=r.props.Alpha[1]/255,Ot[0]=r.props.SegmentColor[2][0],Ot[1]=r.props.SegmentColor[2][1],Ot[2]=r.props.SegmentColor[2][2],Ot[3]=r.props.Alpha[2]/255),Of(Xr,Nt,Ot,i);for(let o=0;o<4;++o)r.colors[e*16+o*4]=Xr[0],r.colors[e*16+o*4+1]=Xr[1],r.colors[e*16+o*4+2]=Xr[2],r.colors[e*16+o*4+3]=Xr[3]}setLayerProps(e){e.props.FilterMode===vt.AlphaKey?this.gl.uniform1f(this.shaderProgramLocations.discardAlphaLevelUniform,As):e.props.FilterMode===vt.Modulate||e.props.FilterMode===vt.Modulate2x?this.gl.uniform1f(this.shaderProgramLocations.discardAlphaLevelUniform,Ms):this.gl.uniform1f(this.shaderProgramLocations.discardAlphaLevelUniform,0),e.props.FilterMode===vt.Blend?(this.gl.enable(this.gl.BLEND),this.gl.enable(this.gl.DEPTH_TEST),this.gl.blendFuncSeparate(this.gl.SRC_ALPHA,this.gl.ONE_MINUS_SRC_ALPHA,this.gl.ONE,this.gl.ONE_MINUS_SRC_ALPHA),this.gl.depthMask(!1)):e.props.FilterMode===vt.Additive?(this.gl.enable(this.gl.BLEND),this.gl.enable(this.gl.DEPTH_TEST),this.gl.blendFunc(this.gl.SRC_ALPHA,this.gl.ONE),this.gl.depthMask(!1)):e.props.FilterMode===vt.AlphaKey?(this.gl.enable(this.gl.BLEND),this.gl.enable(this.gl.DEPTH_TEST),this.gl.blendFunc(this.gl.SRC_ALPHA,this.gl.ONE),this.gl.depthMask(!1)):e.props.FilterMode===vt.Modulate?(this.gl.enable(this.gl.BLEND),this.gl.enable(this.gl.DEPTH_TEST),this.gl.blendFuncSeparate(this.gl.ZERO,this.gl.SRC_COLOR,this.gl.ZERO,this.gl.ONE),this.gl.depthMask(!1)):e.props.FilterMode===vt.Modulate2x&&(this.gl.enable(this.gl.BLEND),this.gl.enable(this.gl.DEPTH_TEST),this.gl.blendFuncSeparate(this.gl.DST_COLOR,this.gl.SRC_COLOR,this.gl.ZERO,this.gl.ONE),this.gl.depthMask(!1));const r=this.rendererData.model.Textures[e.props.TextureID];r.Image?(this.gl.activeTexture(this.gl.TEXTURE0),this.gl.bindTexture(this.gl.TEXTURE_2D,this.rendererData.textures[r.Image]),this.gl.uniform1i(this.shaderProgramLocations.samplerUniform,0),this.gl.uniform1f(this.shaderProgramLocations.replaceableTypeUniform,0)):(r.ReplaceableId===1||r.ReplaceableId===2)&&(this.gl.uniform3fv(this.shaderProgramLocations.replaceableColorUniform,this.rendererData.teamColor),this.gl.uniform1f(this.shaderProgramLocations.replaceableTypeUniform,r.ReplaceableId))}setGeneralBuffers(e){this.gl.bindBuffer(this.gl.ARRAY_BUFFER,e.colorBuffer),this.gl.bufferData(this.gl.ARRAY_BUFFER,e.colors,this.gl.DYNAMIC_DRAW),this.gl.vertexAttribPointer(this.shaderProgramLocations.colorAttribute,4,this.gl.FLOAT,!1,0,0),this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER,e.indexBuffer),this.gl.bufferData(this.gl.ELEMENT_ARRAY_BUFFER,e.indices,this.gl.DYNAMIC_DRAW)}renderEmitterType(e,r){r===De.Tail?(this.gl.bindBuffer(this.gl.ARRAY_BUFFER,e.tailTexCoordBuffer),this.gl.bufferData(this.gl.ARRAY_BUFFER,e.tailTexCoords,this.gl.DYNAMIC_DRAW)):(this.gl.bindBuffer(this.gl.ARRAY_BUFFER,e.headTexCoordBuffer),this.gl.bufferData(this.gl.ARRAY_BUFFER,e.headTexCoords,this.gl.DYNAMIC_DRAW)),this.gl.vertexAttribPointer(this.shaderProgramLocations.textureCoordAttribute,2,this.gl.FLOAT,!1,0,0),r===De.Tail?(this.gl.bindBuffer(this.gl.ARRAY_BUFFER,e.tailVertexBuffer),this.gl.bufferData(this.gl.ARRAY_BUFFER,e.tailVertices,this.gl.DYNAMIC_DRAW)):(this.gl.bindBuffer(this.gl.ARRAY_BUFFER,e.headVertexBuffer),this.gl.bufferData(this.gl.ARRAY_BUFFER,e.headVertices,this.gl.DYNAMIC_DRAW)),this.gl.vertexAttribPointer(this.shaderProgramLocations.vertexPositionAttribute,3,this.gl.FLOAT,!1,0,0),this.gl.drawElements(this.gl.TRIANGLES,e.particles.length*6,this.gl.UNSIGNED_SHORT,0)}}const sh=`attribute vec3 aVertexPosition;
+attribute vec2 aTextureCoord;
+
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+
+varying vec2 vTextureCoord;
+
+void main(void) {
+    vec4 position = vec4(aVertexPosition, 1.0);
+    gl_Position = uPMatrix * uMVMatrix * position;
+    vTextureCoord = aTextureCoord;
+}
+`,ah=`precision mediump float;
+
+varying vec2 vTextureCoord;
+
+uniform sampler2D uSampler;
+uniform vec3 uReplaceableColor;
+uniform float uReplaceableType;
+uniform float uDiscardAlphaLevel;
+uniform vec4 uColor;
+
+float hypot (vec2 z) {
+    float t;
+    float x = abs(z.x);
+    float y = abs(z.y);
+    t = min(x, y);
+    x = max(x, y);
+    t = t / x;
+    return (z.x == 0.0 && z.y == 0.0) ? 0.0 : x * sqrt(1.0 + t * t);
+}
+
+void main(void) {
+    vec2 coords = vec2(vTextureCoord.s, vTextureCoord.t);
+    if (uReplaceableType == 0.) {
+        gl_FragColor = texture2D(uSampler, coords);
+    } else if (uReplaceableType == 1.) {
+        gl_FragColor = vec4(uReplaceableColor, 1.0);
+    } else if (uReplaceableType == 2.) {
+        float dist = hypot(coords - vec2(0.5, 0.5)) * 2.;
+        float truncateDist = clamp(1. - dist * 1.4, 0., 1.);
+        float alpha = sin(truncateDist);
+        gl_FragColor = vec4(uReplaceableColor * alpha, 1.0);
+    }
+    gl_FragColor *= uColor;
+
+    if (gl_FragColor[3] < uDiscardAlphaLevel) {
+        discard;
+    }
+}
+`,lh=`struct VSUniforms {
+    mvMatrix: mat4x4f,
+    pMatrix: mat4x4f,
+}
+
+struct FSUniforms {
+    replaceableColor: vec3f,
+    replaceableType: u32,
+    discardAlphaLevel: f32,
+    color: vec4f,
+}
+
+@group(0) @binding(0) var<uniform> vsUniforms: VSUniforms;
+@group(1) @binding(0) var<uniform> fsUniforms: FSUniforms;
+@group(1) @binding(1) var fsUniformSampler: sampler;
+@group(1) @binding(2) var fsUniformTexture: texture_2d<f32>;
+
+struct VSIn {
+    @location(0) vertexPosition: vec3f,
+    @location(1) textureCoord: vec2f,
+}
+
+struct VSOut {
+    @builtin(position) position: vec4f,
+    @location(0) textureCoord: vec2f,
+}
+
+@vertex fn vs(
+    in: VSIn
+) -> VSOut {
+    var position: vec4f = vec4f(in.vertexPosition, 1.0);
+
+    var out: VSOut;
+    out.position = vsUniforms.pMatrix * vsUniforms.mvMatrix * position;
+    out.textureCoord = in.textureCoord;
+    return out;
+}
+
+fn hypot(z: vec2f) -> f32 {
+    var t: f32 = 0;
+    var x: f32 = abs(z.x);
+    let y: f32 = abs(z.y);
+    t = min(x, y);
+    x = max(x, y);
+    t = t / x;
+    if (z.x == 0.0 && z.y == 0.0) {
+        return 0.0;
+    }
+    return x * sqrt(1.0 + t * t);
+}
+
+@fragment fn fs(
+    in: VSOut
+) -> @location(0) vec4f {
+    let texCoord: vec2f = in.textureCoord;
+    var color: vec4f = vec4f(0.0);
+
+    if (fsUniforms.replaceableType == 0) {
+        color = textureSample(fsUniformTexture, fsUniformSampler, texCoord);
+    } else if (fsUniforms.replaceableType == 1) {
+        color = vec4f(fsUniforms.replaceableColor, 1.0);
+    } else if (fsUniforms.replaceableType == 2) {
+        let dist: f32 = hypot(texCoord - vec2(0.5, 0.5)) * 2.;
+        let truncateDist: f32 = clamp(1. - dist * 1.4, 0., 1.);
+        let alpha: f32 = sin(truncateDist);
+        color = vec4f(fsUniforms.replaceableColor * alpha, 1.0);
+    }
+
+    color *= fsUniforms.color;
+
+    // hand-made alpha-test
+    if (color.a < fsUniforms.discardAlphaLevel) {
+        discard;
+    }
+
+    return color;
+}
+`;class ch{constructor(e,r){if(this.shaderProgramLocations={vertexPositionAttribute:null,textureCoordAttribute:null,pMatrixUniform:null,mvMatrixUniform:null,samplerUniform:null,replaceableColorUniform:null,replaceableTypeUniform:null,discardAlphaLevelUniform:null,colorUniform:null},this.interp=e,this.rendererData=r,this.emitters=[],r.model.RibbonEmitters.length)for(let n=0;n<r.model.RibbonEmitters.length;++n){const i=r.model.RibbonEmitters[n],o={index:n,emission:0,props:i,capacity:0,baseCapacity:0,creationTimes:[],vertices:null,vertexBuffer:null,vertexGPUBuffer:null,texCoords:null,texCoordBuffer:null,texCoordGPUBuffer:null,fsUnifrmsPerLayer:[]};o.baseCapacity=Math.ceil(ro.maxAnimVectorVal(o.props.EmissionRate)*o.props.LifeSpan)+1,this.emitters.push(o)}}destroy(){this.shaderProgram&&(this.vertexShader&&(this.gl.detachShader(this.shaderProgram,this.vertexShader),this.gl.deleteShader(this.vertexShader),this.vertexShader=null),this.fragmentShader&&(this.gl.detachShader(this.shaderProgram,this.fragmentShader),this.gl.deleteShader(this.fragmentShader),this.fragmentShader=null),this.gl.deleteProgram(this.shaderProgram),this.shaderProgram=null),this.gpuVSUniformsBuffer&&(this.gpuVSUniformsBuffer.destroy(),this.gpuVSUniformsBuffer=null);for(const e of this.emitters)for(const r of e.fsUnifrmsPerLayer)r.destroy();this.emitters=[]}initGL(e){this.gl=e,this.initShaders()}initGPUDevice(e){this.device=e,this.gpuShaderModule=e.createShaderModule({label:"ribbons shader module",code:lh}),this.vsBindGroupLayout=this.device.createBindGroupLayout({label:"ribbons vs bind group layout",entries:[{binding:0,visibility:GPUShaderStage.VERTEX,buffer:{type:"uniform",hasDynamicOffset:!1,minBindingSize:128}}]}),this.fsBindGroupLayout=this.device.createBindGroupLayout({label:"ribbons bind group layout2",entries:[{binding:0,visibility:GPUShaderStage.FRAGMENT,buffer:{type:"uniform",hasDynamicOffset:!1,minBindingSize:48}},{binding:1,visibility:GPUShaderStage.FRAGMENT,sampler:{type:"filtering"}},{binding:2,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:"float",viewDimension:"2d",multisampled:!1}}]}),this.gpuPipelineLayout=this.device.createPipelineLayout({label:"ribbons pipeline layout",bindGroupLayouts:[this.vsBindGroupLayout,this.fsBindGroupLayout]});const r=(n,i,o)=>e.createRenderPipeline({label:`ribbons pipeline ${n}`,layout:this.gpuPipelineLayout,vertex:{module:this.gpuShaderModule,buffers:[{arrayStride:12,attributes:[{shaderLocation:0,offset:0,format:"float32x3"}]},{arrayStride:8,attributes:[{shaderLocation:1,offset:0,format:"float32x2"}]}]},fragment:{module:this.gpuShaderModule,targets:[{format:navigator.gpu.getPreferredCanvasFormat(),blend:i}]},depthStencil:o,primitive:{topology:"triangle-strip"}});this.gpuPipelines=[r("none",{color:{operation:"add",srcFactor:"one",dstFactor:"zero"},alpha:{operation:"add",srcFactor:"one",dstFactor:"zero"}},{depthWriteEnabled:!0,depthCompare:"less-equal",format:"depth24plus"}),r("transparent",{color:{operation:"add",srcFactor:"src-alpha",dstFactor:"one-minus-src-alpha"},alpha:{operation:"add",srcFactor:"one",dstFactor:"one-minus-src-alpha"}},{depthWriteEnabled:!0,depthCompare:"less-equal",format:"depth24plus"}),r("blend",{color:{operation:"add",srcFactor:"src-alpha",dstFactor:"one-minus-src-alpha"},alpha:{operation:"add",srcFactor:"one",dstFactor:"one-minus-src-alpha"}},{depthWriteEnabled:!1,depthCompare:"less-equal",format:"depth24plus"}),r("additive",{color:{operation:"add",srcFactor:"src",dstFactor:"one"},alpha:{operation:"add",srcFactor:"src",dstFactor:"one"}},{depthWriteEnabled:!1,depthCompare:"less-equal",format:"depth24plus"}),r("addAlpha",{color:{operation:"add",srcFactor:"src-alpha",dstFactor:"one"},alpha:{operation:"add",srcFactor:"src-alpha",dstFactor:"one"}},{depthWriteEnabled:!1,depthCompare:"less-equal",format:"depth24plus"}),r("modulate",{color:{operation:"add",srcFactor:"zero",dstFactor:"src"},alpha:{operation:"add",srcFactor:"zero",dstFactor:"one"}},{depthWriteEnabled:!1,depthCompare:"less-equal",format:"depth24plus"}),r("modulate2x",{color:{operation:"add",srcFactor:"dst",dstFactor:"src"},alpha:{operation:"add",srcFactor:"zero",dstFactor:"one"}},{depthWriteEnabled:!1,depthCompare:"less-equal",format:"depth24plus"})],this.gpuVSUniformsBuffer=this.device.createBuffer({label:"ribbons vs uniforms",size:128,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}),this.gpuVSUniformsBindGroup=this.device.createBindGroup({layout:this.vsBindGroupLayout,entries:[{binding:0,resource:{buffer:this.gpuVSUniformsBuffer}}]})}update(e){for(const r of this.emitters)this.updateEmitter(r,e)}render(e,r){this.gl.useProgram(this.shaderProgram),this.gl.uniformMatrix4fv(this.shaderProgramLocations.pMatrixUniform,!1,r),this.gl.uniformMatrix4fv(this.shaderProgramLocations.mvMatrixUniform,!1,e),this.gl.enableVertexAttribArray(this.shaderProgramLocations.vertexPositionAttribute),this.gl.enableVertexAttribArray(this.shaderProgramLocations.textureCoordAttribute);for(const n of this.emitters){if(n.creationTimes.length<2)continue;this.gl.uniform4f(this.shaderProgramLocations.colorUniform,n.props.Color[0],n.props.Color[1],n.props.Color[2],this.interp.animVectorVal(n.props.Alpha,1)),this.setGeneralBuffers(n);const i=n.props.MaterialID,o=this.rendererData.model.Materials[i];for(let s=0;s<o.Layers.length;++s)this.setLayerProps(o.Layers[s],this.rendererData.materialLayerTextureID[i][s]),this.renderEmitter(n)}this.gl.disableVertexAttribArray(this.shaderProgramLocations.vertexPositionAttribute),this.gl.disableVertexAttribArray(this.shaderProgramLocations.textureCoordAttribute)}renderGPU(e,r,n){const i=new ArrayBuffer(128),o={mvMatrix:new Float32Array(i,0,16),pMatrix:new Float32Array(i,64,16)};o.mvMatrix.set(r),o.pMatrix.set(n),this.device.queue.writeBuffer(this.gpuVSUniformsBuffer,0,i);for(const s of this.emitters){if(s.creationTimes.length<2)continue;this.device.queue.writeBuffer(s.vertexGPUBuffer,0,s.vertices),this.device.queue.writeBuffer(s.texCoordGPUBuffer,0,s.texCoords),e.setVertexBuffer(0,s.vertexGPUBuffer),e.setVertexBuffer(1,s.texCoordGPUBuffer),e.setBindGroup(0,this.gpuVSUniformsBindGroup);const a=s.props.MaterialID,c=this.rendererData.model.Materials[a];for(let u=0;u<c.Layers.length;++u){const l=this.rendererData.materialLayerTextureID[a][u],d=this.rendererData.model.Textures[l],g=c.Layers[u],f=this.gpuPipelines[g.FilterMode]||this.gpuPipelines[0];e.setPipeline(f);const h=new ArrayBuffer(48),v={replaceableColor:new Float32Array(h,0,3),replaceableType:new Uint32Array(h,12,1),discardAlphaLevel:new Float32Array(h,16,1),color:new Float32Array(h,32,4)};v.replaceableColor.set(this.rendererData.teamColor),v.replaceableType.set([d.ReplaceableId||0]),v.discardAlphaLevel.set([g.FilterMode===Re.Transparent?.75:0]),v.color.set([s.props.Color[0],s.props.Color[1],s.props.Color[2],this.interp.animVectorVal(s.props.Alpha,1)]),s.fsUnifrmsPerLayer[u]||(s.fsUnifrmsPerLayer[u]=this.device.createBuffer({label:`ribbons fs uniforms ${s.index} layer ${u}`,size:48,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}));const S=s.fsUnifrmsPerLayer[u];this.device.queue.writeBuffer(S,0,h);const p=this.device.createBindGroup({label:`ribbons fs uniforms ${s.index}`,layout:this.fsBindGroupLayout,entries:[{binding:0,resource:{buffer:S}},{binding:1,resource:this.rendererData.gpuSamplers[l]},{binding:2,resource:(this.rendererData.gpuTextures[d.Image]||this.rendererData.gpuEmptyTexture).createView()}]});e.setBindGroup(1,p),e.draw(s.creationTimes.length*2)}}}initShaders(){const e=this.vertexShader=$t(this.gl,sh,this.gl.VERTEX_SHADER),r=this.fragmentShader=$t(this.gl,ah,this.gl.FRAGMENT_SHADER),n=this.shaderProgram=this.gl.createProgram();this.gl.attachShader(n,e),this.gl.attachShader(n,r),this.gl.linkProgram(n),this.gl.getProgramParameter(n,this.gl.LINK_STATUS)||alert("Could not initialise shaders"),this.gl.useProgram(n),this.shaderProgramLocations.vertexPositionAttribute=this.gl.getAttribLocation(n,"aVertexPosition"),this.shaderProgramLocations.textureCoordAttribute=this.gl.getAttribLocation(n,"aTextureCoord"),this.shaderProgramLocations.pMatrixUniform=this.gl.getUniformLocation(n,"uPMatrix"),this.shaderProgramLocations.mvMatrixUniform=this.gl.getUniformLocation(n,"uMVMatrix"),this.shaderProgramLocations.samplerUniform=this.gl.getUniformLocation(n,"uSampler"),this.shaderProgramLocations.replaceableColorUniform=this.gl.getUniformLocation(n,"uReplaceableColor"),this.shaderProgramLocations.replaceableTypeUniform=this.gl.getUniformLocation(n,"uReplaceableType"),this.shaderProgramLocations.discardAlphaLevelUniform=this.gl.getUniformLocation(n,"uDiscardAlphaLevel"),this.shaderProgramLocations.colorUniform=this.gl.getUniformLocation(n,"uColor")}resizeEmitterBuffers(e,r){var n,i;if(r<=e.capacity)return;r=Math.min(r,e.baseCapacity);const o=new Float32Array(r*2*3),s=new Float32Array(r*2*2);e.vertices&&o.set(e.vertices),e.vertices=o,e.texCoords=s,e.capacity=r,this.gl?e.vertexBuffer||(e.vertexBuffer=this.gl.createBuffer(),e.texCoordBuffer=this.gl.createBuffer()):this.device&&((n=e.vertexGPUBuffer)==null||n.destroy(),(i=e.texCoordGPUBuffer)==null||i.destroy(),e.vertexGPUBuffer=this.device.createBuffer({label:`ribbon vertex buffer ${e.index}`,size:o.byteLength,usage:GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST}),e.texCoordGPUBuffer=this.device.createBuffer({label:`ribbon texCoord buffer ${e.index}`,size:s.byteLength,usage:GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST}))}updateEmitter(e,r){const n=Date.now();if(this.interp.animVectorVal(e.props.Visibility,0)>0){const o=e.props.EmissionRate;e.emission+=o*r,e.emission>=1e3&&(e.emission=e.emission%1e3,e.creationTimes.length+1>e.capacity&&this.resizeEmitterBuffers(e,e.creationTimes.length+1),this.appendVertices(e),e.creationTimes.push(n))}if(e.creationTimes.length)for(;e.creationTimes[0]+e.props.LifeSpan*1e3<n;){e.creationTimes.shift();for(let o=0;o+6+5<e.vertices.length;o+=6)e.vertices[o]=e.vertices[o+6],e.vertices[o+1]=e.vertices[o+7],e.vertices[o+2]=e.vertices[o+8],e.vertices[o+3]=e.vertices[o+9],e.vertices[o+4]=e.vertices[o+10],e.vertices[o+5]=e.vertices[o+11]}e.creationTimes.length&&this.updateEmitterTexCoords(e,n)}appendVertices(e){const r=Us(e.props.PivotPoint),n=Us(e.props.PivotPoint);r[1]-=this.interp.animVectorVal(e.props.HeightBelow,0),n[1]+=this.interp.animVectorVal(e.props.HeightAbove,0);const i=this.rendererData.nodes[e.props.ObjectId].matrix;yt(r,r,i),yt(n,n,i);const o=e.creationTimes.length;e.vertices[o*6]=r[0],e.vertices[o*6+1]=r[1],e.vertices[o*6+2]=r[2],e.vertices[o*6+3]=n[0],e.vertices[o*6+4]=n[1],e.vertices[o*6+5]=n[2]}updateEmitterTexCoords(e,r){for(let n=0;n<e.creationTimes.length;++n){let i=(r-e.creationTimes[n])/(e.props.LifeSpan*1e3);const o=this.interp.animVectorVal(e.props.TextureSlot,0),s=o%e.props.Columns,a=Math.floor(o/e.props.Rows),c=1/e.props.Columns,u=1/e.props.Rows;i=s*c+i*c,e.texCoords[n*2*2]=i,e.texCoords[n*2*2+1]=a*u,e.texCoords[n*2*2+2]=i,e.texCoords[n*2*2+3]=(1+a)*u}}setLayerProps(e,r){const n=this.rendererData.model.Textures[r];e.Shading&Tt.TwoSided?this.gl.disable(this.gl.CULL_FACE):this.gl.enable(this.gl.CULL_FACE),e.FilterMode===Re.Transparent?this.gl.uniform1f(this.shaderProgramLocations.discardAlphaLevelUniform,.75):this.gl.uniform1f(this.shaderProgramLocations.discardAlphaLevelUniform,0),e.FilterMode===Re.None?(this.gl.disable(this.gl.BLEND),this.gl.enable(this.gl.DEPTH_TEST),this.gl.depthMask(!0)):e.FilterMode===Re.Transparent?(this.gl.enable(this.gl.BLEND),this.gl.enable(this.gl.DEPTH_TEST),this.gl.blendFuncSeparate(this.gl.SRC_ALPHA,this.gl.ONE_MINUS_SRC_ALPHA,this.gl.ONE,this.gl.ONE_MINUS_SRC_ALPHA),this.gl.depthMask(!0)):e.FilterMode===Re.Blend?(this.gl.enable(this.gl.BLEND),this.gl.enable(this.gl.DEPTH_TEST),this.gl.blendFuncSeparate(this.gl.SRC_ALPHA,this.gl.ONE_MINUS_SRC_ALPHA,this.gl.ONE,this.gl.ONE_MINUS_SRC_ALPHA),this.gl.depthMask(!1)):e.FilterMode===Re.Additive?(this.gl.enable(this.gl.BLEND),this.gl.enable(this.gl.DEPTH_TEST),this.gl.blendFunc(this.gl.SRC_COLOR,this.gl.ONE),this.gl.depthMask(!1)):e.FilterMode===Re.AddAlpha?(this.gl.enable(this.gl.BLEND),this.gl.enable(this.gl.DEPTH_TEST),this.gl.blendFunc(this.gl.SRC_ALPHA,this.gl.ONE),this.gl.depthMask(!1)):e.FilterMode===Re.Modulate?(this.gl.enable(this.gl.BLEND),this.gl.enable(this.gl.DEPTH_TEST),this.gl.blendFuncSeparate(this.gl.ZERO,this.gl.SRC_COLOR,this.gl.ZERO,this.gl.ONE),this.gl.depthMask(!1)):e.FilterMode===Re.Modulate2x&&(this.gl.enable(this.gl.BLEND),this.gl.enable(this.gl.DEPTH_TEST),this.gl.blendFuncSeparate(this.gl.DST_COLOR,this.gl.SRC_COLOR,this.gl.ZERO,this.gl.ONE),this.gl.depthMask(!1)),n.Image?(this.gl.activeTexture(this.gl.TEXTURE0),this.gl.bindTexture(this.gl.TEXTURE_2D,this.rendererData.textures[n.Image]),this.gl.uniform1i(this.shaderProgramLocations.samplerUniform,0),this.gl.uniform1f(this.shaderProgramLocations.replaceableTypeUniform,0)):(n.ReplaceableId===1||n.ReplaceableId===2)&&(this.gl.uniform3fv(this.shaderProgramLocations.replaceableColorUniform,this.rendererData.teamColor),this.gl.uniform1f(this.shaderProgramLocations.replaceableTypeUniform,n.ReplaceableId)),e.Shading&Tt.NoDepthTest&&this.gl.disable(this.gl.DEPTH_TEST),e.Shading&Tt.NoDepthSet&&this.gl.depthMask(!1)}setGeneralBuffers(e){this.gl.bindBuffer(this.gl.ARRAY_BUFFER,e.texCoordBuffer),this.gl.bufferData(this.gl.ARRAY_BUFFER,e.texCoords,this.gl.DYNAMIC_DRAW),this.gl.vertexAttribPointer(this.shaderProgramLocations.textureCoordAttribute,2,this.gl.FLOAT,!1,0,0),this.gl.bindBuffer(this.gl.ARRAY_BUFFER,e.vertexBuffer),this.gl.bufferData(this.gl.ARRAY_BUFFER,e.vertices,this.gl.DYNAMIC_DRAW),this.gl.vertexAttribPointer(this.shaderProgramLocations.vertexPositionAttribute,3,this.gl.FLOAT,!1,0,0)}renderEmitter(e){this.gl.drawArrays(this.gl.TRIANGLE_STRIP,0,e.creationTimes.length*2)}}const uh=`attribute vec3 aVertexPosition;
+attribute vec3 aNormal;
+attribute vec2 aTextureCoord;
+attribute vec4 aGroup;
+
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uNodesMatrices[\${MAX_NODES}];
+
+varying vec3 vNormal;
+varying vec2 vTextureCoord;
+
+void main(void) {
+    vec4 position = vec4(aVertexPosition, 1.0);
+    int count = 1;
+    vec4 sum = uNodesMatrices[int(aGroup[0])] * position;
+
+    if (aGroup[1] < \${MAX_NODES}.) {
+        sum += uNodesMatrices[int(aGroup[1])] * position;
+        count += 1;
+    }
+    if (aGroup[2] < \${MAX_NODES}.) {
+        sum += uNodesMatrices[int(aGroup[2])] * position;
+        count += 1;
+    }
+    if (aGroup[3] < \${MAX_NODES}.) {
+        sum += uNodesMatrices[int(aGroup[3])] * position;
+        count += 1;
+    }
+    sum.xyz /= float(count);
+    sum.w = 1.;
+    position = sum;
+
+    gl_Position = uPMatrix * uMVMatrix * position;
+    vTextureCoord = aTextureCoord;
+    vNormal = aNormal;
+}`,dh=`attribute vec3 aVertexPosition;
+attribute vec3 aNormal;
+attribute vec2 aTextureCoord;
+
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+
+varying vec3 vNormal;
+varying vec2 vTextureCoord;
+
+void main(void) {
+    vec4 position = vec4(aVertexPosition, 1.0);
+    gl_Position = uPMatrix * uMVMatrix * position;
+    vTextureCoord = aTextureCoord;
+    vNormal = aNormal;
+}`,fh=`precision mediump float;
+
+varying vec3 vNormal;
+varying vec2 vTextureCoord;
+
+uniform sampler2D uSampler;
+uniform vec3 uReplaceableColor;
+uniform float uReplaceableType;
+uniform float uDiscardAlphaLevel;
+uniform mat3 uTVertexAnim;
+uniform float uWireframe;
+
+float hypot (vec2 z) {
+    float t;
+    float x = abs(z.x);
+    float y = abs(z.y);
+    t = min(x, y);
+    x = max(x, y);
+    t = t / x;
+    return (z.x == 0.0 && z.y == 0.0) ? 0.0 : x * sqrt(1.0 + t * t);
+}
+
+void main(void) {
+    if (uWireframe > 0.) {
+        gl_FragColor = vec4(1.);
+        return;
+    }
+
+    vec2 texCoord = (uTVertexAnim * vec3(vTextureCoord.s, vTextureCoord.t, 1.)).st;
+
+    if (uReplaceableType == 0.) {
+        gl_FragColor = texture2D(uSampler, texCoord);
+    } else if (uReplaceableType == 1.) {
+        gl_FragColor = vec4(uReplaceableColor, 1.0);
+    } else if (uReplaceableType == 2.) {
+        float dist = hypot(texCoord - vec2(0.5, 0.5)) * 2.;
+        float truncateDist = clamp(1. - dist * 1.4, 0., 1.);
+        float alpha = sin(truncateDist);
+        gl_FragColor = vec4(uReplaceableColor * alpha, 1.0);
+    }
+
+    // hand-made alpha-test
+    if (gl_FragColor[3] < uDiscardAlphaLevel) {
+        discard;
+    }
+}
+`,hh=`attribute vec3 aVertexPosition;
+attribute vec3 aNormal;
+attribute vec2 aTextureCoord;
+attribute vec4 aSkin;
+attribute vec4 aBoneWeight;
+attribute vec4 aTangent;
+
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uNodesMatrices[\${MAX_NODES}];
+
+varying vec3 vNormal;
+varying vec3 vTangent;
+varying vec3 vBinormal;
+varying vec2 vTextureCoord;
+varying mat3 vTBN;
+varying vec3 vFragPos;
+
+void main(void) {
+    vec4 position = vec4(aVertexPosition, 1.0);
+    mat4 sum;
+
+    // sum += uNodesMatrices[int(aSkin[0])] * 1.;
+    sum += uNodesMatrices[int(aSkin[0])] * aBoneWeight[0];
+    sum += uNodesMatrices[int(aSkin[1])] * aBoneWeight[1];
+    sum += uNodesMatrices[int(aSkin[2])] * aBoneWeight[2];
+    sum += uNodesMatrices[int(aSkin[3])] * aBoneWeight[3];
+
+    mat3 rotation = mat3(sum);
+
+    position = sum * position;
+    position.w = 1.;
+
+    gl_Position = uPMatrix * uMVMatrix * position;
+    vTextureCoord = aTextureCoord;
+
+    vec3 normal = aNormal;
+    vec3 tangent = aTangent.xyz;
+
+    // https://learnopengl.com/Advanced-Lighting/Normal-Mapping
+    tangent = normalize(tangent - dot(tangent, normal) * normal);
+
+    vec3 binormal = cross(normal, tangent) * aTangent.w;
+
+    normal = normalize(rotation * normal);
+    tangent = normalize(rotation * tangent);
+    binormal = normalize(rotation * binormal);
+
+    vNormal = normal;
+    vTangent = tangent;
+    vBinormal = binormal;
+
+    vTBN = mat3(tangent, binormal, normal);
+
+    vFragPos = position.xyz;
+}`,gh=`#version 300 es
+in vec3 aVertexPosition;
+in vec3 aNormal;
+in vec2 aTextureCoord;
+in vec4 aSkin;
+in vec4 aBoneWeight;
+in vec4 aTangent;
+
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uNodesMatrices[\${MAX_NODES}];
+
+out vec3 vNormal;
+out vec3 vTangent;
+out vec3 vBinormal;
+out vec2 vTextureCoord;
+out mat3 vTBN;
+out vec3 vFragPos;
+
+void main(void) {
+    vec4 position = vec4(aVertexPosition, 1.0);
+    mat4 sum;
+
+    // sum += uNodesMatrices[int(aSkin[0])] * 1.;
+    sum += uNodesMatrices[int(aSkin[0])] * aBoneWeight[0];
+    sum += uNodesMatrices[int(aSkin[1])] * aBoneWeight[1];
+    sum += uNodesMatrices[int(aSkin[2])] * aBoneWeight[2];
+    sum += uNodesMatrices[int(aSkin[3])] * aBoneWeight[3];
+
+    mat3 rotation = mat3(sum);
+
+    position = sum * position;
+    position.w = 1.;
+
+    gl_Position = uPMatrix * uMVMatrix * position;
+    vTextureCoord = aTextureCoord;
+
+    vec3 normal = aNormal;
+    vec3 tangent = aTangent.xyz;
+
+    // https://learnopengl.com/Advanced-Lighting/Normal-Mapping
+    tangent = normalize(tangent - dot(tangent, normal) * normal);
+
+    vec3 binormal = cross(normal, tangent) * aTangent.w;
+
+    normal = normalize(rotation * normal);
+    tangent = normalize(rotation * tangent);
+    binormal = normalize(rotation * binormal);
+
+    vNormal = normal;
+    vTangent = tangent;
+    vBinormal = binormal;
+
+    vTBN = mat3(tangent, binormal, normal);
+
+    vFragPos = position.xyz;
+}`,mh=`precision mediump float;
+
+varying vec2 vTextureCoord;
+varying vec3 vNormal;
+varying vec3 vTangent;
+varying vec3 vBinormal;
+varying mat3 vTBN;
+varying vec3 vFragPos;
+
+uniform sampler2D uSampler;
+uniform sampler2D uNormalSampler;
+uniform sampler2D uOrmSampler;
+uniform vec3 uReplaceableColor;
+uniform float uDiscardAlphaLevel;
+uniform mat3 uTVertexAnim;
+uniform vec3 uLightPos;
+uniform vec3 uLightColor;
+uniform vec3 uCameraPos;
+uniform vec3 uShadowParams;
+uniform sampler2D uShadowMapSampler;
+uniform mat4 uShadowMapLightMatrix;
+uniform float uWireframe;
+
+const float PI = 3.14159265359;
+const float gamma = 2.2;
+
+float distributionGGX(vec3 normal, vec3 halfWay, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float nDotH = max(dot(normal, halfWay), 0.0);
+    float nDotH2 = nDotH * nDotH;
+
+    float num = a2;
+    float denom = (nDotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+
+    return num / denom;
+}
+
+float geometrySchlickGGX(float nDotV, float roughness) {
+    float r = roughness + 1.;
+    float k = r * r / 8.;
+    // float k = roughness * roughness / 2.;
+
+    float num = nDotV;
+    float denom = nDotV * (1. - k) + k;
+
+    return num / denom;
+}
+
+float geometrySmith(vec3 normal, vec3 viewDir, vec3 lightDir, float roughness) {
+    float nDotV = max(dot(normal, viewDir), .0);
+    float nDotL = max(dot(normal, lightDir), .0);
+    float ggx2  = geometrySchlickGGX(nDotV, roughness);
+    float ggx1  = geometrySchlickGGX(nDotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+vec3 fresnelSchlick(float lightFactor, vec3 f0) {
+    return f0 + (1. - f0) * pow(clamp(1. - lightFactor, 0., 1.), 5.);
+}
+
+void main(void) {
+    if (uWireframe > 0.) {
+        gl_FragColor = vec4(1.);
+        return;
+    }
+
+    vec2 texCoord = (uTVertexAnim * vec3(vTextureCoord.s, vTextureCoord.t, 1.)).st;
+
+    vec4 orm = texture2D(uOrmSampler, texCoord);
+
+    float occlusion = orm.r;
+    float roughness = orm.g;
+    float metallic = orm.b;
+    float teamColorFactor = orm.a;
+
+    vec4 baseColor = texture2D(uSampler, texCoord);
+    vec3 teamColor = baseColor.rgb * uReplaceableColor;
+    baseColor.rgb = mix(baseColor.rgb, teamColor, teamColorFactor);
+    baseColor.rgb = pow(baseColor.rgb, vec3(gamma));
+
+    vec3 normal = texture2D(uNormalSampler, texCoord).rgb;
+    normal = normal * 2.0 - 1.0;
+    normal.x = -normal.x;
+    normal.y = -normal.y;
+    if (!gl_FrontFacing) {
+        normal = -normal;
+    }
+    normal = normalize(vTBN * -normal);
+
+    vec3 viewDir = normalize(uCameraPos - vFragPos);
+    vec3 reflected = reflect(-viewDir, normal);
+
+    vec3 lightDir = normalize(uLightPos - vFragPos);
+    float lightFactor = max(dot(normal, lightDir), .0);
+    vec3 radiance = uLightColor;
+
+    vec3 f0 = vec3(.04);
+    f0 = mix(f0, baseColor.rgb, metallic);
+
+    vec3 totalLight = vec3(0.);
+    vec3 halfWay = normalize(viewDir + lightDir);
+    float ndf = distributionGGX(normal, halfWay, roughness);
+    float g = geometrySmith(normal, viewDir, lightDir, roughness);
+    vec3 f = fresnelSchlick(max(dot(halfWay, viewDir), 0.), f0);
+
+    vec3 kS = f;
+    // vec3 kD = vec3(1.) - kS;
+    vec3 kD = vec3(1.);
+    // kD *= 1.0 - metallic;
+    vec3 num = ndf * g * f;
+    float denom = 4. * max(dot(normal, viewDir), 0.) * max(dot(normal, lightDir), 0.) + .0001;
+    vec3 specular = num / denom;
+
+    totalLight = (kD * baseColor.rgb / PI + specular) * radiance * lightFactor;
+
+    if (uShadowParams[0] > .5) {
+        float shadowBias = uShadowParams[1];
+        float shadowStep = uShadowParams[2];
+        vec4 fragInLightPos = uShadowMapLightMatrix * vec4(vFragPos, 1.);
+        vec3 shadowMapCoord = fragInLightPos.xyz / fragInLightPos.w;
+        shadowMapCoord.xyz = (shadowMapCoord.xyz + 1.0) * .5;
+
+        int passes = 5;
+        float step = 1. / float(passes);
+
+        float lightDepth = texture2D(uShadowMapSampler, shadowMapCoord.xy).r;
+        float lightDepth0 = texture2D(uShadowMapSampler, vec2(shadowMapCoord.x + shadowStep, shadowMapCoord.y)).r;
+        float lightDepth1 = texture2D(uShadowMapSampler, vec2(shadowMapCoord.x, shadowMapCoord.y + shadowStep)).r;
+        float lightDepth2 = texture2D(uShadowMapSampler, vec2(shadowMapCoord.x, shadowMapCoord.y - shadowStep)).r;
+        float lightDepth3 = texture2D(uShadowMapSampler, vec2(shadowMapCoord.x - shadowStep, shadowMapCoord.y)).r;
+        float currentDepth = shadowMapCoord.z;
+
+        float visibility = 0.;
+        if (lightDepth > currentDepth - shadowBias) {
+            visibility += step;
+        }
+        if (lightDepth0 > currentDepth - shadowBias) {
+            visibility += step;
+        }
+        if (lightDepth1 > currentDepth - shadowBias) {
+            visibility += step;
+        }
+        if (lightDepth2 > currentDepth - shadowBias) {
+            visibility += step;
+        }
+        if (lightDepth3 > currentDepth - shadowBias) {
+            visibility += step;
+        }
+
+        totalLight *= visibility;
+    }
+
+    vec3 color;
+
+    vec3 ambient = vec3(.03);
+    ambient *= baseColor.rgb * occlusion;
+    color = ambient + totalLight;
+
+    color = color / (vec3(1.) + color);
+    color = pow(color, vec3(1. / gamma));
+
+    gl_FragColor = vec4(color, 1.);
+
+    // hand-made alpha-test
+    if (gl_FragColor[3] < uDiscardAlphaLevel) {
+        discard;
+    }
+}
+`,ph=`#version 300 es
+precision mediump float;
+
+in vec2 vTextureCoord;
+in vec3 vNormal;
+in vec3 vTangent;
+in vec3 vBinormal;
+in mat3 vTBN;
+in vec3 vFragPos;
+
+out vec4 FragColor;
+
+uniform sampler2D uSampler;
+uniform sampler2D uNormalSampler;
+uniform sampler2D uOrmSampler;
+uniform vec3 uReplaceableColor;
+uniform float uDiscardAlphaLevel;
+uniform mat3 uTVertexAnim;
+uniform vec3 uLightPos;
+uniform vec3 uLightColor;
+uniform vec3 uCameraPos;
+uniform vec3 uShadowParams;
+uniform sampler2D uShadowMapSampler;
+uniform mat4 uShadowMapLightMatrix;
+uniform bool uHasEnv;
+uniform samplerCube uIrradianceMap;
+uniform samplerCube uPrefilteredEnv;
+uniform sampler2D uBRDFLUT;
+uniform float uWireframe;
+
+const float PI = 3.14159265359;
+const float gamma = 2.2;
+const float MAX_REFLECTION_LOD = \${MAX_ENV_MIP_LEVELS};
+
+float distributionGGX(vec3 normal, vec3 halfWay, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float nDotH = max(dot(normal, halfWay), 0.0);
+    float nDotH2 = nDotH * nDotH;
+
+    float num = a2;
+    float denom = (nDotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+
+    return num / denom;
+}
+
+float geometrySchlickGGX(float nDotV, float roughness) {
+    float r = roughness + 1.;
+    float k = r * r / 8.;
+    // float k = roughness * roughness / 2.;
+
+    float num = nDotV;
+    float denom = nDotV * (1. - k) + k;
+
+    return num / denom;
+}
+
+float geometrySmith(vec3 normal, vec3 viewDir, vec3 lightDir, float roughness) {
+    float nDotV = max(dot(normal, viewDir), .0);
+    float nDotL = max(dot(normal, lightDir), .0);
+    float ggx2  = geometrySchlickGGX(nDotV, roughness);
+    float ggx1  = geometrySchlickGGX(nDotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+vec3 fresnelSchlick(float lightFactor, vec3 f0) {
+    return f0 + (1. - f0) * pow(clamp(1. - lightFactor, 0., 1.), 5.);
+}
+
+vec3 fresnelSchlickRoughness(float lightFactor, vec3 f0, float roughness) {
+    return f0 + (max(vec3(1.0 - roughness), f0) - f0) * pow(clamp(1.0 - lightFactor, 0.0, 1.0), 5.0);
+}
+
+void main(void) {
+    if (uWireframe > 0.) {
+        FragColor = vec4(1.);
+        return;
+    }
+
+    vec2 texCoord = (uTVertexAnim * vec3(vTextureCoord.s, vTextureCoord.t, 1.)).st;
+
+    vec4 orm = texture(uOrmSampler, texCoord);
+
+    float occlusion = orm.r;
+    float roughness = orm.g;
+    float metallic = orm.b;
+    float teamColorFactor = orm.a;
+
+    vec4 baseColor = texture(uSampler, texCoord);
+    vec3 teamColor = baseColor.rgb * uReplaceableColor;
+    baseColor.rgb = mix(baseColor.rgb, teamColor, teamColorFactor);
+    baseColor.rgb = pow(baseColor.rgb, vec3(gamma));
+
+    vec3 normal = texture(uNormalSampler, texCoord).rgb;
+    normal = normal * 2.0 - 1.0;
+    normal.x = -normal.x;
+    normal.y = -normal.y;
+    if (!gl_FrontFacing) {
+        normal = -normal;
+    }
+    normal = normalize(vTBN * -normal);
+
+    vec3 viewDir = normalize(uCameraPos - vFragPos);
+    vec3 reflected = reflect(-viewDir, normal);
+
+    vec3 lightDir = normalize(uLightPos - vFragPos);
+    float lightFactor = max(dot(normal, lightDir), .0);
+    vec3 radiance = uLightColor;
+
+    vec3 f0 = vec3(.04);
+    f0 = mix(f0, baseColor.rgb, metallic);
+
+    vec3 totalLight = vec3(0.);
+    vec3 halfWay = normalize(viewDir + lightDir);
+    float ndf = distributionGGX(normal, halfWay, roughness);
+    float g = geometrySmith(normal, viewDir, lightDir, roughness);
+    vec3 f = fresnelSchlick(max(dot(halfWay, viewDir), 0.), f0);
+
+    vec3 kS = f;
+    vec3 kD = vec3(1.);// - kS;
+    if (uHasEnv) {
+        kD *= 1.0 - metallic;
+    }
+    vec3 num = ndf * g * f;
+    float denom = 4. * max(dot(normal, viewDir), 0.) * max(dot(normal, lightDir), 0.) + .0001;
+    vec3 specular = num / denom;
+
+    totalLight = (kD * baseColor.rgb / PI + specular) * radiance * lightFactor;
+
+    if (uShadowParams[0] > .5) {
+        float shadowBias = uShadowParams[1];
+        float shadowStep = uShadowParams[2];
+        vec4 fragInLightPos = uShadowMapLightMatrix * vec4(vFragPos, 1.);
+        vec3 shadowMapCoord = fragInLightPos.xyz / fragInLightPos.w;
+        shadowMapCoord.xyz = (shadowMapCoord.xyz + 1.0) * .5;
+
+        int passes = 5;
+        float step = 1. / float(passes);
+
+        float lightDepth = texture(uShadowMapSampler, shadowMapCoord.xy).r;
+        float lightDepth0 = texture(uShadowMapSampler, vec2(shadowMapCoord.x + shadowStep, shadowMapCoord.y)).r;
+        float lightDepth1 = texture(uShadowMapSampler, vec2(shadowMapCoord.x, shadowMapCoord.y + shadowStep)).r;
+        float lightDepth2 = texture(uShadowMapSampler, vec2(shadowMapCoord.x, shadowMapCoord.y - shadowStep)).r;
+        float lightDepth3 = texture(uShadowMapSampler, vec2(shadowMapCoord.x - shadowStep, shadowMapCoord.y)).r;
+        float currentDepth = shadowMapCoord.z;
+
+        float visibility = 0.;
+        if (lightDepth > currentDepth - shadowBias) {
+            visibility += step;
+        }
+        if (lightDepth0 > currentDepth - shadowBias) {
+            visibility += step;
+        }
+        if (lightDepth1 > currentDepth - shadowBias) {
+            visibility += step;
+        }
+        if (lightDepth2 > currentDepth - shadowBias) {
+            visibility += step;
+        }
+        if (lightDepth3 > currentDepth - shadowBias) {
+            visibility += step;
+        }
+
+        totalLight *= visibility;
+    }
+
+    vec3 color;
+
+    if (uHasEnv) {
+        vec3 f = fresnelSchlickRoughness(max(dot(normal, viewDir), 0.0), f0, roughness);
+        vec3 kS = f;
+        vec3 kD = vec3(1.0) - kS;
+        kD *= 1.0 - metallic;
+
+        vec3 diffuse = texture(uIrradianceMap, normal).rgb * baseColor.rgb;
+        vec3 prefilteredColor = textureLod(uPrefilteredEnv, reflected, roughness * MAX_REFLECTION_LOD).rgb;
+        vec2 envBRDF = texture(uBRDFLUT, vec2(max(dot(normal, viewDir), 0.0), roughness)).rg;
+        specular = prefilteredColor * (f * envBRDF.x + envBRDF.y);
+
+        vec3 ambient = (kD * diffuse + specular) * occlusion;
+        color = ambient + totalLight;
+    } else {
+        vec3 ambient = vec3(.03);
+        ambient *= baseColor.rgb * occlusion;
+        color = ambient + totalLight;
+    }
+
+    color = color / (vec3(1.) + color);
+    color = pow(color, vec3(1. / gamma));
+
+    FragColor = vec4(color, baseColor.a);
+
+    // hand-made alpha-test
+    if (FragColor[3] < uDiscardAlphaLevel) {
+        discard;
+    }
+}
+`,vh=`attribute vec3 aVertexPosition;
+attribute vec3 aColor;
+
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+
+varying vec3 vColor;
+
+void main(void) {
+    vec4 position = vec4(aVertexPosition, 1.0);
+    gl_Position = uPMatrix * uMVMatrix * position;
+    vColor = aColor;
+}`,bh=`precision mediump float;
+
+varying vec3 vColor;
+
+void main(void) {
+    gl_FragColor = vec4(vColor, 1.0);
+}`,xh=`attribute vec3 aPos;
+
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+
+varying vec3 vLocalPos;
+
+void main(void) {
+    vLocalPos = aPos;
+    gl_Position = uPMatrix * uMVMatrix * vec4(aPos, 1.0);
+}`,Sh=`precision mediump float;
+
+varying vec3 vLocalPos;
+
+uniform sampler2D uEquirectangularMap;
+
+const vec2 invAtan = vec2(0.1591, 0.3183);
+
+vec2 SampleSphericalMap(vec3 v) {
+    // vec2 uv = vec2(atan(v.z, v.x), asin(v.y));
+    vec2 uv = vec2(atan(v.x, v.y), asin(-v.z));
+    uv *= invAtan;
+    uv += 0.5;
+    return uv;
+}
+
+void main(void) {
+    vec2 uv = SampleSphericalMap(normalize(vLocalPos)); // make sure to normalize localPos
+    vec3 color = texture2D(uEquirectangularMap, uv).rgb;
+
+    gl_FragColor = vec4(color, 1.0);
+}`,wh=`#version 300 es
+
+in vec3 aPos;
+out vec3 vLocalPos;
+
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+
+void main(void) {
+    vLocalPos = aPos;
+    mat4 rotView = mat4(mat3(uMVMatrix)); // remove translation from the view matrix
+    vec4 clipPos = uPMatrix * rotView * 1000. * vec4(aPos, 1.0);
+
+    gl_Position = clipPos.xyww;
+}`,Ph=`#version 300 es
+precision mediump float;
+
+in vec3 vLocalPos;
+
+out vec4 FragColor;
+
+uniform samplerCube uEnvironmentMap;
+
+void main(void) {
+    // vec3 envColor = textureLod(uEnvironmentMap, vLocalPos, 0.0).rgb;
+    vec3 envColor = texture(uEnvironmentMap, vLocalPos).rgb;
+
+    FragColor = vec4(envColor, 1.0);
+}`,Th=`attribute vec3 aPos;
+
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+
+varying vec3 vLocalPos;
+
+void main(void) {
+    vLocalPos = aPos;
+    gl_Position = uPMatrix * uMVMatrix * vec4(aPos, 1.0);
+}`,yh=`precision mediump float;
+
+varying vec3 vLocalPos;
+
+uniform samplerCube uEnvironmentMap;
+
+const float PI = 3.14159265359;
+const float gamma = 2.2;
+
+void main(void) {
+    vec3 irradiance = vec3(0.0);
+
+    // the sample direction equals the hemisphere's orientation
+    vec3 normal = normalize(vLocalPos);
+
+    vec3 up    = vec3(0.0, 1.0, 0.0);
+    vec3 right = normalize(cross(up, normal));
+    up         = normalize(cross(normal, right));
+
+    const float sampleDelta = 0.025;
+    float nrSamples = 0.0;
+    for(float phi = 0.0; phi < 2.0 * PI; phi += sampleDelta)
+    {
+        for(float theta = 0.0; theta < 0.5 * PI; theta += sampleDelta)
+        {
+            // spherical to cartesian (in tangent space)
+            vec3 tangentSample = vec3(sin(theta) * cos(phi),  sin(theta) * sin(phi), cos(theta));
+            // tangent space to world
+            vec3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * normal;
+
+            irradiance += pow(textureCube(uEnvironmentMap, sampleVec).rgb, vec3(gamma)) * cos(theta) * sin(theta);
+            nrSamples++;
+        }
+    }
+    irradiance = PI * irradiance * (1.0 / float(nrSamples));
+
+    gl_FragColor = vec4(irradiance, 1.0);
+}`,Uh=`#version 300 es
+
+in vec3 aPos;
+
+out vec3 vLocalPos;
+
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+
+void main(void) {
+    vLocalPos = aPos;
+    gl_Position = uPMatrix * uMVMatrix * vec4(aPos, 1.0);
+}`,Ch=`#version 300 es
+precision mediump float;
+
+out vec4 FragColor;
+
+in vec3 vLocalPos;
+
+uniform samplerCube uEnvironmentMap;
+uniform float uRoughness;
+
+const float PI = 3.14159265359;
+const float gamma = 2.2;
+
+float RadicalInverse_VdC(uint bits) {
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10; // / 0x100000000
+}
+
+vec2 Hammersley(uint i, uint N) {
+    return vec2(float(i)/float(N), RadicalInverse_VdC(i));
+}
+
+vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness) {
+    float a = roughness * roughness;
+
+    float phi = 2.0 * PI * Xi.x;
+    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));
+    float sinTheta = sqrt(1.0 - cosTheta*cosTheta);
+
+    // from spherical coordinates to cartesian coordinates
+    vec3 H;
+    H.x = cos(phi) * sinTheta;
+    H.y = sin(phi) * sinTheta;
+    H.z = cosTheta;
+
+    // from tangent-space vector to world-space sample vector
+    vec3 up        = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 tangent   = normalize(cross(up, N));
+    vec3 bitangent = cross(N, tangent);
+
+    vec3 sampleVec = tangent * H.x + bitangent * H.y + N * H.z;
+
+    return normalize(sampleVec);
+}
+
+void main() {
+    vec3 N = normalize(vLocalPos);
+    vec3 R = N;
+    vec3 V = R;
+
+    const uint SAMPLE_COUNT = 1024u;
+    float totalWeight = 0.0;
+    vec3 prefilteredColor = vec3(0.0);
+    for(uint i = 0u; i < SAMPLE_COUNT; ++i)
+    {
+        vec2 Xi = Hammersley(i, SAMPLE_COUNT);
+        vec3 H  = ImportanceSampleGGX(Xi, N, uRoughness);
+        vec3 L  = normalize(2.0 * dot(V, H) * H - V);
+
+        float NdotL = max(dot(N, L), 0.0);
+        if(NdotL > 0.0) {
+            prefilteredColor += pow(texture(uEnvironmentMap, L).rgb, vec3(gamma)) * NdotL;
+            totalWeight      += NdotL;
+        }
+    }
+    prefilteredColor = prefilteredColor / totalWeight;
+
+    FragColor = vec4(prefilteredColor, 1.0);
+}`,Bh=`#version 300 es
+
+in vec3 aPos;
+
+out vec2 vLocalPos;
+
+void main(void) {
+    vLocalPos = aPos.xy;
+    gl_Position = vec4(aPos, 1.0);
+}`,Eh=`#version 300 es
+precision mediump float;
+
+in vec2 vLocalPos;
+
+out vec4 FragColor;
+
+const float PI = 3.14159265359;
+
+float RadicalInverse_VdC(uint bits) {
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10; // / 0x100000000
+}
+
+vec2 Hammersley(uint i, uint N) {
+    return vec2(float(i)/float(N), RadicalInverse_VdC(i));
+}
+
+vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness) {
+    float a = roughness * roughness;
+
+    float phi = 2.0 * PI * Xi.x;
+    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));
+    float sinTheta = sqrt(1.0 - cosTheta*cosTheta);
+
+    // from spherical coordinates to cartesian coordinates
+    vec3 H;
+    H.x = cos(phi) * sinTheta;
+    H.y = sin(phi) * sinTheta;
+    H.z = cosTheta;
+
+    // from tangent-space vector to world-space sample vector
+    vec3 up        = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 tangent   = normalize(cross(up, N));
+    vec3 bitangent = cross(N, tangent);
+
+    vec3 sampleVec = tangent * H.x + bitangent * H.y + N * H.z;
+
+    return normalize(sampleVec);
+}
+
+float geometrySchlickGGX(float nDotV, float roughness) {
+    float r = roughness;
+    float k = r * r / 2.;
+
+    float num = nDotV;
+    float denom = nDotV * (1. - k) + k;
+
+    return num / denom;
+}
+
+float geometrySmith(vec3 normal, vec3 viewDir, vec3 lightDir, float roughness) {
+    float nDotV = max(dot(normal, viewDir), .0);
+    float nDotL = max(dot(normal, lightDir), .0);
+    float ggx2  = geometrySchlickGGX(nDotV, roughness);
+    float ggx1  = geometrySchlickGGX(nDotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+vec2 IntegrateBRDF(float NdotV, float roughness) {
+    vec3 V;
+    V.x = sqrt(1.0 - NdotV*NdotV);
+    V.y = 0.0;
+    V.z = NdotV;
+
+    float A = 0.0;
+    float B = 0.0;
+
+    vec3 N = vec3(0.0, 0.0, 1.0);
+
+    const uint SAMPLE_COUNT = 1024u;
+    for(uint i = 0u; i < SAMPLE_COUNT; ++i)
+    {
+        vec2 Xi = Hammersley(i, SAMPLE_COUNT);
+        vec3 H  = ImportanceSampleGGX(Xi, N, roughness);
+        vec3 L  = normalize(2.0 * dot(V, H) * H - V);
+
+        float NdotL = max(L.z, 0.0);
+        float NdotH = max(H.z, 0.0);
+        float VdotH = max(dot(V, H), 0.0);
+
+        if(NdotL > 0.0)
+        {
+            float G = geometrySmith(N, V, L, roughness);
+            float G_Vis = (G * VdotH) / (NdotH * NdotV);
+            float Fc = pow(1.0 - VdotH, 5.0);
+
+            A += (1.0 - Fc) * G_Vis;
+            B += Fc * G_Vis;
+        }
+    }
+    A /= float(SAMPLE_COUNT);
+    B /= float(SAMPLE_COUNT);
+    return vec2(A, B);
+}
+
+void main() {
+    FragColor = vec4(IntegrateBRDF((vLocalPos.x + 1.0) * .5, (vLocalPos.y + 1.0) * .5), 0., 1.);
+}`,Ah=`struct VSUniforms {
+    mvMatrix: mat4x4f,
+    pMatrix: mat4x4f,
+    nodesMatrices: array<mat4x4f, \${MAX_NODES}>,
+}
+
+struct FSUniforms {
+    replaceableColor: vec3f,
+    replaceableType: u32,
+    discardAlphaLevel: f32,
+    wireframe: u32,
+    tVertexAnim: mat3x3f,
+}
+
+@group(0) @binding(0) var<uniform> vsUniforms: VSUniforms;
+@group(1) @binding(0) var<uniform> fsUniforms: FSUniforms;
+@group(1) @binding(1) var fsUniformSampler: sampler;
+@group(1) @binding(2) var fsUniformTexture: texture_2d<f32>;
+
+struct VSIn {
+    @location(0) vertexPosition: vec3f,
+    @location(1) normal: vec3f,
+    @location(2) textureCoord: vec2f,
+    @location(3) group: vec4<u32>,
+}
+
+struct VSOut {
+    @builtin(position) position: vec4f,
+    @location(0) normal: vec3f,
+    @location(1) textureCoord: vec2f,
+}
+
+@vertex fn vs(
+    in: VSIn
+) -> VSOut {
+    var position: vec4f = vec4f(in.vertexPosition, 1.0);
+    var count: i32 = 1;
+    var sum: vec4f = vsUniforms.nodesMatrices[in.group[0]] * position;
+
+    if (in.group[1] < \${MAX_NODES}) {
+        sum += vsUniforms.nodesMatrices[in.group[1]] * position;
+        count += 1;
+    }
+    if (in.group[2] < \${MAX_NODES}) {
+        sum += vsUniforms.nodesMatrices[in.group[2]] * position;
+        count += 1;
+    }
+    if (in.group[3] < \${MAX_NODES}) {
+        sum += vsUniforms.nodesMatrices[in.group[3]] * position;
+        count += 1;
+    }
+    sum /= f32(count);
+    sum.w = 1.;
+    position = sum;
+
+    var out: VSOut;
+    out.position = vsUniforms.pMatrix * vsUniforms.mvMatrix * position;
+    out.textureCoord = in.textureCoord;
+    out.normal = in.normal;
+    return out;
+}
+
+fn hypot(z: vec2f) -> f32 {
+    var t: f32 = 0;
+    var x: f32 = abs(z.x);
+    let y: f32 = abs(z.y);
+    t = min(x, y);
+    x = max(x, y);
+    t = t / x;
+    if (z.x == 0.0 && z.y == 0.0) {
+        return 0.0;
+    }
+    return x * sqrt(1.0 + t * t);
+}
+
+@fragment fn fs(
+    in: VSOut
+) -> @location(0) vec4f {
+    if (fsUniforms.wireframe > 0) {
+        return vec4f(1);
+    }
+
+    let texCoord: vec2f = (fsUniforms.tVertexAnim * vec3f(in.textureCoord.x, in.textureCoord.y, 1.)).xy;
+    var color: vec4f = vec4f(0.0);
+
+    if (fsUniforms.replaceableType == 0) {
+        color = textureSample(fsUniformTexture, fsUniformSampler, texCoord);
+    } else if (fsUniforms.replaceableType == 1) {
+        color = vec4f(fsUniforms.replaceableColor, 1.0);
+    } else if (fsUniforms.replaceableType == 2) {
+        let dist: f32 = hypot(texCoord - vec2(0.5, 

@@ -1,0 +1,20 @@
+#pragma once
+
+#include <rts/core/types.hpp>
+
+namespace rts {
+
+class Mesh;
+class Texture;
+class ShaderProgram;
+
+struct RenderCommand {
+    const Mesh*          mesh            = nullptr;
+    const Texture*       texture         = nullptr;
+    const ShaderProgram* shader          = nullptr;
+    Mat4                 transform       = Mat4(1.0f);
+    const Mat4*          bone_transforms = nullptr;
+    u32                  bone_count      = 0;
+};
+
+}  // namespace rts

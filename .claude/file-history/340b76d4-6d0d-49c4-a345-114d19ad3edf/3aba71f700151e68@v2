@@ -1,0 +1,16 @@
+import { useRef } from 'react';
+import { useRendererRegistration } from '../hooks/useRendererRegistration';
+
+export default function MenuPanel() {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useRendererRegistration('menuPanels', () => ({ ref: () => ref.current! }));
+
+  return (
+    <div
+      ref={ref}
+      className="menu-panel-demo"
+      style={{ width: '256px', height: '320px', borderRadius: '4px' }}
+    />
+  );
+}

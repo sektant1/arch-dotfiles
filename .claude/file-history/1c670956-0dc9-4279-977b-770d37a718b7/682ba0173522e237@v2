@@ -1,0 +1,65 @@
+#include <rts/assets/asset_manager.hpp>
+#include <rts/core/logger.hpp>
+#include <stdexcept>
+#include <algorithm>
+
+namespace rts {
+
+void AssetManager::register_texture_loader(const std::string& extension,
+                                            std::unique_ptr<ITextureLoader> loader) {
+    m_texture_loaders[extension] = std::move(loader);
+}
+
+void AssetManager::register_model_loader(const std::string& extension,
+                                          std::unique_ptr<IModelLoader> loader) {
+    m_model_loaders[extension] = std::move(loader);
+}
+
+TextureData AssetManager::load_texture(const std::string& path) {
+    auto cache_it = m_texture_cache.find(path);
+    if (cache_it != m_texture_cache.end()) return cache_it->second;
+
+    auto ext = get_extension(path);
+    auto it  = m_texture_loaders.find(ext);
+    if (it == m_texture_loaders.end()) {
+        throw std::runtime_error("No texture loader registered for extension: " + ext);
+    }
+
+    auto data = it->second->load(path);
+    m_texture_cache[path] = data;
+    RTS_LOG_INFO("Texture loaded: {} ({}x{})", path, data.width, data.height);
+    return data;
+}
+
+std::vector<ModelData> AssetManager::load_model(const std::string& path) {
+    auto cache_it = m_model_cache.find(path);
+    if (cache_it != m_model_cache.end()) return cache_it->second;
+
+    auto ext = get_extension(path);
+    auto it  = m_model_loaders.find(ext);
+    if (it == m_model_loaders.end()) {
+        throw std::runtime_error("No model loader registered for extension: " + ext);
+    }
+
+    auto models = it->second->load(path);
+    m_model_cache[path] = models;
+    RTS_LOG_INFO("Model loaded: {} ({} mesh(es))", path, models.size());
+    return models;
+}
+
+void AssetManager::clear_cache() {
+    m_texture_cache.clear();
+    m_model_cache.clear();
+}
+
+std::string AssetManager::get_extension(const std::string& path) const {
+    auto dot = path.rfind('.');
+    if (dot == std::string::npos) {
+        throw std::runtime_error("File has no extension: " + path);
+    }
+    std::string ext = path.substr(dot);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    return ext;
+}
+
+}  // namespace rts

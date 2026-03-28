@@ -1,0 +1,69 @@
+#include <rts/renderer/renderer.hpp>
+#include <rts/renderer/mesh.hpp>
+#include <rts/renderer/texture.hpp>
+#include <rts/renderer/shader.hpp>
+#include <rts/core/logger.hpp>
+#include <glad/glad.h>
+#include <algorithm>
+
+namespace rts {
+
+void Renderer::init() {
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    RTS_LOG_INFO("Renderer initialized (OpenGL {})",
+                 reinterpret_cast<const char*>(glGetString(GL_VERSION)));
+}
+
+void Renderer::begin_frame(const Vec4& clear_color) {
+    glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    m_commands.clear();
+}
+
+void Renderer::submit(const RenderCommand& command) {
+    m_commands.push_back(command);
+}
+
+void Renderer::flush() {
+    // Sort front-to-back (by Z translation) for early-Z benefit on opaque geometry
+    std::sort(m_commands.begin(), m_commands.end(),
+        [](const RenderCommand& a, const RenderCommand& b) {
+            return a.transform[3][2] < b.transform[3][2];
+        });
+
+    for (const auto& cmd : m_commands) {
+        if (!cmd.mesh || !cmd.shader) continue;
+
+        cmd.shader->bind();
+        cmd.shader->set_mat4("u_model", cmd.transform);
+
+        if (cmd.bone_transforms && cmd.bone_count > 0) {
+            cmd.shader->set_int("u_animated", 1);
+            for (u32 i = 0; i < cmd.bone_count; ++i) {
+                cmd.shader->set_mat4("u_bones[" + std::to_string(i) + "]",
+                                     cmd.bone_transforms[i]);
+            }
+        } else {
+            cmd.shader->set_int("u_animated", 0);
+        }
+
+        if (cmd.texture) {
+            cmd.texture->bind(0);
+            cmd.shader->set_int("u_texture", 0);
+        }
+
+        cmd.mesh->bind();
+        glDrawElements(GL_TRIANGLES,
+                       static_cast<GLsizei>(cmd.mesh->index_count()),
+                       GL_UNSIGNED_INT, nullptr);
+        cmd.mesh->unbind();
+    }
+}
+
+void Renderer::set_viewport(u32 width, u32 height) {
+    glViewport(0, 0, static_cast<GLsizei>(width), static_cast<GLsizei>(height));
+}
+
+}  // namespace rts

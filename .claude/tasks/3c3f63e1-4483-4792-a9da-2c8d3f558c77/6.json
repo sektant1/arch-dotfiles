@@ -1,0 +1,9 @@
+{
+  "id": "6",
+  "subject": "Set up Vite dev server for demo",
+  "description": "Add vite and @vitejs/plugin-react, create vite.config.ts and index.html",
+  "activeForm": "Setting up Vite",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

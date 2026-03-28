@@ -1,0 +1,36 @@
+import { useRef } from 'react';
+import { useRendererRegistration } from '../hooks/useRendererRegistration';
+
+interface Props {
+  progress: number;
+}
+
+export default function LoadingBar({ progress }: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+  const fillRef = useRef<HTMLDivElement>(null);
+
+  // Keep a ref so the renderer's RAF loop always reads the latest value
+  // without needing to re-register on every prop change.
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
+
+  useRendererRegistration('loadingBars', () => ({
+    ref: () => ref.current!,
+    fillRef: () => fillRef.current!,
+    fillPercent: () => Math.min(progressRef.current, 98),
+  }));
+
+  return (
+    <div ref={ref} className="loading-bar-composite">
+      <div className="lb-bg" />
+      <div
+        ref={fillRef}
+        className="lb-fill"
+        style={{ width: Math.min(progress, 98) + '%' }}
+      />
+      <img className="lb-border" src="" alt="" />
+      <img className="lb-glass" src="" alt="" />
+      <div className="lb-text">{Math.floor(progress)}%</div>
+    </div>
+  );
+}

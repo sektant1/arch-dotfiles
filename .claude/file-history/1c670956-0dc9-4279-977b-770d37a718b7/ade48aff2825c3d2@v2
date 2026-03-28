@@ -1,0 +1,151 @@
+#include <rts/core/logger.hpp>
+#include <rts/platform/window.hpp>
+#include <rts/platform/input.hpp>
+#include <rts/platform/time.hpp>
+#include <rts/renderer/renderer.hpp>
+#include <rts/renderer/shader.hpp>
+#include <rts/renderer/mesh.hpp>
+#include <rts/renderer/texture.hpp>
+#include <rts/assets/asset_manager.hpp>
+#include <rts/assets/stb_loader.hpp>
+#include <rts/assets/blp_loader.hpp>
+#include <rts/assets/gltf_loader.hpp>
+#include <rts/assets/mdx_loader.hpp>
+#include <rts/terrain/terrain.hpp>
+#include <rts/camera/camera.hpp>
+
+#include <imgui.h>
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+#include <GLFW/glfw3.h>
+
+int main() {
+    rts::Logger::init();
+    RTS_LOG_INFO("RTS Engine Editor starting...");
+
+    rts::WindowConfig win_cfg;
+    win_cfg.title  = "RTS Engine Editor";
+    win_cfg.width  = 1600;
+    win_cfg.height = 900;
+
+    rts::GlfwWindow window(win_cfg);
+    rts::Input      input(window.native_handle());
+    rts::Time       time;
+
+    rts::Renderer renderer;
+    renderer.init();
+
+    rts::RtsCamera camera;
+    camera.set_aspect_ratio(static_cast<float>(window.width()) /
+                             static_cast<float>(window.height()));
+
+    rts::AssetManager assets;
+    assets.register_texture_loader(".png",  std::make_unique<rts::StbLoader>());
+    assets.register_texture_loader(".jpg",  std::make_unique<rts::StbLoader>());
+    assets.register_texture_loader(".jpeg", std::make_unique<rts::StbLoader>());
+    assets.register_texture_loader(".blp",  std::make_unique<rts::BlpLoader>());
+    assets.register_model_loader(".gltf",   std::make_unique<rts::GltfLoader>());
+    assets.register_model_loader(".glb",    std::make_unique<rts::GltfLoader>());
+    assets.register_model_loader(".mdx",    std::make_unique<rts::MdxLoader>());
+
+    // Terreno de teste flat 64x64
+    std::vector<float> heights(64 * 64, 0.0f);
+    auto terrain_data = rts::Terrain::generate(heights, 64, 64, 1.0f);
+    rts::Mesh terrain_mesh(terrain_data.vertices, terrain_data.indices);
+
+    // Shaders (caminhos relativos ao diretório de execução)
+    auto terrain_shader = rts::ShaderProgram::from_files(
+        "assets/shaders/terrain.vert", "assets/shaders/terrain.frag");
+    auto model_shader = rts::ShaderProgram::from_files(
+        "assets/shaders/model.vert",   "assets/shaders/model.frag");
+
+    // Setup ImGui
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    ImGui::StyleColorsDark();
+    ImGui_ImplGlfw_InitForOpenGL(window.native_handle(), true);
+    ImGui_ImplOpenGL3_Init("#version 330");
+
+    // Iluminação
+    rts::Vec3 light_dir   = glm::normalize(rts::Vec3(-0.5f, -1.0f, -0.3f));
+    rts::Vec3 light_color = rts::Vec3(1.0f, 0.95f, 0.9f);
+    rts::Vec3 ambient     = rts::Vec3(0.2f, 0.2f, 0.25f);
+    float     tile_scale  = 8.0f;
+
+    RTS_LOG_INFO("Editor initialized. WASD/bordas=pan, Scroll=zoom, ESC=sair.");
+
+    while (!window.should_close()) {
+        window.poll_events();
+        input.update();
+        time.update();
+
+        float dt = time.delta_time();
+
+        // Atualizar câmera (ignora input quando ImGui quer captura)
+        rts::Vec2 mouse_pos   = input.mouse_position();
+        rts::Vec2 screen_size = {static_cast<float>(window.width()),
+                                  static_cast<float>(window.height())};
+
+        if (!io.WantCaptureKeyboard && !io.WantCaptureMouse) {
+            camera.update(dt, mouse_pos, screen_size,
+                          input.is_key_pressed(GLFW_KEY_W),
+                          input.is_key_pressed(GLFW_KEY_A),
+                          input.is_key_pressed(GLFW_KEY_S),
+                          input.is_key_pressed(GLFW_KEY_D),
+                          input.scroll_delta());
+        }
+
+        camera.set_aspect_ratio(screen_size.x / std::max(screen_size.y, 1.0f));
+
+        // ---- Render ----
+        renderer.begin_frame();
+
+        terrain_shader.bind();
+        terrain_shader.set_mat4("u_view",        camera.view_matrix());
+        terrain_shader.set_mat4("u_projection",  camera.projection_matrix());
+        terrain_shader.set_mat4("u_model",        rts::Mat4(1.0f));
+        terrain_shader.set_vec3("u_light_dir",   light_dir);
+        terrain_shader.set_vec3("u_light_color", light_color);
+        terrain_shader.set_vec3("u_ambient",     ambient);
+        terrain_shader.set_float("u_tile_scale", tile_scale);
+
+        rts::RenderCommand terrain_cmd;
+        terrain_cmd.mesh      = &terrain_mesh;
+        terrain_cmd.shader    = &terrain_shader;
+        terrain_cmd.transform = rts::Mat4(1.0f);
+        renderer.submit(terrain_cmd);
+
+        renderer.flush();
+
+        // ---- ImGui ----
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::Begin("Debug");
+        ImGui::Text("FPS: %.1f", 1.0f / std::max(dt, 0.0001f));
+        ImGui::Text("Camera target: (%.1f, %.1f, %.1f)",
+                     camera.target().x, camera.target().y, camera.target().z);
+        ImGui::Separator();
+        ImGui::Text("WASD / bordas da tela: Pan");
+        ImGui::Text("Scroll: Zoom");
+        ImGui::Text("ESC: Sair");
+        ImGui::End();
+
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        window.swap_buffers();
+
+        if (input.is_key_pressed(GLFW_KEY_ESCAPE)) break;
+    }
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
+    RTS_LOG_INFO("Editor encerrado.");
+    return 0;
+}

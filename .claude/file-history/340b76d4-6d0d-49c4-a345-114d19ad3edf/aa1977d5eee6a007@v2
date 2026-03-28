@@ -1,0 +1,49 @@
+import { useRef } from 'react';
+import { useRendererRegistration } from '../hooks/useRendererRegistration';
+
+interface Props {
+  label: string;
+  type: 'health' | 'mana' | 'xp' | 'build';
+  fillPercent: number;
+  maxValue?: number;
+  height?: number;
+  hasBorder?: boolean;
+}
+
+export default function StatBar({ label, type, fillPercent, maxValue, height = 18, hasBorder }: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Keep a ref so the renderer's RAF loop always reads the latest value
+  // without needing to re-register on every prop change.
+  const fillRef = useRef(fillPercent);
+  fillRef.current = fillPercent;
+
+  useRendererRegistration('statBars', () => ({
+    ref: () => ref.current!,
+    fillPercent: () => fillRef.current,
+    type,
+    hasBorder: !!hasBorder,
+  }));
+
+  const barText = () => {
+    if (type === 'build') return fillPercent + '%';
+    if (maxValue) return Math.floor(maxValue * fillPercent / 100) + '\u00a0/ ' + maxValue;
+    return fillPercent + '%';
+  };
+
+  return (
+    <div className="bar-row">
+      <span className="bar-label">{label}</span>
+      <div ref={ref} className="stat-bar" style={{ height: height + 'px' }}>
+        <div
+          className={`bar-fill-img ${type}-fill animated-bar`}
+          style={{ width: fillPercent + '%' }}
+        />
+        {hasBorder && <img className="bar-border-overlay" src="" alt="" />}
+        <div className="bar-text" style={height < 18 ? { fontSize: '0.6rem' } : undefined}>
+          {barText()}
+        </div>
+      </div>
+    </div>
+  );
+}

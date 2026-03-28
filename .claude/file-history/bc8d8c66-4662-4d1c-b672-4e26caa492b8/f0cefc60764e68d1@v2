@@ -1,0 +1,50 @@
+import { useEffect, useRef } from 'react';
+import type { Renderer } from '../renderer/Renderer';
+
+interface Props {
+  label: string;
+  type: 'health' | 'mana' | 'xp' | 'build';
+  fillPercent: number;
+  maxValue?: number;
+  height?: number;
+  hasBorder?: boolean;
+  renderer: Renderer;
+}
+
+export default function StatBar(props: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    props.renderer.statBars.push({
+      ref: () => ref.current!,
+      fillPercent: () => props.fillPercent,
+      type: props.type,
+      hasBorder: !!props.hasBorder,
+    });
+  }, []);
+
+  const barText = () => {
+    const pct = props.fillPercent;
+    if (props.type === 'build') return pct + '%';
+    if (props.maxValue) {
+      return Math.floor(props.maxValue * pct / 100) + '\u00a0/ ' + props.maxValue;
+    }
+    return pct + '%';
+  };
+
+  return (
+    <div className="bar-row">
+      <span className="bar-label">{props.label}</span>
+      <div ref={ref} className="stat-bar" style={{ height: (props.height || 18) + 'px' }}>
+        <div
+          className={`bar-fill-img ${props.type}-fill animated-bar`}
+          style={{ width: props.fillPercent + '%' }}
+        />
+        {props.hasBorder && <img className="bar-border-overlay" src="" alt="" />}
+        <div className="bar-text" style={props.height && props.height < 18 ? { fontSize: '0.6rem' } : {}}>
+          {barText()}
+        </div>
+      </div>
+    </div>
+  );
+}

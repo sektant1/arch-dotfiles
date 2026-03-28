@@ -1,0 +1,180 @@
+# PLAN.md — WC3 Build Order Practice Tool
+
+A side-monitor timer app that plays sound cues at build order timestamps while you play Warcraft 3.
+
+---
+
+## How This Project Is Structured
+
+The app is a single-page React app composed of **sections**. Each section is a component in `src/components/sections/`, rendered in `App.tsx` inside `<div className="showcase-flow-item">` wrappers. Sections use the `section-card` CSS class for WC3-themed borders.
+
+### Key patterns to follow
+
+**Adding a section:**
+1. Create `src/components/sections/MySection.tsx`
+2. Export a default function returning `<section className="section-card"> ... </section>`
+3. Import in `App.tsx` and add inside a `<div className="showcase-flow-item">` wrapper (see line ~3219 for examples)
+
+**Simplest section to copy:** `src/components/sections/FAQSection.tsx` — static data, no props, uses `section-card`.
+
+**Adding state:**
+1. Create a file in `src/state/` (e.g., `timer.ts`)
+2. Use `createExternalStore<T>()` from `src/state/createStore.ts`
+3. Follow the export pattern in `src/state/resources.ts`:
+   - Module-level stores: `const myStore = createExternalStore(initialValue)`
+   - Named getter: `export const getMyValue = myStore.get`
+   - Named setter: `export const setMyValue = myStore.set`
+   - Named hook: `export const useMyValue = myStore.useValue`
+
+**Styling:** Add CSS to `src/global.css`. Design tokens: gold `#fcd312`, dark bg `#08080f`, font is Friz Quadrata (loaded from `/fonts/FRIZQT__.TTF`).
+
+**Race-aware theming:** Import `useCurrentRace()` from `src/state/race.ts`. Race type is `'Human' | 'Orc' | 'NightElf' | 'Undead'`.
+
+**Existing components you can reuse:** StatBar, LoadingBar, MenuButton, Checkbox, RadioButton, Slider, EditBox, MenuPanel, Tooltip (all in `src/components/`).
+
+---
+
+## Implementation Phases
+
+### Phase 1: Build Order Data Model
+
+**Create `src/lib/buildOrder.ts`**
+
+```typescript
+import type { Race } from './types';
+
+export interface BuildOrderStep {
+  timeSeconds: number;  // seconds from game start (e.g., 15 = 0:15)
+  action: string;       // "Build Altar of Kings"
+  supply?: string;      // "5/12"
+  category?: 'unit' | 'building' | 'upgrade' | 'hero' | 'item';
+}
+
+export interface BuildOrder {
+  id: string;           // slug: "human-fast-expand"
+  name: string;
+  race: Race;
+  description: string;
+  steps: BuildOrderStep[];
+}
+
+export function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+```
+
+**Create `src/data/presetBuildOrders.ts`**
+- 1-2 presets per race with realistic timestamps
+- Examples: Human fast expand (Archmage), Orc blade master rush, NE Demon Hunter opener, UD Death Knight expand
+
+---
+
+### Phase 2: State Stores
+
+**Create `src/state/timer.ts`**
+- `timerRunningStore` — `createExternalStore<boolean>(false)`
+- `elapsedSecondsStore` — `createExternalStore<number>(0)`
+- `timerSpeedStore` — `createExternalStore<number>(1)` (supports 1x, 1.5x, 2x)
+- `startTimer()` — uses `setInterval(1000 / speed)` to increment elapsed seconds. Store interval ID in a module-level variable.
+- `pauseTimer()` — clears the interval
+- `resetTimer()` — clears interval + sets elapsed to 0
+- Export hooks: `useTimerRunning`, `useElapsedSeconds`, `useTimerSpeed`
+
+**Create `src/state/buildOrder.ts`**
+- `activeBuildOrderStore` — `createExternalStore<BuildOrder | null>(null)`
+- `customBuildOrdersStore` — `createExternalStore<BuildOrder[]>([])`, hydrate from `localStorage.getItem('wc3bo-custom')` on module load, persist on every `set`
+- Export: `useActiveBuildOrder`, `setActiveBuildOrder`, `useCustomBuildOrders`, `addCustomBuildOrder`, `removeCustomBuildOrder`
+
+---
+
+### Phase 3: Timer Display (core feature)
+
+**Create `src/components/BuildOrderStepList.tsx`**
+- Scrollable list of steps showing time (`M:SS`) + action text
+- Compares each step's `timeSeconds` against `useElapsedSeconds()` to determine state
+- Past steps dimmed, current step highlighted (gold border/glow), future steps normal
+- Auto-scrolls to keep current step visible (use `scrollIntoView` or a ref)
+
+**Create `src/components/sections/TimerSection.tsx`**
+- Large `M:SS` display (Friz Quadrata, gold color, big font)
+- Play / Pause / Reset buttons
+- Speed selector (1x / 1.5x / 2x) — can use existing RadioButton or Slider components
+- Embeds `BuildOrderStepList`
+- Uses `section-card` class
+
+**Modify `src/App.tsx`**
+- Import `TimerSection`, render after `HeroSection` inside a `showcase-flow-item` wrapper
+
+**Modify `src/global.css`**
+- `.timer-display` — large centered time, gold color
+- `.timer-controls` — flex row for buttons
+- `.step-list` — scrollable container
+- `.step-item`, `.step-item--past`, `.step-item--current`, `.step-item--future`
+
+---
+
+### Phase 4: Build Order Selector
+
+**Create `src/components/sections/BuildOrderSelectorSection.tsx`**
+- Filter presets by current race (`useCurrentRace()`)
+- Show preset build orders + custom build orders as a selectable list
+- On click: `setActiveBuildOrder(order)` and `resetTimer()`
+- Highlight the selected build order
+
+**Modify `src/App.tsx`** — add before `TimerSection`
+
+---
+
+### Phase 5: Build Order Editor
+
+**Create `src/components/sections/BuildOrderEditorSection.tsx`**
+- Toggle between Form mode and JSON mode
+- **Form mode:** name input, race selector, description, step list editor (time + action + remove per row, "Add Step" button)
+- **JSON mode:** textarea to paste/edit raw JSON
+- Save calls `addCustomBuildOrder()` — persists to localStorage
+
+**Create `src/lib/buildOrderValidation.ts`**
+- `validateBuildOrder(data: unknown): { valid: boolean; errors: string[] }`
+- Used by the JSON mode to validate before saving
+
+---
+
+### Phase 6: Sound Cues (approach TBD)
+
+Options to explore:
+- **Web Speech API** — `speechSynthesis.speak()` to read step actions aloud. Zero deps.
+- **Web Audio API** — `OscillatorNode` for simple beep/chime. Zero deps.
+- **Both** — chime for attention + speech for the action. Toggle each independently.
+
+Integration point: in the timer tick (Phase 2), check if `elapsedSeconds` matches any step's `timeSeconds`. Keep a `Set<number>` of already-fired timestamps to avoid repeats on pause/resume.
+
+---
+
+### Phase 7: Side-Monitor Polish
+
+- **Compact mode toggle** in `App.tsx` — hides showcase sections, shows only timer + step list
+- **Larger fonts** in compact mode for distance readability
+- **Keyboard shortcuts:** Space (play/pause), R (reset), arrow keys (seek ±5s)
+- Dark background (`#08080f`) already good for peripheral vision
+
+---
+
+## New Files Checklist
+
+- [ ] `src/lib/buildOrder.ts` — types + formatTime
+- [ ] `src/data/presetBuildOrders.ts` — preset build orders
+- [ ] `src/state/timer.ts` — timer stores + controls
+- [ ] `src/state/buildOrder.ts` — build order stores + localStorage
+- [ ] `src/components/BuildOrderStepList.tsx` — step list with highlighting
+- [ ] `src/components/sections/TimerSection.tsx` — main timer UI
+- [ ] `src/components/sections/BuildOrderSelectorSection.tsx` — build order picker
+- [ ] `src/components/sections/BuildOrderEditorSection.tsx` — create/edit build orders
+- [ ] `src/lib/buildOrderValidation.ts` — JSON validation
+- [ ] `src/lib/soundCue.ts` — sound cue system (Phase 6)
+
+## Modified Files
+
+- [ ] `src/App.tsx` — import + render new sections, compact mode toggle
+- [ ] `src/global.css` — timer, step list, selector, editor styles

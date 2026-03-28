@@ -1,0 +1,33 @@
+cmake_minimum_required(VERSION 3.22)
+project(rts-engine VERSION 0.1.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+find_package(glfw3 REQUIRED)
+find_package(glm REQUIRED)
+find_package(spdlog REQUIRED)
+find_package(stb REQUIRED)
+find_package(imgui REQUIRED)
+find_package(TinyGLTF REQUIRED)
+find_package(GTest REQUIRED)
+
+# glad (vendored)
+add_library(glad STATIC third_party/glad/src/glad.c)
+target_include_directories(glad PUBLIC third_party/glad/include)
+
+# Engine modules
+add_subdirectory(engine/core)
+add_subdirectory(engine/platform)
+add_subdirectory(engine/renderer)
+add_subdirectory(engine/assets)
+add_subdirectory(engine/terrain)
+add_subdirectory(engine/camera)
+
+# Editor
+add_subdirectory(editor)
+
+# Tests
+enable_testing()
+add_subdirectory(tests)

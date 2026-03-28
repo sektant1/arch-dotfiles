@@ -1,0 +1,61 @@
+import React from "react";
+
+export interface MinimapPing {
+  x: string;
+  y: string;
+  color: string;
+  delay?: string;
+}
+
+export interface MinimapProps {
+  /** URL of the minimap image */
+  imageUrl?: string;
+  /** Ping markers on the minimap */
+  pings?: MinimapPing[];
+  /** Legend items */
+  legend?: { label: string; color: string }[];
+  className?: string;
+}
+
+/**
+ * Minimap frame with fog of war overlay and animated ping markers.
+ */
+export function Minimap({
+  imageUrl,
+  pings = [],
+  legend = [],
+  className,
+}: MinimapProps) {
+  return (
+    <div className={`minimap-showcase ${className ?? ""}`}>
+      <div className="minimap-frame">
+        {imageUrl && (
+          <img className="minimap-image" src={imageUrl} alt="Minimap" />
+        )}
+        <div className="minimap-fog" />
+        {pings.map((ping, i) => (
+          <div
+            key={i}
+            className="minimap-ping"
+            style={{
+              left: ping.x,
+              top: ping.y,
+              background: ping.color,
+              animationDelay: ping.delay ?? "0s",
+            }}
+          />
+        ))}
+      </div>
+      {legend.length > 0 && (
+        <div className="minimap-legend">
+          {legend.map((item, i) => (
+            <span key={i}>
+              <span className="dot" style={{ background: item.color }} />
+              {item.label}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,28 @@
+import { useEffect, useState } from "react";
+import { loadBlpDataUrl } from "../utils/glueButton";
+
+function useBLPUrl(path: string): string {
+  const [url, setUrl] = useState("");
+  useEffect(() => { void loadBlpDataUrl(path).then(setUrl); }, [path]);
+  return url;
+}
+
+interface Props {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label?: string;
+}
+
+export default function BuildCheckbox({ checked, onChange, label }: Props) {
+  const bgUrl    = useBLPUrl("./buttons/checkbox/checkbox-background.blp");
+  const checkUrl = useBLPUrl("./buttons/checkbox/checkbox-check.blp");
+  return (
+    <div className="build-checkbox" onClick={() => onChange(!checked)}>
+      <div className="build-checkbox-visual">
+        {bgUrl    && <img src={bgUrl}    className="build-checkbox-bg"    alt="" />}
+        {checkUrl && <img src={checkUrl} className={`build-checkbox-check${checked ? "" : " build-checkbox-check--hidden"}`} alt="" />}
+      </div>
+      {label && <span className="build-checkbox-label">{label}</span>}
+    </div>
+  );
+}

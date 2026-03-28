@@ -1,0 +1,16 @@
+import BuildOrdersSection from "../components/sections/BuildOrderSection";
+import GlueSmallButton from "../components/GlueSmallButton";
+import { setPage } from "../state/page";
+
+export default function BuildOrderPage() {
+  return (
+    <div className="tab-content tab-content--page">
+      <div className="page-nav">
+        <GlueSmallButton onClick={() => setPage("showcase")}>
+          Back
+        </GlueSmallButton>
+      </div>
+      <BuildOrdersSection />
+    </div>
+  );
+}

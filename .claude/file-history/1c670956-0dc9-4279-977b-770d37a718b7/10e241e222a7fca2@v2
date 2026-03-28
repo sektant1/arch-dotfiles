@@ -1,0 +1,8 @@
+add_library(rts_camera STATIC
+    src/camera.cpp
+)
+
+target_include_directories(rts_camera PUBLIC include)
+target_link_libraries(rts_camera PUBLIC rts::core glm::glm)
+
+add_library(rts::camera ALIAS rts_camera)

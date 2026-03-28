@@ -1,0 +1,21 @@
+#pragma once
+
+#include <rts/core/types.hpp>
+#include <rts/renderer/render_command.hpp>
+#include <vector>
+
+namespace rts {
+
+class Renderer {
+public:
+    void init();
+    void begin_frame(const Vec4& clear_color = {0.1f, 0.1f, 0.15f, 1.0f});
+    void submit(const RenderCommand& command);
+    void flush();
+    void set_viewport(u32 width, u32 height);
+
+private:
+    std::vector<RenderCommand> m_commands;
+};
+
+}  // namespace rts

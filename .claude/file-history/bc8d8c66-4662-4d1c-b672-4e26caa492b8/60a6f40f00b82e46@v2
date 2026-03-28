@@ -1,0 +1,83 @@
+import { useState, useEffect, useRef } from 'react';
+import type { Renderer } from '../renderer/Renderer';
+
+interface Props {
+  label: string;
+  initialValue?: number;
+  renderer: Renderer;
+}
+
+export default function Slider(props: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [value, setValue] = useState(props.initialValue ?? 0.5);
+  const draggingRef = useRef(false);
+
+  useEffect(() => {
+    props.renderer.sliders.push({
+      ref: () => ref.current!,
+      value: () => value,
+    });
+  }, []);
+
+  useEffect(() => {
+    const updateFromEvent = (e: MouseEvent | TouchEvent) => {
+      if (!ref.current) return;
+      const rect = ref.current.getBoundingClientRect();
+      const clientX = 'touches' in e ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
+      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      setValue(pct);
+    };
+
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      if (!draggingRef.current) return;
+      e.preventDefault();
+      updateFromEvent(e);
+    };
+
+    const onUp = () => {
+      draggingRef.current = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+    };
+
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      e.preventDefault();
+      draggingRef.current = true;
+      updateFromEvent(e);
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onUp);
+    };
+
+    const el = ref.current;
+    if (el) {
+      el.addEventListener('mousedown', onDown);
+      el.addEventListener('touchstart', onDown, { passive: false });
+    }
+
+    return () => {
+      if (el) {
+        el.removeEventListener('mousedown', onDown);
+        el.removeEventListener('touchstart', onDown);
+      }
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+    };
+  }, []);
+
+  return (
+    <div className="bar-row">
+      <span className="bar-label">{props.label}</span>
+      <div ref={ref} className="wc3-slider">
+        <img className="slider-bg" src="" alt="" />
+        <img className="slider-border" src="" alt="" />
+        <img className="slider-knob" src="" alt="" style={{ left: (value * 100) + '%' }} />
+      </div>
+    </div>
+  );
+}

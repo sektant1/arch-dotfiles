@@ -1,0 +1,77 @@
+import { useState, useEffect, useRef } from "react";
+import { loadBlpDataUrl } from "../utils/blp";
+
+/**
+ * Hook to load a BLP texture and return a data URL string.
+ * Returns empty string while loading.
+ */
+export function useBlpTexture(path: string | undefined): string {
+  const [url, setUrl] = useState("");
+  const pathRef = useRef(path);
+
+  useEffect(() => {
+    if (!path) {
+      setUrl("");
+      return;
+    }
+    pathRef.current = path;
+    let cancelled = false;
+
+    loadBlpDataUrl(path).then((dataUrl) => {
+      if (!cancelled && pathRef.current === path) {
+        setUrl(dataUrl);
+      }
+    }).catch(() => {
+      if (!cancelled) setUrl("");
+    });
+
+    return () => { cancelled = true; };
+  }, [path]);
+
+  return url;
+}
+
+/**
+ * Hook to load multiple BLP textures in parallel.
+ * Returns a record mapping keys to data URLs.
+ */
+export function useBlpTextures<K extends string>(
+  paths: Record<K, string | undefined>,
+): Record<K, string> {
+  const [urls, setUrls] = useState<Record<K, string>>(() => {
+    const init = {} as Record<K, string>;
+    for (const key of Object.keys(paths) as K[]) {
+      init[key] = "";
+    }
+    return init;
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    const entries = Object.entries(paths) as [K, string | undefined][];
+
+    Promise.all(
+      entries.map(async ([key, path]) => {
+        if (!path) return [key, ""] as const;
+        try {
+          const dataUrl = await loadBlpDataUrl(path);
+          return [key, dataUrl] as const;
+        } catch {
+          return [key, ""] as const;
+        }
+      }),
+    ).then((results) => {
+      if (cancelled) return;
+      const newUrls = {} as Record<K, string>;
+      for (const [key, dataUrl] of results) {
+        newUrls[key] = dataUrl;
+      }
+      setUrls(newUrls);
+    });
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(paths)]);
+
+  return urls;
+}

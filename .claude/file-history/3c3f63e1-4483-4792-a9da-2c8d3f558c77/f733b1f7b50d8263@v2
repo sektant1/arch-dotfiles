@@ -1,0 +1,36 @@
+import React from "react";
+
+export interface XPBarProps {
+  /** XP percentage 0–100 */
+  percent: number;
+  level?: number;
+  showText?: boolean;
+  className?: string;
+}
+
+export function XPBar({
+  percent,
+  level,
+  showText = true,
+  className,
+}: XPBarProps) {
+  const clamped = Math.min(100, Math.max(0, percent));
+
+  return (
+    <div className={`wc3-bar wc3-bar--compact wc3-bar--xp ${className ?? ""}`}>
+      <div
+        className="wc3-bar-fill-wrap"
+        style={{ width: `${clamped}%` }}
+      >
+        <div className="wc3-bar-fill" />
+        <div className="wc3-bar-highlight" />
+      </div>
+      {showText && (
+        <div className="wc3-bar-text">
+          {level != null ? `Level ${level} · ` : ""}
+          {Math.floor(clamped)}%
+        </div>
+      )}
+    </div>
+  );
+}

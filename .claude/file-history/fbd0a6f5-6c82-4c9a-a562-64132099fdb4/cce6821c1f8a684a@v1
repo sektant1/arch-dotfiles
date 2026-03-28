@@ -1,0 +1,2 @@
+DATABASE_URL=postgresql://localhost/wc3_buildorders
+PORT=3000

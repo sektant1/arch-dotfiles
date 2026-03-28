@@ -1,0 +1,66 @@
+# Plan: Package wcui as an npm library
+
+## Context
+The project is currently a standalone Vite demo app. The goal is to make it publishable as an npm package so its React components can be imported in other projects. Assets in `public/` (BLP textures) are excluded due to Blizzard copyright — consuming projects must serve those files themselves.
+
+## Steps
+
+### 1. Create `src/lib.ts` — library barrel export
+New file that re-exports all public components, state, renderer, and types.
+
+- Components from `src/components/`: `StatBar`, `Checkbox`, `Slider`, `RadioButton`, `EditBox`, `MenuButton`, `MenuPanel`, `Tooltip`, `LoadingBar`, `TopHud`, `TopHudWebGL`, `BottomHud`, `HeroPortraitModel`, `WorkerUnitModel`, `TimeIndicatorModel`, `CursorOverlay`, `HeroGallery`
+- State from `src/state/`: `createExternalStore`, `useCurrentRace`, `setCurrentRace`, `RACE_PREFIXES`, resource hooks/getters/setters, `useAnimatedBars`, `useLoadingBar`
+- Renderer: `Renderer` class + all 13 registration interfaces from `src/renderer/Renderer.ts`
+- Types: `Race`, `RacePrefix` from `src/lib/types.ts`
+- Import `./global.css` so Vite extracts it as `dist/style.css`
+- Do NOT export section components (`src/components/sections/`) — those are demo-only
+
+### 2. Create `vite.lib.config.ts` — library build config
+Separate Vite config (keeps demo config untouched):
+
+- `build.lib.entry`: `src/lib.ts`
+- `build.lib.formats`: `['es', 'cjs']`
+- `build.lib.fileName`: `wcui.js` / `wcui.cjs`
+- `rollupOptions.external`: `['react', 'react-dom', 'react/jsx-runtime', 'react-dom/client']`
+- `build.cssFileName`: `'style.css'`
+- `build.sourcemap`: `true`
+
+### 3. Create `tsconfig.build.json` — declaration generation
+Extends `tsconfig.json` with overrides:
+
+- `noEmit: false`, `declaration: true`, `emitDeclarationOnly: true`
+- `declarationDir: "dist"`
+- `types: []` (exclude `vite/client` from declarations)
+- `include`: `src/lib.ts` + component/state/renderer/lib directories
+
+### 4. Modify `package.json`
+- `"name": "wcui"`, `"private": false`, `"version": "0.1.0"`
+- Add `"main"`, `"module"`, `"types"`, `"exports"`, `"files": ["dist"]`, `"sideEffects": ["*.css"]`
+- Move `react`/`react-dom` from `dependencies` → `peerDependencies` (keep in `devDependencies` for demo)
+- Keep `gl-matrix` and `war3-model` in `dependencies` (bundled into library output)
+- Add script `"build:lib": "vite build --config vite.lib.config.ts && tsc -p tsconfig.build.json"`
+- Add `"prepublishOnly": "npm run build:lib"`
+
+### 5. Verify
+
+1. `npm run build:lib` — check `dist/` contains `wcui.js`, `wcui.cjs`, `style.css`, `lib.d.ts` + other `.d.ts` files
+2. `npm run dev` — demo app still works
+3. `npm pack` — inspect tarball contains only `dist/` + metadata (no `public/` assets)
+4. Test in a consumer project: `npm install ../wcui/wcui-0.1.0.tgz`, import a component, verify it renders
+
+## Consumer usage
+```tsx
+// main.tsx
+import 'wcui/style.css';
+
+// any component
+import { StatBar, Checkbox, useCurrentRace } from 'wcui';
+import type { Race } from 'wcui';
+```
+Consumer must serve WC3 BLP/PNG assets from their own `public/` at the same paths the components expect (e.g., `/console-buttons/...`, `/buttons/...`, `/bars/...`).
+
+## Files modified
+- `package.json` — add library fields, restructure deps
+- New: `src/lib.ts`
+- New: `vite.lib.config.ts`
+- New: `tsconfig.build.json`

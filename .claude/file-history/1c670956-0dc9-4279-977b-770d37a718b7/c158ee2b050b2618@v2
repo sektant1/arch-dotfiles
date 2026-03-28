@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Roda os testes
+# Uso: ./scripts/test.sh [filtro]
+set -e
+
+BUILD_DIR="build"
+FILTER=${1:-}
+
+if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
+    echo "==> Build não configurado. Rode './scripts/configure.sh' primeiro."
+    exit 1
+fi
+
+echo "==> Compilando testes..."
+cmake --build "$BUILD_DIR" --target rts_tests --parallel "$(nproc)"
+
+echo "==> Rodando testes..."
+if [ -n "$FILTER" ]; then
+    cd "$BUILD_DIR" && ctest --output-on-failure -R "$FILTER"
+else
+    cd "$BUILD_DIR" && ctest --output-on-failure
+fi

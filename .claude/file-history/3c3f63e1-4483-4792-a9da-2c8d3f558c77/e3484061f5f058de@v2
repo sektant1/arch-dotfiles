@@ -1,0 +1,64 @@
+import React from "react";
+import { useBlpTexture } from "../hooks/useBlpTexture";
+import { TOOLTIP_ASSETS } from "../utils/assets";
+import type { TooltipData } from "../types";
+
+export interface TooltipProps extends TooltipData {
+  /** Render as simple tooltip (narrower) */
+  simple?: boolean;
+  className?: string;
+}
+
+/**
+ * Rich WC3-styled tooltip with title, hotkey badge, description,
+ * and inline resource costs.
+ */
+export function Tooltip({
+  title,
+  hotkey,
+  description,
+  costs,
+  error = false,
+  simple = false,
+  className,
+}: TooltipProps) {
+  const bgUrl = useBlpTexture(TOOLTIP_ASSETS.background);
+  const borderUrl = useBlpTexture(TOOLTIP_ASSETS.border);
+  const goldIcon = useBlpTexture(TOOLTIP_ASSETS.goldIcon);
+  const lumberIcon = useBlpTexture(TOOLTIP_ASSETS.lumberIcon);
+  const supplyIcon = useBlpTexture(TOOLTIP_ASSETS.supplyIcon);
+
+  const costIcons: Record<string, string> = {
+    gold: goldIcon,
+    lumber: lumberIcon,
+    supply: supplyIcon,
+  };
+
+  return (
+    <article
+      className={`tooltip-preview${simple ? " tooltip-preview--simple" : ""}${error ? " tooltip-preview--error" : ""} ${className ?? ""}`}
+      style={{
+        "--tooltip-bg": bgUrl ? `url("${bgUrl}")` : undefined,
+        "--tooltip-border": borderUrl ? `url("${borderUrl}")` : undefined,
+      } as React.CSSProperties}
+    >
+      <div className="tooltip-preview-head">
+        <h4>{title}</h4>
+        {hotkey && <span className="tooltip-hotkey">{hotkey}</span>}
+      </div>
+      <p>{description}</p>
+      {costs && costs.length > 0 && (
+        <div className="tooltip-costs">
+          {costs.map((cost, i) => (
+            <span key={i} className="tooltip-cost">
+              {costIcons[cost.icon] && (
+                <img src={costIcons[cost.icon]} alt={cost.icon} />
+              )}
+              {cost.amount}
+            </span>
+          ))}
+        </div>
+      )}
+    </article>
+  );
+}

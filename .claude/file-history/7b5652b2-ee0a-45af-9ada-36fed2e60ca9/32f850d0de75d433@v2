@@ -1,0 +1,113 @@
+import { useState, useEffect, useRef } from "react";
+import {
+  loadBlpDataUrl,
+  loadDataUrlImage,
+  drawGlueNineSliceToCanvas,
+} from "../utils/glueButton";
+
+const BG_URL = "/buttons/glue/GlueScreen-Button1-BackdropBackground.blp";
+const BG_DOWN_URL =
+  "/buttons/glue/GlueScreen-Button1-BackdropBackground-Down.blp";
+const BORDER_URL =
+  "/buttons/glue/GlueScreen-Button1-BackdropBorder.blp";
+const BORDER_DOWN_URL =
+  "/buttons/glue/GlueScreen-Button1-BackdropBorder-Down.blp";
+const HOVER_URL = "/buttons/glue/bnet-button01-highlight-mouse.blp";
+
+const glueButtonPressedOffsetXPx = -2;
+const glueButtonPressedOffsetYPx = 3;
+
+interface GlueSmallButtonProps {
+  onClick?: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}
+
+export default function GlueSmallButton({
+  onClick,
+  disabled,
+  children,
+}: GlueSmallButtonProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+
+  const [bgUrl, setBgUrl] = useState("");
+  const [bgDownUrl, setBgDownUrl] = useState("");
+  const [borderUrl, setBorderUrl] = useState("");
+  const [borderDownUrl, setBorderDownUrl] = useState("");
+  const [hoverUrl, setHoverUrl] = useState("");
+
+  useEffect(() => {
+    void Promise.all([
+      loadBlpDataUrl(BG_URL),
+      loadBlpDataUrl(BG_DOWN_URL),
+      loadBlpDataUrl(BORDER_URL),
+      loadBlpDataUrl(BORDER_DOWN_URL),
+      loadBlpDataUrl(HOVER_URL),
+    ]).then(([bg, bgDown, border, borderDown, hover]) => {
+      setBgUrl(bg);
+      setBgDownUrl(bgDown);
+      setBorderUrl(border);
+      setBorderDownUrl(borderDown);
+      setHoverUrl(hover);
+    });
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const activeBgUrl = pressed ? bgDownUrl : bgUrl;
+    const activeBorderUrl = pressed ? borderDownUrl : borderUrl;
+    const hoverActive = hovered && !pressed;
+    if (!canvas || !activeBgUrl || !activeBorderUrl) return;
+    let cancelled = false;
+
+    void Promise.all([
+      loadDataUrlImage(activeBgUrl),
+      loadDataUrlImage(activeBorderUrl),
+      hoverUrl ? loadDataUrlImage(hoverUrl) : Promise.resolve(null),
+    ])
+      .then(([bgImg, borderImg, hoverImg]) => {
+        if (cancelled) return;
+        drawGlueNineSliceToCanvas(
+          canvas,
+          bgImg,
+          borderImg,
+          hoverImg,
+          hoverActive,
+        );
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pressed, hovered, bgUrl, bgDownUrl, borderUrl, borderDownUrl, hoverUrl]);
+
+  return (
+    <button
+      type="button"
+      className="glue-small-button"
+      disabled={disabled}
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => {
+        setHovered(false);
+        setPressed(false);
+      }}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+    >
+      <canvas ref={canvasRef} className="glue-screen-canvas" />
+      <span
+        style={{
+          transform: pressed
+            ? `translate(${glueButtonPressedOffsetXPx}px, ${glueButtonPressedOffsetYPx}px)`
+            : "none",
+        }}
+      >
+        {children}
+      </span>
+    </button>
+  );
+}

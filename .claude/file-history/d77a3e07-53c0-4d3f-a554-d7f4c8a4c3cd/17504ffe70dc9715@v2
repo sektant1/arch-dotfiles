@@ -1,0 +1,4 @@
+import { Renderer } from './Renderer';
+
+/** Shared renderer instance used by UI components for element registration. */
+export const renderer = new Renderer();

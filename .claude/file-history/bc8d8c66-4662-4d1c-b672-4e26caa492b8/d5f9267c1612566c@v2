@@ -1,0 +1,41 @@
+import { useEffect, useRef, type ReactNode } from 'react';
+import type { Renderer } from '../renderer/Renderer';
+import GlueButton from './GlueButton';
+
+interface Props {
+  frameSrc: string;
+  bgPath: string;
+  borderPath: string;
+  bgDownPath?: string;
+  borderDownPath?: string;
+  hoverPath?: string;
+  children: ReactNode;
+  renderer: Renderer;
+}
+
+export default function MenuButton(props: Props) {
+  const frameRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    props.renderer.glueMenuFrames.push({
+      ref: () => frameRef.current!,
+      imgSrc: props.frameSrc,
+    });
+  }, []);
+
+  return (
+    <div className="glue-menu-slot">
+      <img ref={frameRef} src={props.frameSrc} alt="" />
+      <GlueButton
+        bgPath={props.bgPath}
+        borderPath={props.borderPath}
+        bgDownPath={props.bgDownPath}
+        borderDownPath={props.borderDownPath}
+        hoverPath={props.hoverPath}
+        renderer={props.renderer}
+      >
+        {props.children}
+      </GlueButton>
+    </div>
+  );
+}

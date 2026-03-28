@@ -1,0 +1,172 @@
+# RTS Engine — Design Spec
+
+## Overview
+
+Low poly 3D RTS engine inspirada em Warcraft 3 (estilo visual dos anos 2000). Suporta modelos .mdx e texturas .blp do Warcraft 3, além de glTF 2.0 e PNG/JPG. Arquitetura modular e desacoplada, com separação clara entre engine e cliente (editor).
+
+**Stack:** C++, OpenGL 3.3, GLFW (Wayland/Linux), CMake, Conan 2.x, Google Test, ImGui, spdlog.
+
+## Estrutura de Diretórios
+
+```
+rts-engine/
+├── engine/
+│   ├── core/          # tipos base, glm, logging (spdlog), event system
+│   ├── platform/      # janela (GLFW/Wayland), input, tempo
+│   ├── renderer/      # OpenGL 3.3, shaders, render queue, mesh/texture abstractions
+│   ├── assets/        # asset manager, loaders (.mdx, .blp, .gltf, .png/jpg)
+│   ├── terrain/       # heightmap loader, terrain mesh generation, splatmap
+│   └── camera/        # câmera RTS (pan, zoom, ângulo fixo)
+├── editor/            # executável do editor — consome a engine + ImGui
+├── tests/             # Google Test, um diretório por módulo
+├── assets/            # recursos (modelos, texturas, heightmaps de teste)
+├── docs/              # documentação (Doxygen + Sphinx/Breathe)
+├── cmake/             # módulos CMake auxiliares
+├── conanfile.py       # dependências 3rd party
+└── CMakeLists.txt     # root
+```
+
+## Módulos e Interfaces
+
+### Core (`rts::core`)
+
+Dependências: glm, spdlog. Nenhuma dependência interna.
+
+- **Logger** — wrapper sobre spdlog, inicialização centralizada e macros de log
+- **EventBus** — pub/sub simples para comunicação desacoplada entre módulos (ex: janela redimensionada → renderer reage)
+- **Math** — usa glm diretamente, sem wrapper
+
+### Platform (`rts::platform`)
+
+Dependências: rts::core, glfw.
+
+- **IWindow** — criar/destruir janela, poll events, swap buffers
+- **IInput** — estado de teclado/mouse, posição do cursor
+- **Time** — delta time, tempo total
+
+### Renderer (`rts::renderer`)
+
+Dependências: rts::core, glm.
+
+- **IRenderer** — init, begin_frame, end_frame, submit(RenderCommand)
+- **IMesh / ITexture** — abstrações GPU (handles opacos)
+- **ShaderProgram** — carregar/compilar shaders, set uniforms
+- Render queue com sorting básico (opaque front-to-back)
+
+### Assets (`rts::assets`)
+
+Dependências: rts::core, rts::renderer, stb, tinygltf.
+
+- **AssetManager** — cache de assets carregados, carregamento por path
+- **IModelLoader** — interface com implementações:
+  - `MdxLoader` — parser binário MDX versão 800 (geometria, bones, keyframes)
+  - `GltfLoader` — via tinygltf (meshes, texturas, skeletal animations)
+- **ITextureLoader** — interface com implementações:
+  - `BlpLoader` — parser BLP1/BLP2 (JPEG-compressed e paletted), converte para RGBA
+  - `StbLoader` — PNG/JPG via stb_image
+
+### Terrain (`rts::terrain`)
+
+Dependências: rts::core, rts::renderer, rts::assets.
+
+- **Terrain** — gera mesh a partir de heightmap (grid de alturas), aplica splatmap (multi-textura via blend map), expõe height queries
+
+### Camera (`rts::camera`)
+
+Dependências: rts::core, glm.
+
+- **Camera** — view/projection matrices, pan (WASD + bordas da tela), zoom (scroll), ângulo fixo top-down
+
+## Pipeline de Rendering
+
+1. `Platform::poll_events()`
+2. `Camera::update(delta_time)` — processa input, atualiza view/projection
+3. `Renderer::begin_frame()` — clear buffers
+4. Submit dos objetos da cena (terreno + modelos) como `RenderCommand` (mesh handle, texture handle, transform)
+5. `Renderer::flush()` — sort e draw calls
+6. ImGui render (editor overlay)
+7. `Platform::swap_buffers()`
+
+### Shaders
+
+- `terrain.vert/frag` — heightmap com splatmap (multi-textura por blend map)
+- `model.vert/frag` — modelos estáticos e animados (skeletal), iluminação Phong
+- Luz direcional única (sol)
+
+### Skeletal Animation
+
+- Bone transforms calculados na CPU (GPU skinning fica para o futuro)
+- Suporte a múltiplas sequências de animação (idle, walk, attack, etc.)
+- Interpolação linear entre keyframes (translation, rotation, scale)
+
+## Formatos Suportados
+
+### MDX (Warcraft 3)
+
+- Parser binário do formato MDX versão 800
+- Extrai: vértices, faces, normals, UVs, bones, sequências de animação
+- Keyframes de translation/rotation/scale por bone
+- Particle e ribbon emitters não incluídos nesta fase
+
+### BLP (Warcraft 3)
+
+- Suporte a BLP1 e BLP2
+- Modos: JPEG-compressed e paletted (256 cores)
+- Conversão para RGBA para upload como textura OpenGL
+
+### glTF 2.0
+
+- Via tinygltf
+- Meshes, texturas (PNG/JPG embedded ou externas), skeletal animations
+- Mapeados para as mesmas abstrações internas (IMesh, ITexture, skeleton)
+
+### Imagens (PNG/JPG)
+
+- Via stb_image
+- Usadas como texturas de modelos glTF, splatmaps, e heightmaps
+
+## Dependências (Conan 2.x)
+
+| Pacote | Versão | Uso |
+|--------|--------|-----|
+| glfw | 3.4 | Janela + input (Wayland) |
+| glm | 1.0 | Math |
+| spdlog | 1.14 | Logging |
+| stb | cci.20230920 | Carregamento de imagens |
+| gtest | 1.15 | Testes |
+| imgui | 1.91 | UI do editor |
+| tinygltf | 2.9 | Loader glTF 2.0 |
+
+**OpenGL loader:** glad (gerado e commitado no repo, sem Conan).
+
+**Documentação:** Doxygen + Sphinx via Breathe (instalados no sistema, não via Conan).
+
+## CMake Targets
+
+```
+rts::core        (STATIC)  → glm, spdlog
+rts::platform    (STATIC)  → rts::core, glfw
+rts::renderer    (STATIC)  → rts::core, glm
+rts::assets      (STATIC)  → rts::core, rts::renderer, stb, tinygltf
+rts::terrain     (STATIC)  → rts::core, rts::renderer, rts::assets
+rts::camera      (STATIC)  → rts::core, glm
+editor           (EXECUTABLE) → todos os módulos + imgui
+```
+
+## Testes
+
+- Um diretório de testes por módulo (`tests/core/`, `tests/assets/`, etc.)
+- **Toda feature implementada deve ter testes correspondentes** — sem exceção
+- Foco inicial: parsers (MDX, BLP), asset manager, event system, terrain generation
+- Renderer e platform: testes manuais (dependem de contexto OpenGL)
+
+## Fora do Escopo (Futuro)
+
+- Pathfinding, seleção de unidades, gameplay
+- Fog of war, minimap
+- Som/áudio
+- Networking
+- GPU skinning
+- Particle/ribbon emitters do MDX
+- Sombras, post-processing
+- ECS

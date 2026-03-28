@@ -1,0 +1,31 @@
+import { createExternalStore } from "./createStore";
+
+const runningStore = createExternalStore<boolean>(false);
+const elapsedStore = createExternalStore<number>(0); // seconds
+
+let intervalId: ReturnType<typeof setInterval> | null = null;
+
+export function startTimer() {
+  if (runningStore.get()) return; // already running
+  runningStore.set(true);
+  intervalId = setInterval(() => {
+    elapsedStore.set((prev) => prev + 1);
+  }, 1000);
+}
+
+export function pauseTimer() {
+  if (intervalId !== null) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+  runningStore.set(false);
+}
+
+export function resetTimer() {
+  pauseTimer();
+  elapsedStore.set(0);
+}
+
+export const useTimerRunning = runningStore.useValue;
+export const useElapsedSeconds = elapsedStore.useValue;
+export const getElapsedSeconds = elapsedStore.get;

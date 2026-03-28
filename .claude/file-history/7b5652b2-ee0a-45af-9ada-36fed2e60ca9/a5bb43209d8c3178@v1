@@ -1,0 +1,114 @@
+import {
+  useTimerRunning,
+  useElapsedSeconds,
+  startTimer,
+  pauseTimer,
+  resetTimer,
+} from "../../state/timer";
+import { useCurrentRace } from "../../state/race";
+import { BUILD_ORDERS_2026 } from "../../data/buildOrders";
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+export default function BuildOrdersSection() {
+  const running = useTimerRunning();
+  const elapsed = useElapsedSeconds();
+  const currentRace = useCurrentRace();
+
+  const minute = Math.floor(elapsed / 60);
+
+  // Filter builds for current race (or show all if no race selected)
+  const relevantBuilds = BUILD_ORDERS_2026.filter(
+    (b) => !currentRace || b.race === currentRace,
+  );
+
+  // Optional: find if we're in a key timing window for any build
+  const activeTiming = relevantBuilds.flatMap((b) =>
+    b.keyTiming &&
+    minute >= b.keyTiming.minute - 1 &&
+    minute <= b.keyTiming.minute + 2
+      ? [{ build: b.name, note: b.keyTiming.note }]
+      : [],
+  )[0]; // show first matching one
+
+  return (
+    <div className="tab-content">
+      <section className="section-card build-orders-section">
+        <h3>
+          {currentRace ? `${currentRace} ` : ""}Build Orders –{" "}
+          {formatTime(elapsed)}
+        </h3>
+        {/* Timer display + controls */}
+
+        {relevantBuilds.length === 0 ? (
+          <p className="text-center text-wc3-gold/80">
+            Select a race in the top HUD to see filtered builds.
+          </p>
+        ) : (
+          <div className="space-y-6">
+            {relevantBuilds.map((build, i) => (
+              <div
+                key={i}
+                className="wc3-panel p-6 rounded border border-wc3-gold/30 bg-wc3-dark/70"
+              >
+                <h4 className="button-showcase-title">{build.name}</h4>
+                <p className="button-showcase-desc">Good vs {build.vs} </p>
+                <p className="mb-4">{build.description}</p>
+
+                <div className="">
+                  <button
+                    type="button"
+                    className="glue-small-button"
+                    onClick={running ? pauseTimer : startTimer}
+                  >
+                    <span className="">{running ? "Pause" : "Start"}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="glue-small-button"
+                    onClick={resetTimer}
+                    disabled={elapsed === 0 && !running}
+                  >
+                    <span className="esc-option-label">Reset</span>
+                  </button>
+                </div>
+                {formatTime(elapsed)}
+                <ul className="list-decimal pl-6 space-y-1.5 text-sm mb-4">
+                  {build.steps.map((step, j) => (
+                    <li
+                      key={j}
+                      className={
+                        elapsed >= j + 3 ? "button-showcase-title" : ""
+                      }
+                    >
+                      {step.order} | {step.time} | {step.instruction} |{" "}
+                      {step.food}
+                    </li>
+                  ))}
+                </ul>
+
+                {build.note && (
+                  <p className="text-xs italic text-wc3-gold/80 mb-3">
+                    {build.note}
+                  </p>
+                )}
+
+                {build.keyTiming && (
+                  <div className="text-sm text-wc3-gold/90">
+                    Key timing: {build.keyTiming.minute}:00 –{" "}
+                    {build.keyTiming.note}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

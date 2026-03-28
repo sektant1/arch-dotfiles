@@ -1,0 +1,22 @@
+import { useEffect, useRef } from 'react';
+import type { Renderer } from '../renderer/Renderer';
+
+interface Props {
+  renderer: Renderer;
+}
+
+export default function MenuPanel(props: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    props.renderer.menuPanels.push({ ref: () => ref.current! });
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      className="menu-panel-demo"
+      style={{ width: '256px', height: '320px', borderRadius: '4px' }}
+    />
+  );
+}

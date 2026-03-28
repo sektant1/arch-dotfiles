@@ -1,0 +1,93 @@
+import React, { useState } from "react";
+import { useBlpTexture } from "../hooks/useBlpTexture";
+import { COMMAND_BUTTON_ASSETS } from "../utils/assets";
+import type { CommandButtonData } from "../types";
+
+export interface CommandButtonProps extends CommandButtonData {
+  onClick?: () => void;
+  /** Show at 64px showcase size instead of 48px */
+  showcase?: boolean;
+  className?: string;
+}
+
+/**
+ * In-game command card ability button with pressed, disabled,
+ * cooldown, passive, level-up, and no-resources states.
+ */
+export function CommandButton({
+  icon,
+  disabledIcon,
+  hotkey,
+  label,
+  disabled = false,
+  passive = false,
+  levelUp = false,
+  noResources = false,
+  cooldown = false,
+  onClick,
+  showcase = false,
+  className,
+}: CommandButtonProps) {
+  const [pressed, setPressed] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
+  const backdropUrl = useBlpTexture(COMMAND_BUTTON_ASSETS.backdrop);
+  const frameUrl = useBlpTexture(COMMAND_BUTTON_ASSETS.frame);
+  const highlightUrl = useBlpTexture(COMMAND_BUTTON_ASSETS.highlight);
+  const iconUrl = useBlpTexture(disabled ? disabledIcon : icon);
+
+  const classNames = [
+    "cmd-btn",
+    showcase && "cmd-btn--showcase",
+    pressed && "cmd-btn--pressed",
+    passive && "cmd-btn--passive",
+    levelUp && "cmd-btn--levelup",
+    noResources && "cmd-btn--no-resources",
+    !icon && "cmd-btn-empty",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <button
+      type="button"
+      className={classNames}
+      onClick={onClick}
+      disabled={disabled && !icon}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setPressed(false); }}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+    >
+      {backdropUrl && (
+        <img className="cmd-btn-backdrop" src={backdropUrl} alt="" />
+      )}
+      {iconUrl ? (
+        <img className="cmd-btn-icon" src={iconUrl} alt={label ?? ""} />
+      ) : (
+        icon === undefined && (
+          <div className="cmd-btn-fallback-icon" aria-hidden="true">
+            *
+          </div>
+        )
+      )}
+      {frameUrl && (
+        <img className="cmd-btn-frame" src={frameUrl} alt="" />
+      )}
+      <div
+        className={`cmd-btn-highlight${hovered && !pressed ? " cmd-btn-highlight--on" : ""}`}
+        style={{
+          backgroundImage: highlightUrl ? `url("${highlightUrl}")` : undefined,
+        }}
+      />
+      {cooldown && <div className="cmd-btn-cooldown" />}
+      {noResources && <div className="cmd-btn-no-resources" />}
+      {hotkey && (
+        <span className="cmd-btn-hotkey" aria-hidden="true">
+          {hotkey}
+        </span>
+      )}
+    </button>
+  );
+}

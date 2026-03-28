@@ -1,0 +1,72 @@
+#include <rts/camera/camera.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <algorithm>
+#include <cmath>
+
+namespace rts {
+
+RtsCamera::RtsCamera(const CameraConfig& config)
+    : m_distance(config.distance)
+    , m_pitch(config.pitch)
+    , m_config(config) {}
+
+void RtsCamera::update(f32 delta_time, const Vec2& mouse_pos, const Vec2& screen_size,
+                        bool key_w, bool key_a, bool key_s, bool key_d,
+                        f32 scroll_delta) {
+    Vec2 pan_dir{0.0f, 0.0f};
+
+    // Teclado
+    if (key_w) pan_dir.y -= 1.0f;
+    if (key_s) pan_dir.y += 1.0f;
+    if (key_a) pan_dir.x -= 1.0f;
+    if (key_d) pan_dir.x += 1.0f;
+
+    // Edge pan
+    if (mouse_pos.x < m_config.edge_pan_margin)                    pan_dir.x -= 1.0f;
+    if (mouse_pos.x > screen_size.x - m_config.edge_pan_margin)    pan_dir.x += 1.0f;
+    if (mouse_pos.y < m_config.edge_pan_margin)                    pan_dir.y -= 1.0f;
+    if (mouse_pos.y > screen_size.y - m_config.edge_pan_margin)    pan_dir.y += 1.0f;
+
+    if (glm::length(pan_dir) > 0.0f) {
+        pan_dir = glm::normalize(pan_dir);
+    }
+
+    pan(pan_dir * m_config.pan_speed * delta_time);
+    zoom(scroll_delta * m_config.zoom_speed);
+}
+
+void RtsCamera::pan(const Vec2& offset) {
+    m_target.x += offset.x;
+    m_target.z += offset.y;
+}
+
+void RtsCamera::zoom(f32 delta) {
+    m_distance = std::clamp(m_distance - delta,
+                             m_config.min_distance,
+                             m_config.max_distance);
+}
+
+void RtsCamera::set_aspect_ratio(f32 aspect) {
+    m_aspect_ratio = aspect;
+}
+
+Mat4 RtsCamera::view_matrix() const {
+    Vec3 pos = calculate_position();
+    return glm::lookAt(pos, m_target, Vec3(0.0f, 1.0f, 0.0f));
+}
+
+Mat4 RtsCamera::projection_matrix() const {
+    return glm::perspective(glm::radians(m_config.fov), m_aspect_ratio,
+                            m_config.near_plane, m_config.far_plane);
+}
+
+Vec3 RtsCamera::calculate_position() const {
+    f32  pitch_rad = glm::radians(m_pitch);
+    Vec3 offset;
+    offset.x = 0.0f;
+    offset.y = m_distance * std::cos(pitch_rad);
+    offset.z = m_distance * std::sin(pitch_rad);
+    return m_target - offset;
+}
+
+}  // namespace rts

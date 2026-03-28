@@ -1,0 +1,74 @@
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
+import { Renderer, type Race } from '@wc3-ui/core';
+
+interface WC3RendererContextValue {
+  renderer: Renderer;
+}
+
+const WC3RendererContext = createContext<WC3RendererContextValue | null>(null);
+
+export interface WC3RendererProviderProps {
+  children: ReactNode;
+  /** Initial race to load textures for. Defaults to 'Human'. */
+  race?: Race;
+  /** CSS class for the overlay canvas */
+  canvasClassName?: string;
+}
+
+export function WC3RendererProvider({ children, race = 'Human', canvasClassName }: WC3RendererProviderProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Create renderer once, synchronously, so children's registration effects
+  // fire against the same instance that the canvas init effect will use.
+  const rendererRef = useRef<Renderer | null>(null);
+  if (rendererRef.current === null) {
+    rendererRef.current = new Renderer();
+  }
+  const renderer = rendererRef.current;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    renderer.init(canvas);
+    renderer.loadRace(race);
+    renderer.preloadAll();
+    renderer.start();
+
+    return () => {
+      renderer.destroy();
+    };
+    // race intentionally excluded: a separate effect handles race changes below
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    renderer.loadRace(race);
+  }, [renderer, race]);
+
+  return (
+    <WC3RendererContext.Provider value={{ renderer }}>
+      <canvas
+        ref={canvasRef}
+        className={canvasClassName}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: 0,
+        }}
+      />
+      {children}
+    </WC3RendererContext.Provider>
+  );
+}
+
+export function useWC3Renderer(): Renderer {
+  const ctx = useContext(WC3RendererContext);
+  if (!ctx) {
+    throw new Error('useWC3Renderer must be used inside <WC3RendererProvider>');
+  }
+  return ctx.renderer;
+}

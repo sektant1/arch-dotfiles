@@ -1,0 +1,9 @@
+project = 'RTS Engine'
+author  = 'rts-engine contributors'
+
+extensions = ['breathe']
+
+breathe_projects = {'rts-engine': './xml'}
+breathe_default_project = 'rts-engine'
+
+html_theme = 'sphinx_rtd_theme'

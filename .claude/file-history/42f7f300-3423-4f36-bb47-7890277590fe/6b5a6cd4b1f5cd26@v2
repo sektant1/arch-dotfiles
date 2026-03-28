@@ -1,0 +1,207 @@
+# ──────────────────────────────────────────────────────────────────────────
+#  °˖* ૮(  • ᴗ ｡)っ🍸  pewdiepie/archdaemon/dionysh shhheersh
+#  Hyprland config 
+#  vers. 1.0
+# ──────────────────────────────────────────────────────────────────────────
+
+# ── MONITORS ───────────────────────────────────────────────────────────────
+monitor = eDP-1, disable
+monitor = HDMI-A-2, 1920x1080@120.00, auto, 1
+
+# ── MY PROGRAMS ────────────────────────────────────────────────────────────
+$terminal    = kitty
+$fileManager = thunar
+$menu        = rofi
+
+# ── AUTOSTART ──────────────────────────────────────────────────────────────
+
+exec-once = ~/.config/hypr/scripts/waybar_watcher.sh &
+exec-once = ~/.config/hypr/scripts/workspace-signal.sh &
+
+# FIREFOX PRELOAD - fast firefox bööt, just hide workspace 9.
+exec-once = hyprctl dispatch exec '[workspace 9 silent] firefox --new-instance --profile ~/.mozilla/firefox/czb65uen.default-release --new-window about:blank'
+
+# EWW SCRIPTS
+exec-once = ~/.config/eww/scripts/audio/audio_visualizer.py &
+exec-once = cava -p ~/.config/cava/config &
+
+# ROFI image cache
+exec-once = cp ~/.config/rofi/image.png /dev/shm/rofi_image.png
+
+
+# ── ENVIRONMENT VARIABLES ──────────────────────────────────────────────────
+env = XCURSOR_SIZE,16
+env = HYPRCURSOR_SIZE,16
+env = XDG_CURRENT_DESKTOP,Hyprland
+env = GDK_DPI_SCALE,1
+env = XFT_DPI,96
+env = XFT_FONT,UbuntuMono Nerd Font-11
+
+# ── LOOK AND FEEL ──────────────────────────────────────────────────────────
+general {
+    col.active_border   = rgba(9cdef2ff)
+    col.inactive_border = rgba(444444ff)
+    gaps_in             = 0
+    gaps_out            = 5
+    border_size         = 2
+
+    col.active_border   = rgba(61afefff)   # Blue for focused windows
+    col.inactive_border = rgba(444444ff)
+
+    resize_on_border = false
+    allow_tearing    = false
+    layout           = dwindle
+}
+
+# ── DECORATION ─────────────────────────────────────────────────────────────
+decoration {
+    rounding       = 1
+    rounding_power = 2
+
+    active_opacity   = 1.0
+    inactive_opacity = 0.95
+
+    shadow {
+        enabled      = false
+        range        = 5
+        render_power = 4
+        color        = rgba(1fbeffee)
+    }
+
+    blur {
+        enabled     = false
+        size        = 2
+        passes      = 1
+        brightness  = 0.4
+    }
+}
+
+# ── ANIMATIONS ─────────────────────────────────────────────────────────────
+animations {
+    enabled = yes, please :)
+
+    bezier = easeOutQuint,0.23,1,0.32,1
+    bezier = easeInOutCubic,0.65,0.05,0.36,1
+    bezier = linear,0,0,1,1
+    bezier = almostLinear,0.5,0.5,0.75,1.0
+    bezier = quick,0.15,0,0.1,1
+
+    animation = global, 1, 10, default
+    animation = border, 1, 5.39, easeOutQuint
+    animation = windows, 1, 4.79, easeOutQuint
+    animation = windowsIn, 1, 4.1, easeOutQuint, popin 87%
+    animation = windowsOut, 1, 1.49, linear, popin 87%
+    animation = fadeIn, 1, 1.73, almostLinear
+    animation = fadeOut, 1, 1.46, almostLinear
+    animation = fade, 1, 3.03, quick
+    animation = layers, 1, 3.81, easeOutQuint
+    animation = layersIn, 1, 4, easeOutQuint, fade
+    animation = layersOut, 1, 1.5, linear, fade
+    animation = fadeLayersIn, 1, 1.79, almostLinear
+    animation = fadeLayersOut, 1, 1.39, almostLinear
+    animation = workspaces, 1, 1.94, almostLinear, fade
+    animation = workspacesIn, 1, 1.21, almostLinear, fade
+    animation = workspacesOut, 1, 1.94, almostLinear, fade
+}
+
+# ── LAYOUTS ────────────────────────────────────────────────────────────────
+dwindle {
+    pseudotile     = true
+    preserve_split = true
+}
+
+master {
+    new_status = master
+}
+
+misc {
+    force_default_wallpaper = 0
+    disable_hyprland_logo   = true
+}
+
+# ── INPUT ──────────────────────────────────────────────────────────────────
+input {
+    kb_layout  = us
+    kb_variant =
+    kb_model   =
+    kb_options =
+    kb_rules   =
+
+    follow_mouse = 1
+    sensitivity  = 0
+
+    touchpad {
+        natural_scroll = true
+    }
+}
+
+
+device {
+    name        = epic-mouse-v1
+    sensitivity = -0.5
+}
+
+# SUPER key
+$mainMod = SUPER
+	
+# Actions
+bind = $mainMod, RETURN, exec, kitty # Open Alactritty
+bind = $mainMod, W, killactive # Close current window
+bind = $mainMod, M, exit # Exit Hyprland
+bind = $mainMod, E, exec, ~/.config/ml4w/settings/filemanager.sh # Opens the filemanager
+bind = $mainMod, T, togglefloating # Toggle between tiling and floating window
+bind = $mainMod, F, fullscreen # Open the window in fullscreen
+bind = $mainMod CTRL, RETURN, exec, rofi -show drun # Open rofi
+bind = $mainMod, P, pseudo, # dwindle
+bind = $mainMod, O, togglesplit, # dwindle
+bind = $mainMod, B, exec, ~/.config/ml4w/settings/browser.sh # Opens the browser
+bind = $mainMod SHIFT, B, exec, ~/.config/ml4w/scripts/reload-waybar.sh # Reload Waybar
+bind = $mainMod SHIFT, W, exec, ~/.config/ml4w/scripts/reload-hyprpaper.sh # Reload hyprpaper after a changing the wallpaper
+bind = , XF86AudioRaiseVolume, exec, wpctl set-volume -l 1.4 @DEFAULT_AUDIO_SINK@ 5%+
+bind = , XF86AudioLowerVolume, exec, wpctl set-volume -l 1.4 @DEFAULT_AUDIO_SINK@ 5%-
+bind = , XF86MonBrightnessUp, exec, brightnessctl set 10%+
+bind = , XF86MonBrightnessDown, exec, brightnessctl set 10%-
+bind = , XF86AudioMute, exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
+bind = , XF86AudioMicMute, exec, wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
+bind = , XF86WLAN, exec, nmcli radio wifi toggle
+bind = , XF86Refresh, exec, xdotool key F5
+
+# Move focus with mainMod + arrow keys
+bind = $mainMod, H, movefocus, l # Move focus left
+bind = $mainMod, L, movefocus, r # Move focus right
+bind = $mainMod, K, movefocus, u # Move focus up
+bind = $mainMod, J, movefocus, d # Move focus down
+
+# Switch workspaces with mainMod + [0-9]
+bind = $mainMod, 1, workspace, 1 # Switch to workspace 1
+bind = $mainMod, 2, workspace, 2 # Switch to workspace 2
+bind = $mainMod, 3, workspace, 3 # Switch to workspace 3
+bind = $mainMod, 4, workspace, 4 # Switch to workspace 4
+bind = $mainMod, 5, workspace, 5 # Switch to workspace 5
+bind = $mainMod, 6, workspace, 6 # Switch to workspace 6
+bind = $mainMod, 7, workspace, 7 # Switch to workspace 7
+bind = $mainMod, 8, workspace, 8 # Switch to workspace 8
+bind = $mainMod, 9, workspace, 9 # Switch to workspace 9
+bind = $mainMod, 0, workspace, 10 # Switch to workspace 10
+
+# Move active window to a workspace with mainMod + SHIFT + [0-9]
+bind = $mainMod SHIFT, 1, movetoworkspace, 1 #  Move window to workspace 1
+bind = $mainMod SHIFT, 2, movetoworkspace, 2 #  Move window to workspace 2
+bind = $mainMod SHIFT, 3, movetoworkspace, 3 #  Move window to workspace 3
+bind = $mainMod SHIFT, 4, movetoworkspace, 4 #  Move window to workspace 4
+bind = $mainMod SHIFT, 5, movetoworkspace, 5 #  Move window to workspace 5
+bind = $mainMod SHIFT, 6, movetoworkspace, 6 #  Move window to workspace 6
+bind = $mainMod SHIFT, 7, movetoworkspace, 7 #  Move window to workspace 7
+bind = $mainMod SHIFT, 8, movetoworkspace, 8 #  Move window to workspace 8
+bind = $mainMod SHIFT, 9, movetoworkspace, 9 #  Move window to workspace 9
+bind = $mainMod SHIFT, 0, movetoworkspace, 10 #  Move window to workspace 10
+
+bind = SUPER, SPACE, exec, rofi -show drun
+
+# Scroll through existing workspaces with mainMod + scroll
+bind = $mainMod, mouse_down, workspace, e+1 # Scroll workspaces 
+bind = $mainMod, mouse_up, workspace, e-1 # Scroll workspaces
+
+# Move/resize windows with mainMod + LMB/RMB and dragging
+bindm = $mainMod, mouse:272, movewindow # Move window
+bindm = $mainMod, mouse:273, resizewindow # Resize window

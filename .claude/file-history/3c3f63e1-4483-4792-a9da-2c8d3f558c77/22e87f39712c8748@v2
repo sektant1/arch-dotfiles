@@ -1,0 +1,108 @@
+import React, { useRef, useCallback, useEffect, useState } from "react";
+import { loadBlpImage } from "../utils/blp";
+import { GLUE_BUTTON_ASSETS } from "../utils/assets";
+
+export interface GlueButtonProps {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  /** Button width in px */
+  width?: number;
+  /** Button height in px */
+  height?: number;
+  className?: string;
+  hotkey?: string;
+}
+
+/**
+ * Standard login/menu screen button with tiled stone background,
+ * gold border, and hover glow.
+ */
+export function GlueButton({
+  children,
+  onClick,
+  disabled = false,
+  width = 260,
+  height = 48,
+  className,
+  hotkey,
+}: GlueButtonProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const imagesRef = useRef<Record<string, HTMLImageElement>>({});
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.imageSmoothingEnabled = false;
+
+    const imgs = imagesRef.current;
+    const bgKey = disabled ? "bgDisabled" : pressed ? "bgDown" : "bg";
+    const borderKey = disabled
+      ? "borderDisabled"
+      : pressed
+        ? "borderDown"
+        : "border";
+
+    if (imgs[bgKey]) ctx.drawImage(imgs[bgKey], 0, 0, w, h);
+    if (imgs[borderKey]) ctx.drawImage(imgs[borderKey], 0, 0, w, h);
+
+    if (hovered && !disabled && !pressed && imgs.highlight) {
+      ctx.globalCompositeOperation = "screen";
+      ctx.drawImage(imgs.highlight, 0, 0, w, h);
+      ctx.globalCompositeOperation = "source-over";
+    }
+  }, [hovered, pressed, disabled]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const assets = GLUE_BUTTON_ASSETS;
+
+    Promise.all(
+      Object.entries(assets).map(async ([key, url]) => {
+        try {
+          const img = await loadBlpImage(url);
+          if (!cancelled) imagesRef.current[key] = img;
+        } catch {}
+      }),
+    ).then(() => {
+      if (!cancelled) draw();
+    });
+
+    return () => { cancelled = true; };
+  }, [draw]);
+
+  useEffect(() => { draw(); }, [draw]);
+
+  return (
+    <button
+      type="button"
+      className={`glue-screen-button ${className ?? ""}`}
+      style={{ width, height }}
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setPressed(false); }}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+    >
+      <canvas
+        ref={canvasRef}
+        className="glue-screen-canvas"
+        width={width * 2}
+        height={height * 2}
+      />
+      <span>
+        {hotkey && <span className="button-hotkey">{hotkey}</span>}
+        {children}
+      </span>
+    </button>
+  );
+}

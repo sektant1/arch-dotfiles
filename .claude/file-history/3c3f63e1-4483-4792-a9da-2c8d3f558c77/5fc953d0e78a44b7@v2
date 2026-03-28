@@ -1,0 +1,79 @@
+import React, { useRef, useEffect, useCallback } from "react";
+import { loadBlpImage } from "../utils/blp";
+import { SLIDER_ASSETS, getSliderKnob } from "../utils/assets";
+import type { Race } from "../types";
+
+export interface SliderProps {
+  value: number;
+  min?: number;
+  max?: number;
+  onChange?: (value: number) => void;
+  disabled?: boolean;
+  race?: Race;
+  label?: string;
+  className?: string;
+}
+
+/**
+ * Options menu slider with a shared track and a race-specific thumb.
+ */
+export function Slider({
+  value,
+  min = 0,
+  max = 100,
+  onChange,
+  disabled = false,
+  race = "Human",
+  label,
+  className,
+}: SliderProps) {
+  const trackCanvasRef = useRef<HTMLCanvasElement>(null);
+  const knobUrl = getSliderKnob(race);
+
+  const drawTrack = useCallback(async () => {
+    const canvas = trackCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    try {
+      const [bg, border] = await Promise.all([
+        loadBlpImage(SLIDER_ASSETS.bg),
+        loadBlpImage(disabled ? SLIDER_ASSETS.borderDisabled : SLIDER_ASSETS.border),
+      ]);
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(bg, 0, 0, w, h);
+      ctx.drawImage(border, 0, 0, w, h);
+    } catch {}
+  }, [disabled]);
+
+  useEffect(() => { drawTrack(); }, [drawTrack]);
+
+  const percent = max > min ? ((value - min) / (max - min)) * 100 : 0;
+  const knobLeft = `${percent}%`;
+
+  return (
+    <div className={`esc-slider-demo ${className ?? ""}`}>
+      {label && <div className="esc-slider-value">{label}</div>}
+      <div className="esc-slider-track">
+        <canvas ref={trackCanvasRef} className="esc-slider-canvas" width={440} height={40} />
+        <div
+          className="esc-slider-knob"
+          style={{ left: knobLeft }}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          value={value}
+          onChange={(e) => onChange?.(Number(e.target.value))}
+          disabled={disabled}
+          aria-label={label}
+        />
+      </div>
+    </div>
+  );
+}

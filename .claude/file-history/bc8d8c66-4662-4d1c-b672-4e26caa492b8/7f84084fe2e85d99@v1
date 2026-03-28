@@ -1,0 +1,85 @@
+import type { Renderer } from '../../renderer/Renderer';
+import MenuPanel from '../MenuPanel';
+import HeroGallery from '../HeroGallery';
+import { currentRace, RACE_PREFIXES } from '../../state/race';
+
+interface Props {
+  renderer: Renderer;
+}
+
+export default function PanelsSection(props: Props) {
+  const rp = () => RACE_PREFIXES[currentRace()];
+  const consolePath = () => `war3/Console/${currentRace()}/`;
+
+  return (
+    <div class="tab-content">
+      <div class="section-card">
+        <h2>Menu Background</h2>
+        <p class="section-desc">Race-specific EscMenu panel with background + border composite.</p>
+        <div style={{ display: 'flex', 'flex-direction': 'column', 'align-items': 'center', gap: '12px' }}>
+          <MenuPanel renderer={props.renderer} />
+          <div style={{ 'text-align': 'center' }}>
+            <div style={{ 'font-size': '0.75rem', color: 'var(--text-dim)', 'margin-bottom': '4px' }}>Border Texture Strip (512x64)</div>
+            <img src={`war3/Widgets/EscMenu/${currentRace()}/${rp().esc}-options-menu-border.png`} style={{ height: '40px', 'image-rendering': 'auto' }} alt="" />
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h2>Loading Screen</h2>
+        <p class="section-desc">2x2 grid with shared left quadrants + race-specific right quadrants.</p>
+        <div class="loading-preview">
+          <div class="loading-grid">
+            <img src="war3/Glues/Loading/Multiplayer/Loading-TopLeft.png" alt="Top Left" />
+            <img src={`war3/Glues/Loading/Multiplayer/Loading-${currentRace()}-TopRight.png`} alt="Top Right" />
+            <img src="war3/Glues/Loading/Multiplayer/Loading-BotLeft.png" alt="Bottom Left" />
+            <img src={`war3/Glues/Loading/Multiplayer/Loading-${currentRace()}-BotRight.png`} alt="Bottom Right" />
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h2>Hero Portrait Gallery</h2>
+        <p class="section-desc">Score screen hero portraits from Reign of Chaos and The Frozen Throne.</p>
+        <HeroGallery />
+      </div>
+
+      <div class="section-card">
+        <h2>HUD Tile Breakdown</h2>
+        <p class="section-desc">Individual HUD tiles, portrait mask, and inventory cover for the current race.</p>
+        <div class="hud-tiles-preview">
+          <div class="tile-card">
+            <img src={`${consolePath()}${rp().tile}UITile01.png`} alt="Tile 01" />
+            <div class="tile-label">Tile 01 (512x512)</div>
+          </div>
+          <div class="tile-card">
+            <img src={`${consolePath()}${rp().tile}UITile02.png`} alt="Tile 02" />
+            <div class="tile-label">Tile 02 (512x512)</div>
+          </div>
+          <div class="tile-card">
+            <img src={`${consolePath()}${rp().tile}UITile03.png`} alt="Tile 03" />
+            <div class="tile-label">Tile 03 (512x512)</div>
+          </div>
+          <div class="tile-card">
+            <img src={`${consolePath()}${rp().tile}UITile04.png`} alt="Tile 04" />
+            <div class="tile-label">Tile 04 (64x512)</div>
+          </div>
+        </div>
+        <div class="hud-tiles-preview" style={{ 'margin-top': '12px' }}>
+          <div class="tile-card">
+            <img src={`${consolePath()}${rp().tile}UIPortraitMask.png`} alt="Portrait Mask" />
+            <div class="tile-label">Portrait Mask</div>
+          </div>
+          <div class="tile-card">
+            <img src={`${consolePath()}${rp().tile}UITile-TimeIndicator.png`} alt="Time Indicator" />
+            <div class="tile-label">Time Indicator</div>
+          </div>
+          <div class="tile-card">
+            <img src={`${consolePath()}${rp().tile}UITile-InventoryCover.png`} alt="Inventory Cover" />
+            <div class="tile-label">Inventory Cover</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,60 @@
+import { useState, useRef, useCallback } from 'react';
+
+// Bar animation state
+export function useAnimatedBars() {
+  const [healthPct, setHealthPct] = useState(75);
+  const [manaPct, setManaPct] = useState(60);
+  const [xpPct, setXpPct] = useState(40);
+  const [buildPct, setBuildPct] = useState(55);
+
+  const animateBars = useCallback(() => {
+    setHealthPct(Math.floor(Math.random() * 60 + 20));
+    setManaPct(Math.floor(Math.random() * 60 + 20));
+    setXpPct(Math.floor(Math.random() * 60 + 20));
+    setBuildPct(Math.floor(Math.random() * 60 + 20));
+  }, []);
+
+  return {
+    healthPct, manaPct, xpPct, buildPct,
+    setHealthPct, setManaPct, setXpPct, setBuildPct,
+    animateBars,
+  };
+}
+
+// Loading bar state
+export function useLoadingBar() {
+  const [progress, setProgress] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startRef = useRef<() => void>(null);
+
+  const stop = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  const start = useCallback(() => {
+    setProgress(0);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(() => {
+      setProgress(prev => {
+        const next = prev + Math.random() * 8 + 2;
+        if (next >= 100) {
+          clearInterval(intervalRef.current!);
+          intervalRef.current = null;
+          setTimeout(() => {
+            setProgress(0);
+            setTimeout(() => startRef.current?.(), 100);
+          }, 1500);
+          return 100;
+        }
+        return next;
+      });
+    }, 400);
+  }, []);
+
+  startRef.current = start;
+
+  return { progress, start, stop };
+}

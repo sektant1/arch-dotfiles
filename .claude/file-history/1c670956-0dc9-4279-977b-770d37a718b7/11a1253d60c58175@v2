@@ -1,0 +1,13 @@
+add_library(rts_assets STATIC
+    src/stb_loader.cpp
+    src/blp_loader.cpp
+    src/gltf_loader.cpp
+    src/mdx_loader.cpp
+    src/asset_manager.cpp
+)
+
+target_include_directories(rts_assets PUBLIC include)
+target_link_libraries(rts_assets PUBLIC rts::core rts::renderer)
+target_link_libraries(rts_assets PRIVATE stb::stb TinyGLTF::TinyGLTF)
+
+add_library(rts::assets ALIAS rts_assets)

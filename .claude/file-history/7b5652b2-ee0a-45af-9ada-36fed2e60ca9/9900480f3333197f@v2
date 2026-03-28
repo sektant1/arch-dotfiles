@@ -1,0 +1,29 @@
+import EscOptionButton from "../components/EscOptionButton";
+import { setPage } from "../state/page";
+
+export default function HomePage() {
+  return (
+    <div className="tab-content tab-content--page">
+      <section className="hero-section">
+        <div className="hero-content">
+          <img src="/logo.avif" alt="WC3UI" className="hero-logo" />
+          <p className="hero-subtitle">
+            Build order guide for Warcraft 3 Practice.
+          </p>
+          <div className="home-cta-row">
+            <EscOptionButton onClick={() => setPage("build-orders")}>
+              {"See\u00A0"}
+              <span className="button-hotkey">B</span>uilds
+            </EscOptionButton>
+            <EscOptionButton onClick={() => setPage("showcase")}>
+              {"See\u00A0"}
+              <span className="button-hotkey">C</span>omponents
+            </EscOptionButton>
+          </div>
+          <div className="hero-version-label">Patch 0.01</div>
+          <p className="social-proof">Created by noobs, for noobs :p</p>
+        </div>
+      </section>
+    </div>
+  );
+}

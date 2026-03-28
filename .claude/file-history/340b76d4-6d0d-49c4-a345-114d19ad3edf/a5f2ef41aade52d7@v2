@@ -1,0 +1,1 @@
+export type { Race, RacePrefix, TextureEntry } from '@wc3-ui/core';

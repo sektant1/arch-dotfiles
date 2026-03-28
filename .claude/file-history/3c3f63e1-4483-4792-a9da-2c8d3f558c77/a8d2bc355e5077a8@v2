@@ -1,0 +1,103 @@
+import { useEffect, useRef, useCallback } from "react";
+import { loadBlpImage } from "../utils/blp";
+
+/**
+ * Hook that manages a canvas element and renders 9-slice BLP textures to it.
+ * Used for buttons, editboxes, scrollbars, and other UI chrome.
+ */
+export function useNineSliceCanvas(
+  bgUrl?: string,
+  borderUrl?: string,
+  highlightUrl?: string,
+) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imagesRef = useRef<{
+    bg?: HTMLImageElement;
+    border?: HTMLImageElement;
+    highlight?: HTMLImageElement;
+  }>({});
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const { width, height } = canvas;
+    ctx.clearRect(0, 0, width, height);
+    ctx.imageSmoothingEnabled = false;
+
+    const { bg, border, highlight } = imagesRef.current;
+    if (bg) ctx.drawImage(bg, 0, 0, width, height);
+    if (border) ctx.drawImage(border, 0, 0, width, height);
+    if (highlight) {
+      ctx.globalCompositeOperation = "screen";
+      ctx.drawImage(highlight, 0, 0, width, height);
+      ctx.globalCompositeOperation = "source-over";
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      const promises: Promise<void>[] = [];
+      if (bgUrl) {
+        promises.push(
+          loadBlpImage(bgUrl).then((img) => {
+            if (!cancelled) imagesRef.current.bg = img;
+          }),
+        );
+      }
+      if (borderUrl) {
+        promises.push(
+          loadBlpImage(borderUrl).then((img) => {
+            if (!cancelled) imagesRef.current.border = img;
+          }),
+        );
+      }
+      if (highlightUrl) {
+        promises.push(
+          loadBlpImage(highlightUrl).then((img) => {
+            if (!cancelled) imagesRef.current.highlight = img;
+          }),
+        );
+      }
+      await Promise.all(promises);
+      if (!cancelled) draw();
+    }
+
+    load().catch(() => {});
+    return () => { cancelled = true; };
+  }, [bgUrl, borderUrl, highlightUrl, draw]);
+
+  return { canvasRef, redraw: draw };
+}
+
+/**
+ * Renders a single BLP image to a canvas, filling entirely.
+ */
+export function useSingleImageCanvas(url?: string) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!url) return;
+    let cancelled = false;
+
+    loadBlpImage(url).then((img) => {
+      if (cancelled) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, 0, 0);
+    }).catch(() => {});
+
+    return () => { cancelled = true; };
+  }, [url]);
+
+  return canvasRef;
+}

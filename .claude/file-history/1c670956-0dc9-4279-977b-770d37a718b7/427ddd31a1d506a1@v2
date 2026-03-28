@@ -1,0 +1,123 @@
+#include <rts/terrain/terrain.hpp>
+#include <rts/core/logger.hpp>
+#include <stb_image.h>
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
+
+namespace rts {
+
+TerrainData Terrain::generate(const std::vector<f32>& heights,
+                               u32 grid_width, u32 grid_height, f32 cell_size) {
+    TerrainData data;
+    data.grid_width  = grid_width;
+    data.grid_height = grid_height;
+    data.cell_size   = cell_size;
+
+    // Vértices
+    data.vertices.resize(grid_width * grid_height);
+    for (u32 z = 0; z < grid_height; ++z) {
+        for (u32 x = 0; x < grid_width; ++x) {
+            u32 idx = z * grid_width + x;
+            auto& v = data.vertices[idx];
+            v.position = Vec3(
+                static_cast<f32>(x) * cell_size,
+                heights[idx],
+                static_cast<f32>(z) * cell_size
+            );
+            v.uv = Vec2(
+                static_cast<f32>(x) / static_cast<f32>(grid_width  - 1),
+                static_cast<f32>(z) / static_cast<f32>(grid_height - 1)
+            );
+        }
+    }
+
+    // Índices — dois triângulos por quad
+    for (u32 z = 0; z < grid_height - 1; ++z) {
+        for (u32 x = 0; x < grid_width - 1; ++x) {
+            u32 tl = z * grid_width + x;
+            u32 tr = tl + 1;
+            u32 bl = (z + 1) * grid_width + x;
+            u32 br = bl + 1;
+
+            data.indices.push_back(tl);
+            data.indices.push_back(bl);
+            data.indices.push_back(tr);
+
+            data.indices.push_back(tr);
+            data.indices.push_back(bl);
+            data.indices.push_back(br);
+        }
+    }
+
+    // Normais — acumular contribuição de cada face e normalizar
+    for (auto& v : data.vertices) v.normal = Vec3(0.0f);
+
+    for (size_t i = 0; i < data.indices.size(); i += 3) {
+        auto& v0 = data.vertices[data.indices[i]];
+        auto& v1 = data.vertices[data.indices[i + 1]];
+        auto& v2 = data.vertices[data.indices[i + 2]];
+
+        Vec3 face_normal = glm::cross(v1.position - v0.position,
+                                       v2.position - v0.position);
+        v0.normal += face_normal;
+        v1.normal += face_normal;
+        v2.normal += face_normal;
+    }
+
+    for (auto& v : data.vertices) {
+        v.normal = (glm::length(v.normal) > 0.0f)
+                   ? glm::normalize(v.normal)
+                   : Vec3(0.0f, 1.0f, 0.0f);
+    }
+
+    return data;
+}
+
+f32 Terrain::height_at(const TerrainData& data, f32 world_x, f32 world_z) {
+    f32 gx = world_x / data.cell_size;
+    f32 gz = world_z / data.cell_size;
+
+    u32 x0 = std::min(static_cast<u32>(std::floor(gx)), data.grid_width  - 1);
+    u32 z0 = std::min(static_cast<u32>(std::floor(gz)), data.grid_height - 1);
+    u32 x1 = std::min(x0 + 1, data.grid_width  - 1);
+    u32 z1 = std::min(z0 + 1, data.grid_height - 1);
+
+    f32 fx = std::clamp(gx - static_cast<f32>(x0), 0.0f, 1.0f);
+    f32 fz = std::clamp(gz - static_cast<f32>(z0), 0.0f, 1.0f);
+
+    f32 h00 = data.vertices[z0 * data.grid_width + x0].position.y;
+    f32 h10 = data.vertices[z0 * data.grid_width + x1].position.y;
+    f32 h01 = data.vertices[z1 * data.grid_width + x0].position.y;
+    f32 h11 = data.vertices[z1 * data.grid_width + x1].position.y;
+
+    f32 h_top    = h00 + (h10 - h00) * fx;
+    f32 h_bottom = h01 + (h11 - h01) * fx;
+    return h_top + (h_bottom - h_top) * fz;
+}
+
+std::vector<f32> Terrain::load_heightmap_raw(const std::string& path,
+                                               u32& out_width, u32& out_height,
+                                               f32 height_scale) {
+    int w, h, channels;
+    stbi_set_flip_vertically_on_load(false);
+    u8* raw = stbi_load(path.c_str(), &w, &h, &channels, 1); // força grayscale
+
+    if (!raw) {
+        throw std::runtime_error("Failed to load heightmap: " + path);
+    }
+
+    out_width  = static_cast<u32>(w);
+    out_height = static_cast<u32>(h);
+
+    std::vector<f32> heights(static_cast<size_t>(w * h));
+    for (size_t i = 0; i < heights.size(); ++i) {
+        heights[i] = (static_cast<f32>(raw[i]) / 255.0f) * height_scale;
+    }
+
+    stbi_image_free(raw);
+    RTS_LOG_INFO("Heightmap loaded: {}x{} from '{}'", out_width, out_height, path);
+    return heights;
+}
+
+}  // namespace rts

@@ -1,0 +1,112 @@
+import React, { useEffect, useRef } from "react";
+import { loadBlpImage } from "../utils/blp";
+import { BAR_ASSETS } from "../utils/assets";
+
+export interface HealthBarProps {
+  /** Current value (0–max) */
+  value: number;
+  /** Maximum value */
+  max: number;
+  /** Show text overlay (e.g. "450 / 650") */
+  showText?: boolean;
+  /** Custom fill BLP path */
+  fillUrl?: string;
+  /** Custom highlight BLP path */
+  highlightUrl?: string;
+  /** Custom edge BLP path */
+  edgeUrl?: string;
+  className?: string;
+}
+
+export function HealthBar({
+  value,
+  max,
+  showText = true,
+  fillUrl = BAR_ASSETS.healthFill,
+  highlightUrl = BAR_ASSETS.statbarHighlight,
+  edgeUrl = BAR_ASSETS.statbarEdge,
+  className,
+}: HealthBarProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const percent = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function render() {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      try {
+        const [fill, highlight, edge] = await Promise.all([
+          loadBlpImage(fillUrl),
+          loadBlpImage(highlightUrl),
+          loadBlpImage(edgeUrl),
+        ]);
+        if (cancelled) return;
+
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        ctx.imageSmoothingEnabled = false;
+
+        // Draw fill
+        const fillW = Math.round((percent / 100) * w);
+        if (fillW > 0) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(0, 0, fillW, h);
+          ctx.clip();
+          ctx.drawImage(fill, 0, 0, w, h);
+          ctx.restore();
+        }
+
+        // Draw highlight
+        if (fillW > 0) {
+          ctx.save();
+          ctx.globalCompositeOperation = "screen";
+          ctx.globalAlpha = 0.62;
+          ctx.beginPath();
+          ctx.rect(0, 0, fillW, h);
+          ctx.clip();
+          ctx.drawImage(highlight, 0, 0, w, h);
+          ctx.restore();
+        }
+
+        // Draw edge
+        ctx.drawImage(edge, 0, 0, w, h);
+      } catch {
+        // Asset loading failed silently
+      }
+    }
+
+    render();
+    return () => { cancelled = true; };
+  }, [percent, fillUrl, highlightUrl, edgeUrl]);
+
+  return (
+    <div className={`wc3-bar wc3-bar--unit wc3-bar--health ${className ?? ""}`}>
+      <canvas
+        ref={canvasRef}
+        className="wc3-bar-canvas"
+        width={366}
+        height={36}
+      />
+      <div
+        className="wc3-bar-fill-wrap"
+        style={{ width: `${percent}%` }}
+      >
+        <div className="wc3-bar-fill wc3-bar-fill--health" />
+        <div className="wc3-bar-highlight" />
+      </div>
+      <div className="wc3-bar-segments" />
+      {showText && (
+        <div className="wc3-bar-text">
+          {Math.round(value)} / {max}
+        </div>
+      )}
+    </div>
+  );
+}

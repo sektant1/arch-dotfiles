@@ -1,0 +1,9 @@
+add_library(rts_core STATIC
+    src/logger.cpp
+    src/event_bus.cpp
+)
+
+target_include_directories(rts_core PUBLIC include)
+target_link_libraries(rts_core PUBLIC glm::glm spdlog::spdlog)
+
+add_library(rts::core ALIAS rts_core)

@@ -1,0 +1,35 @@
+import { For } from 'solid-js';
+import { currentRace, RACE_PREFIXES, HEROES } from '../state/race';
+import type { HeroData } from '../lib/types';
+
+export default function HeroGallery() {
+  const raceHeroes = () => HEROES[currentRace()] || [];
+
+  return (
+    <div class="hero-gallery">
+      {raceHeroes().length > 0 && (
+        <>
+          <div class="hero-group-label">{RACE_PREFIXES[currentRace()].display} Heroes</div>
+          <For each={raceHeroes()}>{(hero) => <HeroCard hero={hero} />}</For>
+        </>
+      )}
+      <div class="hero-group-label">Neutral / Expansion Heroes</div>
+      <For each={HEROES.Neutral}>{(hero) => <HeroCard hero={hero} />}</For>
+    </div>
+  );
+}
+
+function HeroCard(props: { hero: HeroData }) {
+  const srcDir = () => props.hero.src + '/Glues/ScoreScreen/';
+  return (
+    <div class="hero-card" title={props.hero.lore}>
+      <img
+        src={srcDir() + props.hero.file}
+        alt={props.hero.name}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+      <div class="hero-name">{props.hero.name}</div>
+      <div class="hero-lore">{props.hero.lore}</div>
+    </div>
+  );
+}

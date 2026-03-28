@@ -1,0 +1,72 @@
+import React from "react";
+import { useBlpTexture } from "../hooks/useBlpTexture";
+import { LOADING_BAR_ASSETS } from "../utils/assets";
+
+export interface LoadingBarProps {
+  /** Progress percentage 0–100 */
+  percent: number;
+  showText?: boolean;
+  className?: string;
+}
+
+export function LoadingBar({
+  percent,
+  showText = true,
+  className,
+}: LoadingBarProps) {
+  const clamped = Math.min(100, Math.max(0, percent));
+  const bgUrl = useBlpTexture(LOADING_BAR_ASSETS.background);
+  const fillUrl = useBlpTexture(LOADING_BAR_ASSETS.fill);
+  const borderUrl = useBlpTexture(LOADING_BAR_ASSETS.border);
+  const glassUrl = useBlpTexture(LOADING_BAR_ASSETS.glass);
+  const glowUrl = useBlpTexture(LOADING_BAR_ASSETS.glow);
+
+  const glowOpacity = clamped > 0 ? 1 : 0;
+
+  return (
+    <div className={`loading-preview ${className ?? ""}`}>
+      <div className="loading-bar-composite">
+        <div
+          className="lb-track"
+          style={{
+            left: "5.859375%",
+            right: "6.4453125%",
+            top: "26.5625%",
+            bottom: "26.5625%",
+          }}
+        >
+          <div
+            className="lb-bg"
+            style={{ backgroundImage: bgUrl ? `url("${bgUrl}")` : undefined }}
+          />
+          <div
+            className="lb-fill"
+            style={{
+              backgroundImage: fillUrl ? `url("${fillUrl}")` : undefined,
+              width: `${clamped}%`,
+            }}
+          />
+        </div>
+        {borderUrl && <img className="lb-border" src={borderUrl} alt="" />}
+        {glassUrl && <img className="lb-glass" src={glassUrl} alt="" />}
+        {glowUrl && (
+          <img
+            className="lb-glow"
+            src={glowUrl}
+            alt=""
+            style={{
+              left: "5.919%",
+              top: "-19.58%",
+              bottom: "-19.49%",
+              width: `${clamped}%`,
+              opacity: glowOpacity,
+            }}
+          />
+        )}
+        {showText && (
+          <div className="lb-text">{Math.floor(clamped)}%</div>
+        )}
+      </div>
+    </div>
+  );
+}

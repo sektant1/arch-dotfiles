@@ -1,0 +1,23 @@
+// Context & hooks
+export { WC3RendererProvider, useWC3Renderer } from './context/WC3RendererContext';
+export type { WC3RendererProviderProps } from './context/WC3RendererContext';
+export { useRendererRegistration } from './hooks/useRendererRegistration';
+
+// Components
+export { default as Tooltip } from './components/Tooltip';
+export { default as EditBox } from './components/EditBox';
+export { default as MenuPanel } from './components/MenuPanel';
+export { default as StatBar } from './components/StatBar';
+export { default as RadioButton } from './components/RadioButton';
+export { default as LoadingBar } from './components/LoadingBar';
+export { default as Slider } from './components/Slider';
+export { default as CursorOverlay } from './components/CursorOverlay';
+export { default as BottomHud } from './components/BottomHud';
+export { default as TopHud } from './components/TopHud';
+export { default as TopHudWebGL } from './components/TopHudWebGL';
+export { default as HeroPortraitModel } from './components/HeroPortraitModel';
+export { default as TimeIndicatorModel } from './components/TimeIndicatorModel';
+export { default as WorkerUnitModel } from './components/WorkerUnitModel';
+
+// Re-export core types needed by consumers
+export type { Race, Renderer } from '@wc3-ui/core';

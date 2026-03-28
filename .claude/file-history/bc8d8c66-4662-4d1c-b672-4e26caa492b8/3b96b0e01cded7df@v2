@@ -1,0 +1,35 @@
+import { useCurrentRace, RACE_PREFIXES, HEROES } from '../state/race';
+import type { HeroData } from '../lib/types';
+
+export default function HeroGallery() {
+  const race = useCurrentRace();
+  const raceHeroes = HEROES[race] || [];
+
+  return (
+    <div className="hero-gallery">
+      {raceHeroes.length > 0 && (
+        <>
+          <div className="hero-group-label">{RACE_PREFIXES[race].display} Heroes</div>
+          {raceHeroes.map((hero) => <HeroCard key={hero.name} hero={hero} />)}
+        </>
+      )}
+      <div className="hero-group-label">Neutral / Expansion Heroes</div>
+      {HEROES.Neutral.map((hero) => <HeroCard key={hero.name} hero={hero} />)}
+    </div>
+  );
+}
+
+function HeroCard(props: { hero: HeroData }) {
+  const srcDir = props.hero.src + '/Glues/ScoreScreen/';
+  return (
+    <div className="hero-card" title={props.hero.lore}>
+      <img
+        src={srcDir + props.hero.file}
+        alt={props.hero.name}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+      <div className="hero-name">{props.hero.name}</div>
+      <div className="hero-lore">{props.hero.lore}</div>
+    </div>
+  );
+}

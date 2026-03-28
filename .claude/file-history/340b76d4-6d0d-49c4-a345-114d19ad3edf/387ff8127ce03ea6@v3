@@ -1,0 +1,13 @@
+// Context & hooks
+export { WC3RendererProvider, useWC3Renderer } from './context/WC3RendererContext';
+export type { WC3RendererProviderProps } from './context/WC3RendererContext';
+export { useRendererRegistration } from './hooks/useRendererRegistration';
+
+// Components
+export { default as Tooltip } from './components/Tooltip';
+export { default as EditBox } from './components/EditBox';
+export { default as MenuPanel } from './components/MenuPanel';
+export { default as StatBar } from './components/StatBar';
+
+// Re-export core types needed by consumers
+export type { Race, Renderer } from '@wc3-ui/core';

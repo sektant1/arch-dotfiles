@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Configura o projeto com Conan + CMake
+# Uso: ./scripts/configure.sh [Debug|Release]
+set -e
+
+BUILD_TYPE=${1:-Debug}
+CONAN=$(command -v conan || echo "$HOME/.local/bin/conan")
+BUILD_DIR="build"
+
+echo "==> Instalando dependências Conan ($BUILD_TYPE)..."
+$CONAN install . --output-folder="$BUILD_DIR" --build=missing -s build_type="$BUILD_TYPE"
+
+echo "==> Configurando CMake..."
+cmake -S . -B "$BUILD_DIR" \
+    -DCMAKE_TOOLCHAIN_FILE="$BUILD_DIR/build/$BUILD_TYPE/generators/conan_toolchain.cmake" \
+    -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+
+echo "==> Configurado com sucesso em '$BUILD_DIR/'"

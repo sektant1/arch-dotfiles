@@ -1,0 +1,40 @@
+#include <gtest/gtest.h>
+#include <rts/camera/camera.hpp>
+
+TEST(CameraTest, DefaultPositionLooksDown) {
+    rts::RtsCamera camera;
+    auto view = camera.view_matrix();
+    EXPECT_NE(view, rts::Mat4(1.0f));
+}
+
+TEST(CameraTest, ProjectionIsNotIdentity) {
+    rts::RtsCamera camera;
+    camera.set_aspect_ratio(16.0f / 9.0f);
+    auto proj = camera.projection_matrix();
+    EXPECT_NE(proj, rts::Mat4(1.0f));
+}
+
+TEST(CameraTest, PanChangesPosition) {
+    rts::RtsCamera camera;
+    auto view_before = camera.view_matrix();
+    camera.pan(rts::Vec2(5.0f, 0.0f));
+    auto view_after = camera.view_matrix();
+    EXPECT_NE(view_before, view_after);
+}
+
+TEST(CameraTest, ZoomChangesDistance) {
+    rts::RtsCamera camera;
+    auto view_before = camera.view_matrix();
+    camera.zoom(-2.0f);
+    auto view_after = camera.view_matrix();
+    EXPECT_NE(view_before, view_after);
+}
+
+TEST(CameraTest, ZoomClampsToMinMax) {
+    rts::RtsCamera camera;
+    camera.zoom(-1000.0f);
+    auto view_close = camera.view_matrix();
+    camera.zoom(2000.0f);
+    auto view_far = camera.view_matrix();
+    EXPECT_NE(view_close, view_far);
+}

@@ -1,0 +1,20 @@
+#include <rts/core/logger.hpp>
+#include <spdlog/sinks/stdout_color_sinks.h>
+
+namespace rts {
+
+std::shared_ptr<spdlog::logger> Logger::s_logger;
+
+void Logger::init() {
+    if (s_logger) return;
+
+    s_logger = spdlog::stdout_color_mt("RTS");
+    s_logger->set_level(spdlog::level::trace);
+    s_logger->set_pattern("[%H:%M:%S.%e] [%n] [%^%l%$] %v");
+}
+
+std::shared_ptr<spdlog::logger>& Logger::get() {
+    return s_logger;
+}
+
+}  // namespace rts

@@ -1,0 +1,187 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  min-height: 100%;
+}
+
+body {
+  background: #08080f;
+  color: #fff;
+  font-family:
+    Friz Quadrata,
+    Palatino Linotype,
+    Book Antiqua,
+    Palatino,
+    serif;
+}
+
+/* ── Sticky header ─────────────────────────────────── */
+.demo-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: linear-gradient(180deg, #0e0e1a 0%, #0a0a14 100%);
+  border-bottom: 1px solid #222233;
+  backdrop-filter: blur(8px);
+}
+
+.demo-header h1 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #fcd312;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
+}
+
+.demo-race-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.demo-race-btn {
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: #111118;
+  color: #9aa4c0;
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.demo-race-btn:hover {
+  background: #1a1a28;
+  color: #d3ddfb;
+}
+
+.demo-race-btn--active {
+  background: #1e1e30;
+  color: #fcd312;
+  border-color: #fcd312;
+}
+
+/* ── Page layout ───────────────────────────────────── */
+.demo-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.demo-section {
+  margin-bottom: 40px;
+}
+
+.demo-section h2 {
+  margin: 0 0 6px;
+  font-size: 1.3rem;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
+}
+
+.demo-section h2 span {
+  font-size: 0.75rem;
+  color: #555;
+  font-weight: normal;
+  margin-left: 8px;
+}
+
+.demo-desc {
+  margin: 0 0 16px;
+  color: #7b818d;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.demo-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.demo-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.demo-label {
+  font-size: 0.72rem;
+  color: #666;
+  margin-top: 4px;
+}
+
+.demo-card {
+  background: #111118;
+  border: 1px solid #222233;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.demo-controls-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.demo-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #9aa4c0;
+  font-size: 0.82rem;
+}
+
+.demo-slider-wrap input[type="range"] {
+  width: 160px;
+  accent-color: #fcd312;
+}
+
+.demo-divider {
+  border: none;
+  border-top: 1px solid #1e1e30;
+  margin: 32px 0;
+}
+
+/* ── Chat input row for demo ───────────────────────── */
+.demo-chat-input {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.demo-chat-input input {
+  flex: 1;
+  border: 1px solid #2a3453;
+  border-radius: 4px;
+  background: #0a0f1c;
+  color: #dce5fb;
+  font-family: inherit;
+  padding: 7px 9px;
+}
+
+.demo-chat-input button {
+  border: 1px solid #43527b;
+  border-radius: 4px;
+  background: #111a30;
+  color: #dce5fb;
+  font-family: inherit;
+  padding: 7px 12px;
+  cursor: pointer;
+}

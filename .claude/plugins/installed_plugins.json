@@ -1,0 +1,126 @@
+{
+  "version": 2,
+  "plugins": {
+    "game-sounds@citedy": [
+      {
+        "scope": "user",
+        "installPath": "/home/garrosh/.claude/plugins/cache/citedy/game-sounds/3.0.0",
+        "version": "3.0.0",
+        "installedAt": "2026-03-21T17:15:24.544Z",
+        "lastUpdated": "2026-03-21T17:15:24.544Z",
+        "gitCommitSha": "69402c3e72bbbc014cf9aee2721f500eec5821e4"
+      }
+    ],
+    "typescript-lsp@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/home/garrosh/.claude/plugins/cache/claude-plugins-official/typescript-lsp/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-21T21:04:54.133Z",
+        "lastUpdated": "2026-03-21T21:04:54.133Z",
+        "gitCommitSha": "61c0597779bd2d670dcd4fbbf37c66aa19eb2ce6"
+      }
+    ],
+    "frontend-design@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/home/garrosh/.claude/plugins/cache/claude-plugins-official/frontend-design/unknown",
+        "version": "unknown",
+        "installedAt": "2026-03-27T20:11:09.403Z",
+        "lastUpdated": "2026-03-28T13:49:10.812Z"
+      }
+    ],
+    "superpowers@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/home/garrosh/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.6",
+        "version": "5.0.6",
+        "installedAt": "2026-03-27T20:12:54.775Z",
+        "lastUpdated": "2026-03-27T20:12:54.775Z",
+        "gitCommitSha": "eafe962b18f6c5dc70fb7c8cc7e83e61f4cdde06"
+      }
+    ],
+    "code-simplifier@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/home/garrosh/.claude/plugins/cache/claude-plugins-official/code-simplifier/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-27T20:18:06.978Z",
+        "lastUpdated": "2026-03-27T20:18:06.978Z"
+      }
+    ],
+    "claude-md-management@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/home/garrosh/.claude/plugins/cache/claude-plugins-official/claude-md-management/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-27T20:18:07.077Z",
+        "lastUpdated": "2026-03-27T20:18:07.077Z"
+      }
+    ],
+    "security-guidance@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/home/garrosh/.claude/plugins/cache/claude-plugins-official/security-guidance/unknown",
+        "version": "unknown",
+        "installedAt": "2026-03-27T20:18:07.176Z",
+        "lastUpdated": "2026-03-28T13:49:10.793Z"
+      }
+    ],
+    "claude-code-setup@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/home/garrosh/.claude/plugins/cache/claude-plugins-official/claude-code-setup/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-27T20:18:07.262Z",
+        "lastUpdated": "2026-03-27T20:18:07.262Z"
+      }
+    ],
+    "pyright-lsp@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/home/garrosh/.claude/plugins/cache/claude-plugins-official/pyright-lsp/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-27T20:18:07.346Z",
+        "lastUpdated": "2026-03-27T20:18:07.346Z"
+      }
+    ],
+    "clangd-lsp@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/home/garrosh/.claude/plugins/cache/claude-plugins-official/clangd-lsp/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-27T20:18:07.402Z",
+        "lastUpdated": "2026-03-27T20:18:07.402Z"
+      }
+    ],
+    "lua-lsp@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/home/garrosh/.claude/plugins/cache/claude-plugins-official/lua-lsp/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-27T20:18:07.492Z",
+        "lastUpdated": "2026-03-27T20:18:07.492Z"
+      }
+    ],
+    "postman@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/home/garrosh/.claude/plugins/cache/claude-plugins-official/postman/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-27T20:18:13.033Z",
+        "lastUpdated": "2026-03-27T20:18:13.033Z",
+        "gitCommitSha": "0714280351c1a137e79aad465a66730511ffbd57"
+      }
+    ],
+    "skill-creator@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/home/garrosh/.claude/plugins/cache/claude-plugins-official/skill-creator/unknown",
+        "version": "unknown",
+        "installedAt": "2026-03-28T14:16:25.432Z",
+        "lastUpdated": "2026-03-28T14:16:25.432Z"
+      }
+    ]
+  }
+}

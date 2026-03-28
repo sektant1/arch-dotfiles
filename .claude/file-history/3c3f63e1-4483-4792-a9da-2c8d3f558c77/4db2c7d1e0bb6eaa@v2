@@ -1,0 +1,40 @@
+import React, { useRef, useEffect } from "react";
+
+export type ChatLineType = "ally" | "enemy" | "system" | "whisper";
+
+export interface ChatMessage {
+  from?: string;
+  text: string;
+  type?: ChatLineType;
+}
+
+export interface ChatLogProps {
+  messages: ChatMessage[];
+  className?: string;
+}
+
+/**
+ * In-game chat log with colored message types.
+ */
+export function ChatLog({ messages, className }: ChatLogProps) {
+  const logRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  return (
+    <div className={`chat-preview ${className ?? ""}`}>
+      <div ref={logRef} className="chat-log">
+        {messages.map((msg, i) => (
+          <div key={i} className={`chat-line${msg.type ? ` chat-line--${msg.type}` : ""}`}>
+            {msg.from && <span className="chat-from">{msg.from}:</span>}
+            {msg.text}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,52 @@
+import React, { useRef, useEffect } from "react";
+import { loadBlpImage } from "../utils/blp";
+import { UNIT_QUEUE_BORDER } from "../utils/assets";
+
+export interface UnitQueueProps {
+  /** Border BLP path */
+  borderUrl?: string;
+  /** Width of the queue panel */
+  width?: number;
+  children?: React.ReactNode;
+  className?: string;
+}
+
+/**
+ * Build queue backdrop with the in-game unit queue border frame.
+ */
+export function UnitQueue({
+  borderUrl = UNIT_QUEUE_BORDER,
+  width,
+  children,
+  className,
+}: UnitQueueProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!borderUrl) return;
+    let cancelled = false;
+
+    loadBlpImage(borderUrl).then((img) => {
+      if (cancelled) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, 0, 0);
+    }).catch(() => {});
+
+    return () => { cancelled = true; };
+  }, [borderUrl]);
+
+  return (
+    <div className={`unit-queue-preview ${className ?? ""}`}>
+      <div className="unit-queue-stage" style={width ? { width } : undefined}>
+        <canvas ref={canvasRef} className="unit-queue-canvas" />
+        <div className="unit-queue-fallback">{children}</div>
+      </div>
+    </div>
+  );
+}

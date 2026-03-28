@@ -1,0 +1,24 @@
+import EscOptionButton from "../components/EscOptionButton";
+import HeroSection from "../components/sections/HeroSection";
+import { setPage } from "../state/page";
+
+export default function HomePage() {
+  return (
+    <div className="tab-content tab-content--page">
+      <HeroSection
+        actions={
+          <>
+            <EscOptionButton onClick={() => setPage("build-orders")}>
+              {"See\u00A0"}
+              <span className="button-hotkey">B</span>uilds
+            </EscOptionButton>
+            <EscOptionButton onClick={() => setPage("showcase")}>
+              {"See\u00A0"}
+              <span className="button-hotkey">C</span>omponents
+            </EscOptionButton>
+          </>
+        }
+      />
+    </div>
+  );
+}

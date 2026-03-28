@@ -1,0 +1,86 @@
+import React, { useEffect, useRef, useState } from "react";
+import { useBlpTexture } from "../hooks/useBlpTexture";
+import { RESOURCE_ICONS } from "../utils/assets";
+
+export type ResourceType = "gold" | "lumber" | "supply" | "upkeep";
+
+export interface ResourceCounterProps {
+  type: ResourceType;
+  value: number;
+  /** For supply: max supply */
+  max?: number;
+  /** Animate value changes */
+  animated?: boolean;
+  className?: string;
+}
+
+function useAnimatedValue(target: number, animated: boolean): number {
+  const [display, setDisplay] = useState(target);
+  const frameRef = useRef<number>();
+
+  useEffect(() => {
+    if (!animated) {
+      setDisplay(target);
+      return;
+    }
+
+    const start = display;
+    const diff = target - start;
+    if (diff === 0) return;
+
+    const duration = 400;
+    const startTime = performance.now();
+
+    function tick(now: number) {
+      const elapsed = now - startTime;
+      const t = Math.min(1, elapsed / duration);
+      setDisplay(Math.round(start + diff * t));
+      if (t < 1) frameRef.current = requestAnimationFrame(tick);
+    }
+
+    frameRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target, animated]);
+
+  return display;
+}
+
+/**
+ * Animated resource counter with icon slot, matching the in-game HUD.
+ */
+export function ResourceCounter({
+  type,
+  value,
+  max,
+  animated = true,
+  className,
+}: ResourceCounterProps) {
+  const displayValue = useAnimatedValue(value, animated);
+
+  const iconPath =
+    type === "gold"
+      ? RESOURCE_ICONS.gold
+      : type === "lumber"
+        ? RESOURCE_ICONS.lumber
+        : type === "supply"
+          ? RESOURCE_ICONS.supply
+          : undefined;
+
+  const iconUrl = useBlpTexture(iconPath);
+
+  return (
+    <div className={`resource-counter ${className ?? ""}`}>
+      {iconUrl && <img src={iconUrl} alt={type} />}
+      {type === "supply" && max != null ? (
+        <span>
+          {displayValue}/{max}
+        </span>
+      ) : (
+        <span>{displayValue}</span>
+      )}
+    </div>
+  );
+}

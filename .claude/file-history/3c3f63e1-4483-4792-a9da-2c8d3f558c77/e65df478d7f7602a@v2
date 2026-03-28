@@ -1,0 +1,26 @@
+import React from "react";
+
+export interface SectionCardProps {
+  title?: string;
+  description?: string;
+  children?: React.ReactNode;
+  className?: string;
+}
+
+/**
+ * Dark card container used to group showcase sections.
+ */
+export function SectionCard({
+  title,
+  description,
+  children,
+  className,
+}: SectionCardProps) {
+  return (
+    <section className={`section-card ${className ?? ""}`}>
+      {title && <h3>{title}</h3>}
+      {description && <p className="section-desc">{description}</p>}
+      {children}
+    </section>
+  );
+}

@@ -1,0 +1,12 @@
+import { createExternalStore } from './createStore';
+
+export type PageId = string;
+
+const pageStore = createExternalStore<PageId>('home');
+
+/** Read current page (non-reactive). */
+export const currentPage = pageStore.get;
+/** Set current page (works anywhere). */
+export const setPage = pageStore.set;
+/** Hook — subscribe to current page in a React component. */
+export const usePage = pageStore.useValue;

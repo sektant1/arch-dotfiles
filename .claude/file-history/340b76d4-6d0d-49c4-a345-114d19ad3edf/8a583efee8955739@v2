@@ -1,0 +1,50 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+A Warcraft III UI component library built with SolidJS and TypeScript. It renders pixel-accurate recreations of WC3 interface elements (HUD bars, buttons, tooltips, checkboxes, sliders, portraits, menus) using a custom WebGL2 renderer for texture compositing and nine-slice borders, with SolidJS for DOM structure and reactivity.
+
+## Commands
+
+- `npm run dev` — start Vite dev server on port 3000
+- `npm run build` — production build
+- `npm run preview` — preview production build
+
+No test runner or linter is configured.
+
+## Architecture
+
+### Rendering Pipeline
+
+The app uses a **hybrid DOM + WebGL** approach. SolidJS components create standard HTML elements, which are then registered with a central `Renderer` (`src/renderer/Renderer.ts`). The renderer reads DOM element positions each frame and draws WebGL2 quads (textured overlays, nine-slice borders, tiled backgrounds) on a canvas that sits behind/over the DOM.
+
+Key renderer modules:
+- `GLContext` — WebGL2 context wrapper
+- `QuadBatcher` — batches textured quads into draw calls
+- `BlendManager` — manages GL blend state transitions
+- `NineSlice` — draws nine-slice bordered frames from 8-cell texture atlases
+- `TextureManager` — loads/caches textures, decodes BLP files via `war3-model`
+- `textures.ts` — defines per-race texture manifests (`RaceTextures`) and preloading
+
+Components register themselves with the renderer via typed registries (e.g., `CheckboxReg`, `SliderReg`, `GlueButtonReg`). The renderer reads their reactive state (hovered, pressed, checked, fill percent) each frame to determine which textures to draw.
+
+### State Management
+
+Global state lives in `src/state/` using SolidJS signals:
+- `race.ts` — current faction selection (Human/Orc/NightElf/Undead) with prefix mappings
+- `resources.ts` — gold/lumber counters with animated tick interpolation and WC3 cheat codes
+- `ui.ts` — animated bar percentages and loading bar state
+
+### Component Structure
+
+`src/components/` contains individual WC3 UI elements (Checkbox, Slider, EditBox, StatBar, Tooltip, MenuButton, etc.) and `sections/` contains showcase page sections that compose them. `App.tsx` is a large file (~1500 lines) that orchestrates the full showcase layout, race switching, resource bars, and WebGL canvas setup.
+
+### Asset Pipeline
+
+Game textures are in `public/` organized by type (borders, buttons, console, fonts, tooltips, etc.). BLP textures from WC3 are decoded at runtime using the `war3-model` npm package. The `wc3ui.zip` at the repo root likely contains source assets. Race-specific textures are loaded on demand when the user switches factions.
+
+### Type System
+
+`src/lib/types.ts` defines core types: `Race` (union of four factions) and `RacePrefix` (mapping variants for file paths). `TextureEntry` is defined in the renderer and tracks loaded texture state.

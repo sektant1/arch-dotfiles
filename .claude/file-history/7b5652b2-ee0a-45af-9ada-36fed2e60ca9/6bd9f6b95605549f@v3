@@ -1,0 +1,19 @@
+import type { ComponentType } from "react";
+import HomePage from "./HomePage";
+import BuildOrderPage from "./BuildOrderPage";
+
+/**
+ * Page registry — maps page IDs to their components.
+ *
+ * To add a new page:
+ * 1. Create a file in src/pages/ (e.g. MyPage.tsx)
+ * 2. Import it here and add an entry to the PAGE_REGISTRY
+ * 3. Navigate to it with: setPage("my-page")
+ *
+ * The special page ID "showcase" renders the default showcase flow
+ * in App.tsx and does NOT need an entry here.
+ */
+export const PAGE_REGISTRY: Record<string, ComponentType> = {
+  "home": HomePage,
+  "build-orders": BuildOrderPage,
+};

@@ -1,0 +1,61 @@
+import { useEffect, useState } from "react";
+import type { SkillPick } from "../data/buildOrders";
+import { loadBlpDataUrl } from "../utils/glueButton";
+import SkillTooltip from "./SkillTooltip";
+
+const FALLBACK_ICON = "/buttons/command/BTNSkillz.blp";
+
+function SkillIcon({ pick, isLast }: { pick: SkillPick; isLast: boolean }) {
+  const [iconUrl, setIconUrl] = useState("");
+  const [hovered, setHovered] = useState(false);
+
+  useEffect(() => {
+    const path = pick.icon || FALLBACK_ICON;
+    void loadBlpDataUrl(path)
+      .then(setIconUrl)
+      .catch(() => {
+        if (pick.icon) void loadBlpDataUrl(FALLBACK_ICON).then(setIconUrl);
+      });
+  }, [pick.icon]);
+
+  return (
+    <div className="skill-pick">
+      <div
+        className="skill-pick-content"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        <div className="skill-pick-icon-wrapper">
+          <div className="skill-pick-level">Lv{pick.level}</div>
+          {iconUrl ? (
+            <img src={iconUrl} alt={pick.skill} className="skill-pick-icon" />
+          ) : (
+            <div className="skill-pick-icon skill-pick-icon--placeholder" />
+          )}
+        </div>
+        <div className="skill-pick-name">{pick.skill}</div>
+        {hovered && <SkillTooltip pick={pick} />}
+      </div>
+      {!isLast && <div className="skill-pick-connector" />}
+    </div>
+  );
+}
+
+interface Props {
+  skillOrder: SkillPick[];
+}
+
+export default function SkillOrderSection({ skillOrder }: Props) {
+  if (skillOrder.length === 0) return null;
+
+  return (
+    <section className="section-card skill-order-section">
+      <h4 className="skill-order-title">Skill Order</h4>
+      <div className="skill-order-row">
+        {skillOrder.map((pick, i) => (
+          <SkillIcon key={i} pick={pick} isLast={i === skillOrder.length - 1} />
+        ))}
+      </div>
+    </section>
+  );
+}

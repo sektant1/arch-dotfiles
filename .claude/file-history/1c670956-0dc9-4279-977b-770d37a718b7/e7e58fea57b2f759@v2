@@ -1,0 +1,10 @@
+add_library(rts_terrain STATIC
+    src/terrain.cpp
+)
+
+target_include_directories(rts_terrain PUBLIC include)
+target_link_libraries(rts_terrain PUBLIC rts::core rts::renderer rts::assets)
+
+add_library(rts::terrain ALIAS rts_terrain)
+
+target_link_libraries(rts_terrain PRIVATE stb::stb)      

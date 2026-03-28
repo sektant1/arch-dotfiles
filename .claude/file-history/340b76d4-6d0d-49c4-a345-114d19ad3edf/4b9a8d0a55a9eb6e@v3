@@ -1,0 +1,34 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import dts from 'vite-plugin-dts';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    dts({ include: ['src'], insertTypesEntry: true }),
+  ],
+  resolve: {
+    alias: {
+      '@wc3-ui/core': new URL('../core/src/index.ts', import.meta.url).pathname,
+    },
+  },
+  build: {
+    lib: {
+      entry: 'src/index.ts',
+      formats: ['es', 'cjs'],
+      fileName: (format) => `index.${format === 'es' ? 'js' : 'cjs'}`,
+    },
+    rollupOptions: {
+      // Bundle @wc3-ui/core into the output — it's source-only and has no
+      // separate build step, so external consumers can't resolve it otherwise.
+      external: ['react', 'react-dom', 'react/jsx-runtime'],
+      output: {
+        globals: {
+          react: 'React',
+          'react-dom': 'ReactDOM',
+        },
+      },
+    },
+    target: 'esnext',
+  },
+});

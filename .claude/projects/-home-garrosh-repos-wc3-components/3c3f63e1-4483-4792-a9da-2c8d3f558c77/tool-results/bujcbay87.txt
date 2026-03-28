@@ -1,0 +1,816 @@
+0.5)) * 2.;
+        let truncateDist: f32 = clamp(1. - dist * 1.4, 0., 1.);
+        let alpha: f32 = sin(truncateDist);
+        color = vec4f(fsUniforms.replaceableColor * alpha, 1.0);
+    }
+
+    // hand-made alpha-test
+    if (color.a < fsUniforms.discardAlphaLevel) {
+        discard;
+    }
+
+    return color;
+}
+`,Mh=`struct VSUniforms {
+    mvMatrix: mat4x4f,
+    pMatrix: mat4x4f,
+    nodesMatrices: array<mat4x4f, \${MAX_NODES}>,
+}
+
+struct FSUniforms {
+    replaceableColor: vec3f,
+    // replaceableType: u32,
+    discardAlphaLevel: f32,
+    tVertexAnim: mat3x3f,
+    lightPos: vec3f,
+    hasEnv: u32,
+    lightColor: vec3f,
+    wireframe: u32,
+    cameraPos: vec3f,
+    shadowParams: vec3f,
+    shadowMapLightMatrix: mat4x4f,
+}
+
+@group(0) @binding(0) var<uniform> vsUniforms: VSUniforms;
+@group(1) @binding(0) var<uniform> fsUniforms: FSUniforms;
+@group(1) @binding(1) var fsUniformDiffuseSampler: sampler;
+@group(1) @binding(2) var fsUniformDiffuseTexture: texture_2d<f32>;
+@group(1) @binding(3) var fsUniformNormalSampler: sampler;
+@group(1) @binding(4) var fsUniformNormalTexture: texture_2d<f32>;
+@group(1) @binding(5) var fsUniformOrmSampler: sampler;
+@group(1) @binding(6) var fsUniformOrmTexture: texture_2d<f32>;
+@group(1) @binding(7) var fsUniformShadowSampler: sampler_comparison;
+@group(1) @binding(8) var fsUniformShadowTexture: texture_depth_2d;
+@group(1) @binding(9) var irradienceMapSampler: sampler;
+@group(1) @binding(10) var irradienceMapTexture: texture_cube<f32>;
+@group(1) @binding(11) var prefilteredEnvSampler: sampler;
+@group(1) @binding(12) var prefilteredEnvTexture: texture_cube<f32>;
+@group(1) @binding(13) var brdfLutSampler: sampler;
+@group(1) @binding(14) var brdfLutTexture: texture_2d<f32>;
+
+struct VSIn {
+    @location(0) vertexPosition: vec3f,
+    @location(1) normal: vec3f,
+    @location(2) textureCoord: vec2f,
+    @location(3) tangent: vec4f,
+    @location(4) skin: vec4<u32>,
+    @location(5) boneWeight: vec4f,
+}
+
+struct VSOut {
+    @builtin(position) position: vec4f,
+    @location(0) normal: vec3f,
+    @location(1) textureCoord: vec2f,
+    @location(2) tangent: vec3f,
+    @location(3) binormal: vec3f,
+    @location(4) fragPos: vec3f,
+}
+
+@vertex fn vs(
+    in: VSIn
+) -> VSOut {
+    var position: vec4f = vec4f(in.vertexPosition, 1.0);
+    var sum: mat4x4f;
+
+    sum += vsUniforms.nodesMatrices[in.skin[0]] * in.boneWeight[0];
+    sum += vsUniforms.nodesMatrices[in.skin[1]] * in.boneWeight[1];
+    sum += vsUniforms.nodesMatrices[in.skin[2]] * in.boneWeight[2];
+    sum += vsUniforms.nodesMatrices[in.skin[3]] * in.boneWeight[3];
+
+    let rotation: mat3x3f = mat3x3f(sum[0].xyz, sum[1].xyz, sum[2].xyz);
+
+    position = sum * position;
+    position.w = 1;
+
+    var out: VSOut;
+    out.position = vsUniforms.pMatrix * vsUniforms.mvMatrix * position;
+    out.textureCoord = in.textureCoord;
+    out.normal = in.normal;
+
+    var normal: vec3f = in.normal;
+    var tangent: vec3f = in.tangent.xyz;
+
+    // https://learnopengl.com/Advanced-Lighting/Normal-Mapping
+    tangent = normalize(tangent - dot(tangent, normal) * normal);
+
+    var binormal: vec3f = cross(normal, tangent) * in.tangent.w;
+
+    normal = normalize(rotation * normal);
+    tangent = normalize(rotation * tangent);
+    binormal = normalize(rotation * binormal);
+
+    out.normal = normal;
+    out.tangent = tangent;
+    out.binormal = binormal;
+
+    out.fragPos = position.xyz;
+
+    return out;
+}
+
+fn hypot(z: vec2f) -> f32 {
+    var t: f32 = 0;
+    var x: f32 = abs(z.x);
+    let y: f32 = abs(z.y);
+    t = min(x, y);
+    x = max(x, y);
+    t = t / x;
+    if (z.x == 0.0 && z.y == 0.0) {
+        return 0.0;
+    }
+    return x * sqrt(1.0 + t * t);
+}
+
+const PI: f32 = 3.14159265359;
+const gamma: f32 = 2.2;
+const MAX_REFLECTION_LOD: f32 = \${MAX_ENV_MIP_LEVELS};
+
+fn distributionGGX(normal: vec3f, halfWay: vec3f, roughness: f32) -> f32 {
+    let a: f32 = roughness * roughness;
+    let a2: f32 = a * a;
+    let nDotH: f32 = max(dot(normal, halfWay), 0.0);
+    let nDotH2: f32 = nDotH * nDotH;
+
+    let num: f32 = a2;
+    var denom: f32 = (nDotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+
+    return num / denom;
+}
+
+fn geometrySchlickGGX(nDotV: f32, roughness: f32) -> f32 {
+    let r: f32 = roughness + 1.;
+    let k: f32 = r * r / 8.;
+    // float k = roughness * roughness / 2.;
+
+    let num: f32 = nDotV;
+    let denom: f32 = nDotV * (1. - k) + k;
+
+    return num / denom;
+}
+
+fn geometrySmith(normal: vec3f, viewDir: vec3f, lightDir: vec3f, roughness: f32) -> f32 {
+    let nDotV: f32 = max(dot(normal, viewDir), .0);
+    let nDotL: f32 = max(dot(normal, lightDir), .0);
+    let ggx2: f32  = geometrySchlickGGX(nDotV, roughness);
+    let ggx1: f32  = geometrySchlickGGX(nDotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+fn fresnelSchlick(lightFactor: f32, f0: vec3f) -> vec3f {
+    return f0 + (1. - f0) * pow(clamp(1. - lightFactor, 0., 1.), 5.);
+}
+
+fn fresnelSchlickRoughness(lightFactor: f32, f0: vec3f, roughness: f32) -> vec3f {
+    return f0 + (max(vec3(1.0 - roughness), f0) - f0) * pow(clamp(1.0 - lightFactor, 0.0, 1.0), 5.0);
+}
+
+@fragment fn fs(
+    in: VSOut,
+    @builtin(front_facing) isFront: bool
+) -> @location(0) vec4f {
+    if (fsUniforms.wireframe > 0) {
+        return vec4f(1);
+    }
+
+    let texCoord: vec2f = (fsUniforms.tVertexAnim * vec3f(in.textureCoord.x, in.textureCoord.y, 1.)).xy;
+    var baseColor: vec4f = textureSample(fsUniformDiffuseTexture, fsUniformDiffuseSampler, texCoord);
+
+    // hand-made alpha-test
+    if (baseColor.a < fsUniforms.discardAlphaLevel) {
+        discard;
+    }
+
+    let orm: vec4f = textureSample(fsUniformOrmTexture, fsUniformOrmSampler, texCoord);
+
+    let occlusion: f32 = orm.r;
+    let roughness: f32 = orm.g;
+    let metallic: f32 = orm.b;
+    let teamColorFactor: f32 = orm.a;
+
+    var teamColor: vec3f = baseColor.rgb * fsUniforms.replaceableColor;
+    baseColor = vec4(mix(baseColor.rgb, teamColor, teamColorFactor), baseColor.a);
+    baseColor = vec4(pow(baseColor.rgb, vec3f(gamma)), baseColor.a);
+
+    let TBN: mat3x3f = mat3x3f(in.tangent, in.binormal, in.normal);
+
+    var normal: vec3f = textureSample(fsUniformNormalTexture, fsUniformNormalSampler, texCoord).xyz;
+    normal = normal * 2 - 1;
+    normal.x = -normal.x;
+    normal.y = -normal.y;
+    if (!isFront) {
+        normal = -normal;
+    }
+    normal = normalize(TBN * -normal);
+
+    let viewDir: vec3f = normalize(fsUniforms.cameraPos - in.fragPos);
+    let reflected = reflect(-viewDir, normal);
+
+    let lightDir: vec3f = normalize(fsUniforms.lightPos - in.fragPos);
+    let lightFactor: f32 = max(dot(normal, lightDir), 0);
+    let radiance: vec3f = fsUniforms.lightColor;
+
+    var f0 = vec3f(.04);
+    f0 = mix(f0, baseColor.rgb, metallic);
+
+    var totalLight: vec3f = vec3f(0);
+    let halfWay: vec3f = normalize(viewDir + lightDir);
+    let ndf: f32 = distributionGGX(normal, halfWay, roughness);
+    let g: f32 = geometrySmith(normal, viewDir, lightDir, roughness);
+    let f: vec3f = fresnelSchlick(max(dot(halfWay, viewDir), 0), f0);
+
+    let kS = f;
+    var kD = vec3f(1);// - kS;
+    if (fsUniforms.hasEnv > 0) {
+        kD *= 1 - metallic;
+    }
+    let num: vec3f = ndf * g * f;
+    let denom: f32 = 4. * max(dot(normal, viewDir), 0.) * max(dot(normal, lightDir), 0.) + .0001;
+    var specular: vec3f = num / denom;
+
+    totalLight = (kD * baseColor.rgb / PI + specular) * radiance * lightFactor;
+
+    if (fsUniforms.shadowParams[0] > .5) {
+        let shadowBias: f32 = fsUniforms.shadowParams[1];
+        let shadowStep: f32 = fsUniforms.shadowParams[2];
+        let fragInLightPos: vec4f = fsUniforms.shadowMapLightMatrix * vec4f(in.fragPos, 1.);
+        var shadowMapCoord: vec3f = fragInLightPos.xyz / fragInLightPos.w;
+        shadowMapCoord = vec3f((shadowMapCoord.xy + 1) * .5, shadowMapCoord.z);
+        shadowMapCoord.y = 1 - shadowMapCoord.y;
+
+        let passes: u32 = 5;
+        let step: f32 = 1. / f32(passes);
+
+        let currentDepth: f32 = shadowMapCoord.z;
+        var lightDepth: f32 = textureSampleCompare(fsUniformShadowTexture, fsUniformShadowSampler, shadowMapCoord.xy, currentDepth - shadowBias);
+        let lightDepth0: f32 = textureSampleCompare(fsUniformShadowTexture, fsUniformShadowSampler, vec2f(shadowMapCoord.x + shadowStep, shadowMapCoord.y), currentDepth - shadowBias);
+        let lightDepth1: f32 = textureSampleCompare(fsUniformShadowTexture, fsUniformShadowSampler, vec2f(shadowMapCoord.x, shadowMapCoord.y + shadowStep), currentDepth - shadowBias);
+        let lightDepth2: f32 = textureSampleCompare(fsUniformShadowTexture, fsUniformShadowSampler, vec2f(shadowMapCoord.x, shadowMapCoord.y - shadowStep), currentDepth - shadowBias);
+        let lightDepth3: f32 = textureSampleCompare(fsUniformShadowTexture, fsUniformShadowSampler, vec2f(shadowMapCoord.x - shadowStep, shadowMapCoord.y), currentDepth - shadowBias);
+
+        var visibility: f32 = 0.;
+        if (lightDepth > .5) {
+            visibility += step;
+        }
+        if (lightDepth0 > .5) {
+            visibility += step;
+        }
+        if (lightDepth1 > .5) {
+            visibility += step;
+        }
+        if (lightDepth2 > .5) {
+            visibility += step;
+        }
+        if (lightDepth3 > .5) {
+            visibility += step;
+        }
+
+        totalLight *= visibility;
+    }
+
+    var color: vec3f = vec3f(0.0);
+
+    if (fsUniforms.hasEnv > 0) {
+        let f: vec3f = fresnelSchlickRoughness(max(dot(normal, viewDir), 0.0), f0, roughness);
+        let kS: vec3f = f;
+        var kD: vec3f = vec3f(1.0) - kS;
+        kD *= 1.0 - metallic;
+
+        let diffuse: vec3f = textureSample(irradienceMapTexture, irradienceMapSampler, normal).rgb * baseColor.rgb;
+        let prefilteredColor: vec3f = textureSampleLevel(prefilteredEnvTexture, prefilteredEnvSampler, reflected, roughness * MAX_REFLECTION_LOD).rgb;
+        let envBRDF: vec2f = textureSample(brdfLutTexture, brdfLutSampler, vec2f(max(dot(normal, viewDir), 0.0), roughness)).rg;
+        specular = prefilteredColor * (f * envBRDF.x + envBRDF.y);
+
+        let ambient: vec3f = (kD * diffuse + specular) * occlusion;
+        color = ambient + totalLight;
+    } else {
+        var ambient: vec3f = vec3(.03);
+        ambient *= baseColor.rgb * occlusion;
+        color = ambient + totalLight;
+    }
+
+    color = color / (vec3f(1) + color);
+    color = pow(color, vec3f(1 / gamma));
+
+    return vec4f(color, baseColor.a);
+}
+`,_h=`struct VSUniforms {
+    mvMatrix: mat4x4f,
+    pMatrix: mat4x4f,
+    nodesMatrices: array<mat4x4f, \${MAX_NODES}>,
+}
+
+struct FSUniforms {
+    replaceableColor: vec3f,
+    // replaceableType: u32,
+    discardAlphaLevel: f32,
+    tVertexAnim: mat3x3f,
+    lightPos: vec3f,
+    lightColor: vec3f,
+    cameraPos: vec3f,
+    shadowParams: vec3f,
+    shadowMapLightMatrix: mat4x4f,
+    // env
+}
+
+@group(0) @binding(0) var<uniform> vsUniforms: VSUniforms;
+@group(1) @binding(0) var<uniform> fsUniforms: FSUniforms;
+@group(1) @binding(1) var fsUniformDiffuseSampler: sampler;
+@group(1) @binding(2) var fsUniformDiffuseTexture: texture_2d<f32>;
+@group(1) @binding(3) var fsUniformNormalSampler: sampler;
+@group(1) @binding(4) var fsUniformNormalTexture: texture_2d<f32>;
+@group(1) @binding(5) var fsUniformOrmSampler: sampler;
+@group(1) @binding(6) var fsUniformOrmTexture: texture_2d<f32>;
+@group(1) @binding(7) var fsUniformShadowSampler: sampler_comparison;
+// @group(1) @binding(7) var fsUniformShadowSampler: sampler;
+@group(1) @binding(8) var fsUniformShadowTexture: texture_depth_2d;
+
+struct VSIn {
+    @location(0) vertexPosition: vec3f,
+    @location(1) normal: vec3f,
+    @location(2) textureCoord: vec2f,
+    @location(3) tangent: vec4f,
+    @location(4) skin: vec4<u32>,
+    @location(5) boneWeight: vec4f,
+}
+
+struct VSOut {
+    @builtin(position) position: vec4f,
+    @location(0) textureCoord: vec2f,
+    @location(1) depth: f32,
+}
+
+@vertex fn vs(
+    in: VSIn
+) -> VSOut {
+    var position: vec4f = vec4f(in.vertexPosition, 1.0);
+    var sum: mat4x4f;
+
+    sum += vsUniforms.nodesMatrices[in.skin[0]] * in.boneWeight[0];
+    sum += vsUniforms.nodesMatrices[in.skin[1]] * in.boneWeight[1];
+    sum += vsUniforms.nodesMatrices[in.skin[2]] * in.boneWeight[2];
+    sum += vsUniforms.nodesMatrices[in.skin[3]] * in.boneWeight[3];
+
+    position = sum * position;
+    position.w = 1;
+
+    var out: VSOut;
+    out.position = vsUniforms.pMatrix * vsUniforms.mvMatrix * position;
+    out.textureCoord = in.textureCoord;
+
+    out.depth = out.position.z / out.position.w;
+
+    return out;
+}
+
+struct FSOut {
+    @builtin(frag_depth) depth: f32,
+    @location(0) color: vec4f
+}
+
+@fragment fn fs(
+    in: VSOut,
+    @builtin(front_facing) isFront: bool
+) -> FSOut {
+    let texCoord: vec2f = (fsUniforms.tVertexAnim * vec3f(in.textureCoord.x, in.textureCoord.y, 1.)).xy;
+    var baseColor: vec4f = textureSample(fsUniformDiffuseTexture, fsUniformDiffuseSampler, texCoord);
+
+    // hand-made alpha-test
+    if (baseColor.a < fsUniforms.discardAlphaLevel) {
+        discard;
+    }
+
+    var out: FSOut;
+    out.color = vec4f(1, 1, 1, 1);
+    out.depth = in.depth;
+    return out;
+}
+`,Dh=`struct VSUniforms {
+    mvMatrix: mat4x4f,
+    pMatrix: mat4x4f,
+}
+
+@group(0) @binding(0) var<uniform> vsUniforms: VSUniforms;
+
+struct VSIn {
+    @location(0) vertexPosition: vec3f,
+    @location(1) color: vec3f,
+}
+
+struct VSOut {
+    @builtin(position) position: vec4f,
+    @location(0) color: vec3f,
+}
+
+@vertex fn vs(
+    in: VSIn
+) -> VSOut {
+    var position: vec4f = vec4f(in.vertexPosition, 1.0);
+
+    var out: VSOut;
+    out.position = vsUniforms.pMatrix * vsUniforms.mvMatrix * position;
+    out.color = in.color;
+    return out;
+}
+
+@fragment fn fs(
+    in: VSOut
+) -> @location(0) vec4f {
+    return vec4f(in.color, 1);
+}
+`,Lh=`struct VSUniforms {
+    mvMatrix: mat4x4f,
+    pMatrix: mat4x4f,
+}
+
+@group(0) @binding(0) var<uniform> vsUniforms: VSUniforms;
+@group(1) @binding(0) var fsUniformSampler: sampler;
+@group(1) @binding(1) var fsUniformTexture: texture_cube<f32>;
+
+struct VSIn {
+    @location(0) vertexPosition: vec3f,
+}
+
+struct VSOut {
+    @builtin(position) position: vec4f,
+    @location(0) localPos: vec3f,
+}
+
+@vertex fn vs(
+    in: VSIn
+) -> VSOut {
+    let rotView: mat4x4f = mat4x4f(
+        vec4f(vsUniforms.mvMatrix[0].xyz, 0),
+        vec4f(vsUniforms.mvMatrix[1].xyz, 0),
+        vec4f(vsUniforms.mvMatrix[2].xyz, 0),
+        vec4f(0, 0, 0, 1)
+    );
+
+    let clipPos: vec4f = vsUniforms.pMatrix * rotView * 1000. * vec4f(in.vertexPosition, 1.0);
+
+    var out: VSOut;
+    out.position = clipPos;
+    out.localPos = in.vertexPosition;
+    return out;
+}
+
+@fragment fn fs(
+    in: VSOut
+) -> @location(0) vec4f {
+    return textureSample(fsUniformTexture, fsUniformSampler, in.localPos);
+}
+`,Rh=`const invAtan: vec2f = vec2f(0.1591, 0.3183);
+
+struct VSUniforms {
+    mvMatrix: mat4x4f,
+    pMatrix: mat4x4f,
+}
+
+@group(0) @binding(0) var<uniform> vsUniforms: VSUniforms;
+@group(1) @binding(0) var fsUniformSampler: sampler;
+@group(1) @binding(1) var fsUniformTexture: texture_2d<f32>;
+
+struct VSIn {
+    @location(0) vertexPosition: vec3f,
+}
+
+struct VSOut {
+    @builtin(position) position: vec4f,
+    @location(0) localPos: vec3f,
+}
+
+@vertex fn vs(
+    in: VSIn
+) -> VSOut {
+    var out: VSOut;
+    out.position = vsUniforms.pMatrix * vsUniforms.mvMatrix * vec4f(in.vertexPosition, 1);
+    out.localPos = in.vertexPosition;
+    return out;
+}
+
+fn SampleSphericalMap(v: vec3f) -> vec2f {
+    // vec2 uv = vec2(atan(v.z, v.x), asin(v.y));
+    var uv: vec2f = vec2f(atan2(v.x, v.y), asin(-v.z));
+    uv *= invAtan;
+    uv += 0.5;
+    return uv;
+}
+
+@fragment fn fs(
+    in: VSOut
+) -> @location(0) vec4f {
+    let uv: vec2f = SampleSphericalMap(normalize(in.localPos)); // make sure to normalize localPos
+    let color: vec3f = textureSample(fsUniformTexture, fsUniformSampler, uv).rgb;
+
+    return vec4f(color, 1.0);
+}
+`,Fh=`const PI: f32 = 3.14159265359;
+const gamma: f32 = 2.2;
+const sampleDelta: f32 = 0.025;
+
+struct VSUniforms {
+    mvMatrix: mat4x4f,
+    pMatrix: mat4x4f,
+}
+
+@group(0) @binding(0) var<uniform> vsUniforms: VSUniforms;
+@group(1) @binding(0) var fsUniformSampler: sampler;
+@group(1) @binding(1) var fsUniformTexture: texture_cube<f32>;
+
+struct VSIn {
+    @location(0) vertexPosition: vec3f,
+}
+
+struct VSOut {
+    @builtin(position) position: vec4f,
+    @location(0) localPos: vec3f,
+}
+
+@vertex fn vs(
+    in: VSIn
+) -> VSOut {
+    var out: VSOut;
+    out.position = vsUniforms.pMatrix * vsUniforms.mvMatrix * vec4f(in.vertexPosition, 1);
+    out.localPos = in.vertexPosition;
+    return out;
+}
+
+@fragment fn fs(
+    in: VSOut
+) -> @location(0) vec4f {
+    var irradiance: vec3f = vec3f(0);
+
+    // the sample direction equals the hemisphere's orientation
+    let normal: vec3f = normalize(in.localPos);
+
+    var up: vec3f = vec3f(0.0, 1.0, 0.0);
+    let right: vec3f = normalize(cross(up, normal));
+    up = normalize(cross(normal, right));
+
+    var nrSamples: i32 = 0;
+    for (var phi: f32 = 0.0; phi < 2.0 * PI; phi += sampleDelta)
+    {
+        for (var theta: f32 = 0.0; theta < 0.5 * PI; theta += sampleDelta)
+        {
+            // spherical to cartesian (in tangent space)
+            let tangentSample: vec3f = vec3f(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
+            // tangent space to world
+            let sampleVec: vec3f = tangentSample.x * right + tangentSample.y * up + tangentSample.z * normal;
+
+            irradiance += pow(textureSample(fsUniformTexture, fsUniformSampler, sampleVec).rgb, vec3f(gamma)) * cos(theta) * sin(theta);
+            nrSamples++;
+        }
+    }
+    irradiance = PI * irradiance * (1.0 / f32(nrSamples));
+
+    return vec4f(irradiance, 1.0);
+}
+`,$h=`const PI: f32 = 3.14159265359;
+const gamma: f32 = 2.2;
+
+struct VSUniforms {
+    mvMatrix: mat4x4f,
+    pMatrix: mat4x4f,
+}
+
+struct FSUniforms {
+    roughness: f32,
+}
+
+@group(0) @binding(0) var<uniform> vsUniforms: VSUniforms;
+@group(1) @binding(0) var<uniform> fsUniforms: FSUniforms;
+@group(1) @binding(1) var fsUniformSampler: sampler;
+@group(1) @binding(2) var fsUniformTexture: texture_cube<f32>;
+
+struct VSIn {
+    @location(0) vertexPosition: vec3f,
+}
+
+struct VSOut {
+    @builtin(position) position: vec4f,
+    @location(0) localPos: vec3f,
+}
+
+@vertex fn vs(
+    in: VSIn
+) -> VSOut {
+    var out: VSOut;
+    out.position = vsUniforms.pMatrix * vsUniforms.mvMatrix * vec4f(in.vertexPosition, 1);
+    out.localPos = in.vertexPosition;
+    return out;
+}
+
+fn RadicalInverse_VdC(bits: u32) -> f32 {
+    var res: u32 = bits;
+    res = (res << 16u) | (res >> 16u);
+    res = ((res & 0x55555555u) << 1u) | ((res & 0xAAAAAAAAu) >> 1u);
+    res = ((res & 0x33333333u) << 2u) | ((res & 0xCCCCCCCCu) >> 2u);
+    res = ((res & 0x0F0F0F0Fu) << 4u) | ((res & 0xF0F0F0F0u) >> 4u);
+    res = ((res & 0x00FF00FFu) << 8u) | ((res & 0xFF00FF00u) >> 8u);
+    return f32(res) * 2.3283064365386963e-10; // / 0x100000000
+}
+
+fn Hammersley(i: u32, N: u32) -> vec2f {
+    return vec2f(f32(i)/f32(N), RadicalInverse_VdC(i));
+}
+
+fn ImportanceSampleGGX(Xi: vec2f, N: vec3f, roughness: f32) -> vec3f {
+    let a: f32 = roughness * roughness;
+
+    let phi: f32 = 2.0 * PI * Xi.x;
+    let cosTheta: f32 = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));
+    let sinTheta: f32 = sqrt(1.0 - cosTheta*cosTheta);
+
+    // from spherical coordinates to cartesian coordinates
+    var H: vec3f;
+    H.x = cos(phi) * sinTheta;
+    H.y = sin(phi) * sinTheta;
+    H.z = cosTheta;
+
+    // from tangent-space vector to world-space sample vector
+    var up: vec3f;
+    if (abs(N.z) < 0.999) {
+        up = vec3f(0.0, 0.0, 1.0);
+    } else {
+        up = vec3f(1.0, 0.0, 0.0);
+    }
+    let tangent: vec3f   = normalize(cross(up, N));
+    let bitangent: vec3f = cross(N, tangent);
+
+    let sampleVec: vec3f = tangent * H.x + bitangent * H.y + N * H.z;
+
+    return normalize(sampleVec);
+}
+
+@fragment fn fs(
+    in: VSOut
+) -> @location(0) vec4f {
+    let N: vec3f = normalize(in.localPos);
+    let R: vec3f = N;
+    let V: vec3f = R;
+
+    const SAMPLE_COUNT: u32 = 1024u;
+    var totalWeight: f32 = 0.0;
+    var prefilteredColor: vec3f = vec3f(0.0);
+    for(var i: u32 = 0u; i < SAMPLE_COUNT; i++)
+    {
+        let Xi: vec2f = Hammersley(i, SAMPLE_COUNT);
+        let H: vec3f  = ImportanceSampleGGX(Xi, N, fsUniforms.roughness);
+        let L: vec3f  = normalize(2.0 * dot(V, H) * H - V);
+
+        let NdotL: f32 = max(dot(N, L), 0.0);
+        if(NdotL > 0.0) {
+            prefilteredColor += pow(textureSampleLevel(fsUniformTexture, fsUniformSampler, L, 0).rgb, vec3f(gamma)) * NdotL;
+            totalWeight      += NdotL;
+        }
+    }
+    prefilteredColor = prefilteredColor / totalWeight;
+
+    return vec4f(prefilteredColor, 1.0);
+}
+`,Vh=`const PI: f32 = 3.14159265359;
+
+struct VSIn {
+    @location(0) vertexPosition: vec3f,
+}
+
+struct VSOut {
+    @builtin(position) position: vec4f,
+    @location(0) localPos: vec3f,
+}
+
+@vertex fn vs(
+    in: VSIn
+) -> VSOut {
+    var out: VSOut;
+    out.position = vec4f(in.vertexPosition, 1);
+    out.localPos = in.vertexPosition;
+    return out;
+}
+
+fn RadicalInverse_VdC(bits: u32) -> f32 {
+    var res: u32 = bits;
+    res = (res << 16u) | (res >> 16u);
+    res = ((res & 0x55555555u) << 1u) | ((res & 0xAAAAAAAAu) >> 1u);
+    res = ((res & 0x33333333u) << 2u) | ((res & 0xCCCCCCCCu) >> 2u);
+    res = ((res & 0x0F0F0F0Fu) << 4u) | ((res & 0xF0F0F0F0u) >> 4u);
+    res = ((res & 0x00FF00FFu) << 8u) | ((res & 0xFF00FF00u) >> 8u);
+    return f32(res) * 2.3283064365386963e-10; // / 0x100000000
+}
+
+fn Hammersley(i: u32, N: u32) -> vec2f {
+    return vec2f(f32(i)/f32(N), RadicalInverse_VdC(i));
+}
+
+fn ImportanceSampleGGX(Xi: vec2f, N: vec3f, roughness: f32) -> vec3f {
+    let a: f32 = roughness * roughness;
+
+    let phi: f32 = 2.0 * PI * Xi.x;
+    let cosTheta: f32 = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));
+    let sinTheta: f32 = sqrt(1.0 - cosTheta*cosTheta);
+
+    // from spherical coordinates to cartesian coordinates
+    var H: vec3f;
+    H.x = cos(phi) * sinTheta;
+    H.y = sin(phi) * sinTheta;
+    H.z = cosTheta;
+
+    // from tangent-space vector to world-space sample vector
+    var up: vec3f;
+    if (abs(N.z) < 0.999) {
+        up = vec3f(0.0, 0.0, 1.0);
+    } else {
+        up = vec3f(1.0, 0.0, 0.0);
+    }
+    let tangent: vec3f   = normalize(cross(up, N));
+    let bitangent: vec3f = cross(N, tangent);
+
+    let sampleVec: vec3f = tangent * H.x + bitangent * H.y + N * H.z;
+
+    return normalize(sampleVec);
+}
+
+fn geometrySchlickGGX(nDotV: f32, roughness: f32) -> f32 {
+    let r: f32 = roughness + 1.;
+    let k: f32 = r * r / 8.;
+    // float k = roughness * roughness / 2.;
+
+    let num: f32 = nDotV;
+    let denom: f32 = nDotV * (1. - k) + k;
+
+    return num / denom;
+}
+
+fn geometrySmith(normal: vec3f, viewDir: vec3f, lightDir: vec3f, roughness: f32) -> f32 {
+    let nDotV: f32 = max(dot(normal, viewDir), .0);
+    let nDotL: f32 = max(dot(normal, lightDir), .0);
+    let ggx2: f32  = geometrySchlickGGX(nDotV, roughness);
+    let ggx1: f32  = geometrySchlickGGX(nDotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+fn IntegrateBRDF(NdotV: f32, roughness: f32) -> vec2f {
+    var V: vec3f;
+    V.x = sqrt(1.0 - NdotV*NdotV);
+    V.y = 0.0;
+    V.z = NdotV;
+
+    var A: f32 = 0.0;
+    var B: f32 = 0.0;
+
+    let N: vec3f = vec3f(0.0, 0.0, 1.0);
+
+    const SAMPLE_COUNT: u32 = 1024u;
+    for(var i: u32 = 0u; i < SAMPLE_COUNT; i++) {
+        let Xi: vec2f = Hammersley(i, SAMPLE_COUNT);
+        let H: vec3f  = ImportanceSampleGGX(Xi, N, roughness);
+        let L: vec3f  = normalize(2.0 * dot(V, H) * H - V);
+
+        let NdotL: f32 = max(L.z, 0.0);
+        let NdotH: f32 = max(H.z, 0.0);
+        let VdotH: f32 = max(dot(V, H), 0.0);
+
+        if (NdotL > 0.0) {
+            let G: f32 = geometrySmith(N, V, L, roughness);
+            let G_Vis: f32 = (G * VdotH) / (NdotH * NdotV);
+            let Fc: f32 = pow(1.0 - VdotH, 5.0);
+
+            A += (1.0 - Fc) * G_Vis;
+            B += Fc * G_Vis;
+        }
+    }
+    A /= f32(SAMPLE_COUNT);
+    B /= f32(SAMPLE_COUNT);
+
+    return vec2f(A, B);
+}
+
+@fragment fn fs(
+    in: VSOut
+) -> @location(0) vec4f {
+    return vec4f(IntegrateBRDF((in.localPos.x + 1.0) * .5, (in.localPos.y + 1.0) * .5), 0., 1.);
+}
+`,kh=`struct VSOut {
+    @builtin(position) position: vec4f,
+    @location(0) texCoord: vec2f,
+};
+
+@vertex fn vs(
+    @location(0) position: vec2f
+) -> VSOut {
+    var vsOutput: VSOut;
+    vsOutput.position = vec4f(position * 2.0 - 1.0, 0.0, 1.0);
+    vsOutput.texCoord = vec2f(position.x, 1.0 - position.y);
+    return vsOutput;
+}
+
+@group(0) @binding(0) var textureSampler: sampler;
+@group(0) @binding(1) var textureView: texture_2d<f32>;
+
+@fragment fn fs(
+    fsInput: VSOut
+) -> @location(0) vec4f {
+    return textureSample(textureView, textureSampler, fsInput.texCoord);
+}`;let _s,Ci,Br;const Bi=new WeakMap;function Ds(t,e){Br||(Br=t.createBuffer({label:"mips vertex buffer",size:48,usage:GPUBufferUsage.VERTEX,mappedAtCreation:!0}),new Float32Array(Br.getMappedRange(0,Br.size)).set([0,0,1,0,0,1,0,1,1,0,1,1]),Br.unmap(),Ci=t.createShaderModule({label:"mips shader module",code:kh}),_s=t.createSampler({label:"mips sampler",minFilter:"linear"})),Bi[e.format]||(Bi[e.format]=t.createRenderPipeline({label:"mips pipeline",layout:"auto",vertex:{module:Ci,buffers:[{arrayStride:8,attributes:[{shaderLocation:0,offset:0,format:"float32x2"}]}]},fragment:{module:Ci,targets:[{format:e.format}]}}));const r=Bi[e.format],n=t.createCommandEncoder({label:"mips encoder"});for(let o=1;o<e.mipLevelCount;++o)for(let s=0;s<e.depthOrArrayLayers;++s){const a=t.createBindGroup({layout:r.getBindGroupLayout(0),entries:[{binding:0,resource:_s},{binding:1,resource:e.createView({dimension:"2d",baseMipLevel:o-1,mipLevelCount:1,baseArrayLayer:s,arrayLayerCount:1})}]}),c={label:"mips render pass",colorAttachments:[{view:e.createView({dimension:"2d",baseMipLevel:o,mipLevelCount:1,baseArrayLayer:s,arrayLayerCount:1}),loadOp:"clear",storeOp:"store"}]},u=n.beginRenderPass(c);u.setPipeline(r),u.setVertexBuffer(0,Br),u.setBindGroup(0,a),u.draw(6),u.end()}const i=n.finish();t.queue.submit([i])}const Ye=254,Er=2048,Ar=32,mr=128,Ft=8,Mr=512,Sn=4,Ih=new Set([0,1]),Gh=uh.replace(/\$\{MAX_NODES}/g,String(Ye)),Nh=hh.replace(/\$\{MAX_NODES}/g,String(Ye)),Oh=gh.replace(/\$\{MAX_NODES}/g,String(Ye)),Hh=ph.replace(/\$\{MAX_ENV_MIP_LEVELS}/g,String(Ft.toFixed(1))),zh=Ah.replace(/\$\{MAX_NODES}/g,String(Ye)),Xh=Mh.replace(/\$\{MAX_NODES}/g,String(Ye)).replace(/\$\{MAX_ENV_MIP_LEVELS}/g,String(Ft.toFixed(1))),Wh=_h.replace(/\$\{MAX_NODES}/g,String(Ye)),Ei=He(),Ai=Fr(),Mi=He(),_i=Me(0,0,0),Di=Wf(0,0,0,1),Li=Me(1,1,1),wn=Fr(),Ls=or(),Rs=or(),pr=He(),Lt=He(),Fs=Fr(),$s=or(),rr=He(),Pn=He(),Vs=He(),Tn=He(),st=He(),yn=He(),qh=He(),ks=eo(),at=or(),Un=eo(),Yh=[["none",{color:{operation:"add",srcFactor:"one",dstFactor:"zero"},alpha:{operation:"add",srcFactor:"one",dstFactor:"zero"}},{depthWriteEnabled:!0,depthCompare:"less-equal",format:"depth24plus"}],["transparent",{color:{operation:"add",srcFactor:"src-alpha",dstFactor:"one-minus-src-alpha"},alpha:{operation:"add",srcFactor:"one",dstFactor:"one-minus-src-alpha"}},{depthWriteEnabled:!0,depthCompare:"less-equal",format:"depth24plus"}],["blend",{color:{operation:"add",srcFactor:"src-alpha",dstFactor:"one-minus-src-alpha"},alpha:{operation:"add",srcFactor:"one",dstFactor:"one-minus-src-alpha"}},{depthWriteEnabled:!1,depthCompare:"less-equal",format:"depth24plus"}],["additive",{color:{operation:"add",srcFactor:"src",dstFactor:"one"},alpha:{operation:"add",srcFactor:"src",dstFactor:"one"}},{depthWriteEnabled:!1,depthCompare:"less-equal",format:"depth24plus"}],["addAlpha",{color:{operation:"add",srcFactor:"src-alpha",dstFactor:"one"},alpha:{operation:"add",srcFactor:"src-alpha",dstFactor:"one"}},{depthWriteEnabled:!1,depthCompare:"less-equal",format:"depth24plus"}],["modulate",{color:{operation:"add",srcFactor:"zero",dstFactor:"src"},alpha:{operation:"add",srcFactor:"zero",dstFactor:"one"}},{depthWriteEnabled:!1,depthCompare:"less-equal",format:"depth24plus"}],["modulate2x",{color:{operation:"add",srcFactor:"dst",dstFactor:"src"},alpha:{operation:"add",srcFactor:"zero",dstFactor:"one"}},{depthWriteEnabled:!1,depthCompare:"less-equal",format:"depth24plus"}]];class no{constructor(e){var r;this.gpuPipelines={},this.vertexBuffer=[],this.normalBuffer=[],this.vertices=[],this.texCoordBuffer=[],this.indexBuffer=[],this.wireframeIndexBuffer=[],this.wireframeIndexGPUBuffer=[],this.groupBuffer=[],this.skinWeightBuffer=[],this.tangentBuffer=[],this.gpuVertexBuffer=[],this.gpuNormalBuffer=[],this.gpuTexCoordBuffer=[],this.gpuGroupBuffer=[],this.gpuIndexBuffer=[],this.gpuSkinWeightBuffer=[],this.gpuTangentBuffer=[],this.gpuFSUniformsBuffers=[],this.isHD=(r=e.Geosets)==null?void 0:r.some(n=>{var i;return((i=n.SkinWeights)==null?void 0:i.length)>0}),this.shaderProgramLocations={vertexPositionAttribute:null,normalsAttribute:null,textureCoordAttribute:null,groupAttribute:null,skinAttribute:null,weightAttribute:null,tangentAttribute:null,pMatrixUniform:null,mvMatrixUniform:null,samplerUniform:null,normalSamplerUniform:null,ormSamplerUniform:null,replaceableColorUniform:null,replaceableTypeUniform:null,discardAlphaLevelUniform:null,tVertexAnimUniform:null,wireframeUniform:null,nodesMatricesAttributes:null,lightPosUniform:null,lightColorUniform:null,cameraPosUniform:null,shadowParamsUniform:null,shadowMapSamplerUniform:null,shadowMapLightMatrixUniform:null,hasEnvUniform:null,irradianceMapUniform:null,prefilteredEnvUniform:null,brdfLUTUniform:null},this.skeletonShaderProgramLocations={vertexPositionAttribute:null,colorAttribute:null,mvMatrixUniform:null,pMatrixUniform:null},this.model=e,this.rendererData={model:e,frame:0,animation:null,animationInfo:null,globalSequencesFrames:[],rootNode:null,nodes:[],geosetAnims:[],geosetAlpha:[],materialLayerTextureID:[],materialLayerNormalTextureID:[],materialLayerOrmTextureID:[],materialLayerReflectionTextureID:[],teamColor:null,cameraPos:null,cameraQuat:null,lightPos:null,lightColor:null,shadowBias:0,shadowSmoothingStep:0,textures:{},gpuTextures:{},gpuSamplers:[],gpuDepthSampler:null,gpuEmptyTexture:null,gpuEmptyCubeTexture:null,gpuDepthEmptyTexture:null,envTextures:{},gpuEnvTextures:{},requiredEnvMaps:{},irradianceMap:{},gpuIrradianceMap:{},prefilteredEnvMap:{},gpuPrefilteredEnvMap:{}},this.rendererData.teamColor=Me(1,0,0),this.rendererData.cameraPos=He(),this.rendererData.cameraQuat=Fr(),this.rendererData.lightPos=Me(1e3,1e3,1e3),this.rendererData.lightColor=Me(1,1,1),this.setSequence(0),this.rendererData.rootNode={node:{},matrix:or(),childs:[]};for(const n of e.Nodes)n&&(this.rendererData.nodes[n.ObjectId]={node:n,matrix:or(),childs:[]});for(const n of e.Nodes)n&&(!n.Parent&&n.Parent!==0?this.rendererData.rootNode.childs.push(this.rendererData.nodes[n.ObjectId]):this.rendererData.nodes[n.Parent].childs.push(this.rendererData.nodes[n.ObjectId]));if(e.GlobalSequences)for(let n=0;n<e.GlobalSequences.length;++n)this.rendererData.globalSequencesFrames[n]=0;for(let n=0;n<e.GeosetAnims.length;++n)this.rendererData.geosetAnims[e.GeosetAnims[n].GeosetId]=e.GeosetAnims[n];for(let n=0;n<e.Materials.length;++n)this.rendererData.materialLayerTextureID[n]=new Array(e.Materials[n].Layers.length),this.rendererData.materialLayerNormalTextureID[n]=new Array(e.Materials[n].Layers.length),this.rendererData.materialLayerOrmTextureID[n]=new Array(e.Materials[n].Layers.length),this.rendererData.materialLayerReflectionTextureID[n]=new Array(e.Materials[n].Layers.length);this.interp=new ro(this.rendererData),this.particlesController=new oh(this.interp,this.rendererData),this.ribbonsController=new ch(this.interp,this.rendererData)}destroy(){var e,r,n;if(this.particlesController&&(this.particlesController.destroy(),this.particlesController=null),this.ribbonsController&&(this.ribbonsController.destroy(),this.ribbonsController=null),this.device){for(const i of this.wireframeIndexGPUBuffer)i.destroy();(e=this.gpuMultisampleTexture)==null||e.destroy(),(r=this.gpuDepthTexture)==null||r.destroy();for(const i of this.gpuVertexBuffer)i.destroy();for(const i of this.gpuNormalBuffer)i.destroy();for(const i of this.gpuTexCoordBuffer)i.destroy();for(const i of this.gpuGroupBuffer)i.destroy();for(const i of this.gpuIndexBuffer)i.destroy();for(const i of this.gpuSkinWeightBuffer)i.destroy();for(const i of this.gpuTangentBuffer)i.destroy();(n=this.gpuVSUniformsBuffer)==null||n.destroy();for(const i in this.gpuFSUniformsBuffers)for(const o of this.gpuFSUniformsBuffers[i])o.destroy();this.skeletonGPUVertexBuffer&&(this.skeletonGPUVertexBuffer.destroy(),this.skeletonGPUVertexBuffer=null),this.skeletonGPUColorBuffer&&(this.skeletonGPUColorBuffer.destroy(),this.skeletonGPUColorBuffer=null),this.skeletonGPUUniformsBuffer&&(this.skeletonGPUUniformsBuffer.destroy(),this.skeletonGPUUniformsBuffer=null),this.envVSUniformsBuffer&&(this.envVSUniformsBuffer.destroy(),this.envVSUniformsBuffer=null),this.cubeGPUVertexBuffer&&(this.cubeGPUVertexBuffer.destroy(),this.cubeGPUVertexBuffer=null);for(const i of this.wireframeIndexGPUBuffer)i?.destroy()}this.gl&&(this.skeletonShaderProgram&&(this.skeletonVertexShader&&(this.gl.detachShader(this.skeletonShaderProgram,this.skeletonVertexShader),this.gl.deleteShader(this.skeletonVertexShader),this.skeletonVertexShader=null),this.skeletonFragmentShader&&(this.gl.detachShader(this.skeletonShaderProgram,this.skeletonFragmentShader),this.gl.deleteShader(this.skeletonFragmentShader),this.skeletonFragmentShader=null),this.gl.deleteProgram(this.skeletonShaderProgram),this.skeletonShaderProgram=null),this.shaderProgram&&(this.vertexShader&&(this.gl.detachShader(this.shaderProgram,this.vertexShader),this.gl.deleteShader(this.vertexShader),this.vertexShader=null),this.fragmentShader&&(this.gl.detachShader(this.shaderProgram,this.fragmentShader),this.gl.deleteShader(this.fragmentShader),this.fragmentShader=null),this.gl.deleteProgram(this.shaderProgram),this.shaderProgram=null),this.destroyShaderProgramObject(this.envToCubemap),this.destroyShaderProgramObject(this.envSphere),this.destroyShaderProgramObject(this.convoluteDiffuseEnv),this.destroyShaderProgramObject(this.prefilterEnv),this.destroyShaderProgramObject(this.integrateBRDF),this.gl.deleteBuffer(this.cubeVertexBuffer),this.gl.deleteBuffer(this.squareVertexBuffer))}initRequiredEnvMaps(){this.model.Version>=1e3&&(mt(this.gl)||this.device)&&this.model.Materials.forEach(e=>{let r;if(e.Shader==="Shader_HD_DefaultUnit"&&e.Layers.length===6&&typeof e.Layers[5].TextureID=="number"||this.model.Version>=1100&&(r=e.Layers.find(n=>n.ShaderTypeId===1&&n.ReflectionsTextureID))&&typeof r.ReflectionsTextureID=="number"){const n=this.model.Version>=1100&&r?r.ReflectionsTextureID:e.Layers[5].TextureID;this.rendererData.requiredEnvMaps[this.model.Textures[n].Image]=!0}})}initGL(e){this.gl=e,this.softwareSkinning=this.gl.getParameter(this.gl.MAX_VERTEX_UNIFORM_VECTORS)<4*(Ye+2),this.anisotropicExt=this.gl.getExtension("EXT_texture_filter_anisotropic")||this.gl.getExtension("MOZ_EXT_texture_filter_anisotropic")||this.gl.getExtension("WEBKIT_EXT_texture_filter_anisotropic"),this.colorBufferFloatExt=this.gl.getExtension("EXT_color_buffer_float"),this.initRequiredEnvMaps(),this.initShaders(),this.initBuffers(),this.initCube(),this.initSquare(),this.initBRDFLUT(),this.particlesController.initGL(e),this.ribbonsController.initGL(e)}async initGPUDevice(e,r,n){this.canvas=e,this.device=r,this.gpuContext=n,this.initRequiredEnvMaps(),this.initGPUShaders(),this.initGPUPipeline(),this.initGPUBuffers(),this.initGPUUniformBuffers(),this.initGPUMultisampleTexture(),this.initGPUDepthTexture(),this.initGPUEmptyTexture(),this.initCube(),this.initGPUBRDFLUT(),this.particlesController.initGPUDevice(r),this.ribbonsController.initGPUDevice(r)}setTextureImage(e,r){var n;if(this.device){const i=this.rendererData.gpuTextures[e]=this.device.createTexture({size:[r.width,r.height],format:"rgba8unorm",usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST|GPUTextureUsage.RENDER_ATTACHMENT});this.device.queue.copyExternalImageToTexture({source:r},{texture:i},{width:r.width,height:r.height}),Ds(this.device,i),this.processEnvMaps(e)}else{this.rendererData.textures[e]=this.gl.createTexture(),this.gl.bindTexture(this.gl.TEXTURE_2D,this.rendererData.textures[e]),this.gl.texImage2D(this.gl.TEXTURE_2D,0,this.gl.RGBA,this.gl.RGBA,this.gl.UNSIGNED_BYTE,r);const i=((n=this.model.Textures.find(o=>o.Image===e))==null?void 0:n.Flags)||0;this.setTextureParameters(i,!0),this.gl.generateMipmap(this.gl.TEXTURE_2D),this.processEnvMaps(e),this.gl.bindTexture(this.gl.TEXTURE_2D,null)}}setTextureImageData(e,r){var n;let i=1;for(let o=1;o<r.length&&!(r[o].width!==r[o-1].width/2||r[o].height!==r[o-1].height/2);++o,++i);if(this.device){const o=this.rendererData.gpuTextures[e]=this.device.createTexture({size:[r[0].width,r[0].height],format:"rgba8unorm",usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST,mipLevelCount:i});for(let s=0;s<i;++s)this.device.queue.writeTexture({texture:o,mipLevel:s},r[s].data,{bytesPerRow:r[s].width*4},{width:r[s].width,height:r[s].height});this.processEnvMaps(e)}else{this.rendererData.textures[e]=this.gl.createTexture(),this.gl.bindTexture(this.gl.TEXTURE_2D,this.rendererData.textures[e]);for(let s=0;s<i;++s)this.gl.texImage2D(this.gl.TEXTURE_2D,s,this.gl.RGBA,this.gl.RGBA,this.gl.UNSIGNED_BYTE,r[s]);const o=((n=this.model.Textures.find(s=>s.Image===e))==null?void 0:n.Flags)||0;this.setTextureParameters(o,!1),this.processEnvMaps(e),this.gl.bindTexture(this.gl.TEXTURE_2D,null)}}setTextureCompressedImage(e,r,n,i){var o;this.rendererData.textures[e]=this.gl.createTexture(),this.gl.bindTexture(this.gl.TEXTURE_2D,this.rendererData.textures[e]);const s=new Uint8Array(n);let a=1;for(let u=1;u<i.images.length;++u){const l=i.images[u];l.shape.width>=2&&l.shape.height>=2&&(a=u+1)}if(mt(this.gl)){this.gl.texStorage2D(this.gl.TEXTURE_2D,a,r,i.images[0].shape.width,i.images[0].shape.height);for(let u=0;u<a;++u){const l=i.images[u];this.gl.compressedTexSubImage2D(this.gl.TEXTURE_2D,u,0,0,l.shape.width,l.shape.height,r,s.subarray(l.offset,l.offset+l.length))}}else for(let u=0;u<a;++u){const l=i.images[u];this.gl.compressedTexImage2D(this.gl.TEXTURE_2D,u,r,l.shape.width,l.shape.height,0,s.subarray(l.offset,l.offset+l.length))}const c=((o=this.model.Textures.find(u=>u.Image===e))==null?void 0:o.Flags)||0;this.setTextureParameters(c,mt(this.gl)),this.processEnvMaps(e),this.gl.bindTexture(this.gl.TEXTURE_2D,null)}setGPUTextureCompressedImage(e,r,n,i){const o=new Uint8Array(n);let s=1;for(let c=1;c<i.images.length;++c){const u=i.images[c];u.shape.width>=4&&u.shape.height>=4&&(s=c+1)}const a=this.rendererData.gpuTextures[e]=this.device.createTexture({size:[i.shape.width,i.shape.height],format:r,usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST,mipLevelCount:s});for(let c=0;c<s;++c){const u=i.images[c];this.device.queue.writeTexture({texture:a,mipLevel:c},o.subarray(u.offset,u.offset+u.length),{bytesPerRow:u.shape.width*(r==="bc1-rgba-unorm"?2:4)},{width:u.shape.width,height:u.shape.height})}this.processEnvMaps(e)}setCamera(e,r){zr(this.rendererData.cameraPos,e),qf(this.rendererData.cameraQuat,r)}setLightPosition(e){zr(this.rendererData.lightPos,e)}setLightColor(e){zr(this.rendererData.lightColor,e)}setSequence(e){this.rendererData.animation=e,this.rendererData.animationInfo=this.model.Sequences[this.rendererData.animation],this.rendererData.frame=this.rendererData.animationInfo.Interval[0]}getSequence(){return this.rendererData.animation}setFrame(e){const r=this.model.Sequences.findIndex(n=>n.Interval[0]<=e&&n.Interval[1]>=e);r<0||(this.rendererData.animation=r,this.rendererData.animationInfo=this.model.Sequences[this.rendererData.animation],this.rendererData.frame=e)}getFrame(){return this.rendererData.frame}setTeamColor(e){zr(this.rendererData.teamColor,e)}update(e){this.rendererData.frame+=e,this.rendererData.frame>this.rendererData.animationInfo.Interval[1]&&(this.rendererData.frame=this.rendererData.animationInfo.Interval[0]),this.updateGlobalSequences(e),this.updateNode(this.rendererData.rootNode),this.particlesController.update(e),this.ribbonsController.update(e);for(let r=0;r<this.model.Geosets.length;++r)this.rendererData.geosetAlpha[r]=this.findAlpha(r);for(let r=0;r<this.rendererData.materialLayerTextureID.length;++r)for(let n=0;n<this.rendererData.materialLayerTextureID[r].length;++n){const i=this.model.Materials[r].Layers[n],o=i.TextureID,s=i.NormalTextureID,a=i.ORMTextureID,c=i.ReflectionsTextureID;typeof o=="number"?this.rendererData.materialLayerTextureID[r][n]=o:this.rendererData.materialLayerTextureID[r][n]=this.interp.num(o),typeof s<"u"&&(this.rendererData.materialLayerNormalTextureID[r][n]=typeof s=="number"?s:this.interp.num(s)),typeof a<"u"&&(this.rendererData.materialLayerOrmTextureID[r][n]=typeof a=="number"?a:this.interp.num(a)),typeof c<"u"&&(this.rendererData.materialLayerReflectionTextureID[r][n]=typeof c=="number"?c:this.interp.num(c))}}render(e,r,{wireframe:n,env:i,levelOfDetail:o=0,useEnvironmentMap:s=!1,shadowMapTexture:a,shadowMapMatrix:c,shadowBias:u,shadowSmoothingStep:l,depthTextureTarget:d}){var g,f,h,v,S;if(!(d&&!this.isHD)){if(this.device){(this.gpuMultisampleTexture.width!==this.canvas.width||this.gpuMultisampleTexture.height!==this.canvas.height)&&(this.gpuMultisampleTexture.destroy(),this.initGPUMultisampleTexture()),(this.gpuDepthTexture.width!==this.canvas.width||this.gpuDepthTexture.height!==this.canvas.height)&&(this.gpuDepthTexture.destroy(),this.initGPUDepthTexture());let p;d?p={label:"shadow renderPass",colorAttachments:[],depthStencilAttachment:{view:d.createView(),depthClearValue:1,depthLoadOp:"clear",depthStoreOp:"store"}}:(p=this.gpuRenderPassDescriptor,this.gpuRenderPassDescriptor.colorAttachments[0].view=this.gpuMultisampleTexture.createView(),this.gpuRenderPassDescriptor.colorAttachments[0].resolveTarget=this.gpuContext.getCurrentTexture().createView(),this.gpuRenderPassDescriptor.depthStencilAttachment={view:this.gpuDepthTexture.createView(),depthClearValue:1,depthLoadOp:"clear",depthStoreOp:"store"});const w=this.device.createCommandEncoder(),m=w.beginRenderPass(p);i&&this.renderEnvironmentGPU(m,e,r);const U=new ArrayBuffer(128+64*Ye),x={mvMatrix:new Float32Array(U,0,16),pMatrix:new Float32Array(U,64,16),nodesMatrices:new Float32Array(U,128,16*Ye)};x.mvMatrix.set(e),x.pMatrix.set(r);for(let y=0;y<Ye;++y)this.rendererData.nodes[y]&&x.nodesMatrices.set(this.rendererData.nodes[y].matrix,y*16);this.device.queue.writeBuffer(this.gpuVSUniformsBuffer,0,U);for(let y=0;y<this.model.Geosets.length;++y){const T=this.model.Geosets[y];if(this.rendererData.geosetAlpha[y]<1e-6||T.LevelOfDetail!==void 0&&T.LevelOfDetail!==o)continue;n&&!this.wireframeIndexGPUBuffer[y]&&this.createWireframeGPUBuffer(y);const P=T.MaterialID,k=this.model.Materials[P];if(m.setVertexBuffer(0,this.gpuVertexBuffer[y]),m.setVertexBuffer(1,this.gpuNormalBuffer[y]),m.setVertexBuffer(2,this.gpuTexCoordBuffer[y]),this.isHD?(m.setVertexBuffer(3,this.gpuTangentBuffer[y]),m.setVertexBuffer(4,this.gpuSkinWeightBuffer[y]),m.setVertexBuffer(5,this.gpuSkinWeightBuffer[y])):m.setVertexBuffer(3,this.gpuGroupBuffer[y]),m.setIndexBuffer(n?this.wireframeIndexGPUBuffer[y]:this.gpuIndexBuffer[y],"uint16"),this.isHD){const L=k.Layers[0];if(d&&!Ih.has(L.FilterMode||0))continue;const N=d?this.gpuShadowPipeline:n?this.gpuWireframePipeline:this.getGPUPipeline(L);m.setPipeline(N);const D=this.rendererData.materialLayerTextureID[P],V=this.rendererData.materialLayerNormalTextureID[P],$=this.rendererData.materialLayerOrmTextureID[P],I=this.rendererData.materialLayerReflectionTextureID[P],pe=D[0],K=this.model.Textures[pe],Te=L?.ShaderTypeId===1?V[0]:D[1],Ie=this.model.Textures[Te],Le=L?.ShaderTypeId===1?$[0]:D[2],Oe=this.model.Textures[Le],Fe=L?.ShaderTypeId===1?I[0]:D[5],ze=this.model.Textures[Fe],Xe=ze?.Image,ct=this.rendererData.gpuIrradianceMap[Xe],Ze=this.rendererData.gpuPrefilteredEnvMap[Xe],ht=i&&ct&&Ze;(g=this.gpuFSUniformsBuffers)[P]||(g[P]=[]);let qe=this.gpuFSUniformsBuffers[P][0];qe||(qe=this.gpuFSUniformsBuffers[P][0]=this.device.createBuffer({label:`fs uniforms ${P}`,size:192,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}));const je=this.getTexCoordMatrix(L),$e=new ArrayBuffer(192),Ge={replaceableColor:new Float32Array($e,0,3),discardAlphaLevel:new Float32Array($e,12,1),tVertexAnim:new Float32Array($e,16,12),lightPos:new Float32Array($e,64,3),hasEnv:new Uint32Array($e,76,1),lightColor:new Float32Array($e,80,3),wireframe:new Uint32Array($e,92,1),cameraPos:new Float32Array($e,96,3),shadowParams:new Float32Array($e,112,3),shadowMapLightMatrix:new Float32Array($e,128,16)};Ge.replaceableColor.set(this.rendererData.teamColor),Ge.discardAlphaLevel.set([L.FilterMode===Re.Transparent?.75:0]),Ge.tVertexAnim.set(je.slice(0,3)),Ge.tVertexAnim.set(je.slice(3,6),4),Ge.tVertexAnim.set(je.slice(6,9),8),Ge.lightPos.set(this.rendererData.lightPos),Ge.lightColor.set(this.rendererData.lightColor),Ge.cameraPos.set(this.rendererData.cameraPos),a&&c?(Ge.shadowParams.set([1,u??1e-6,l??1/1024]),Ge.shadowMapLightMatrix.set(c)):(Ge.shadowParams.set([0,0,0]),Ge.shadowMapLightMatrix.set([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0])),Ge.hasEnv.set([ht?1:0]),Ge.wireframe.set([n?1:0]),this.device.queue.writeBuffer(qe,0,$e);const St=this.device.createBindGroup({label:`fs uniforms ${P}`,layout:this.fsBindGroupLayout,entries:[{binding:0,resource:{buffer:qe}},{binding:1,resource:this.rendererData.gpuSamplers[pe]},{binding:2,resource:(this.rendererData.gpuTextures[K.Image]||this.rendererData.gpuEmptyTexture).createView()},{binding:3,resource:this.rendererData.gpuSamplers[Te]},{binding:4,resource:(this.rendererData.gpuTextures[Ie.Image]||this.rendererData.gpuEmptyTexture).createView()},{binding:5,resource:this.rendererData.gpuSamplers[Le]},{binding:6,resource:(this.rendererData.gpuTextures[Oe.Image]||this.rendererData.gpuEmptyTexture).createView()},{binding:7,resource:this.rendererData.gpuDepthSampler},{binding:8,resource:(a||this.rendererData.gpuDepthEmptyTexture).createView()},{binding:9,resource:this.prefilterEnvSampler},{binding:10,resource:(ct||this.rendererData.gpuEmptyCubeTexture).createView({dimension:"cube"})},{binding:11,resource:this.prefilterEnvSampler},{binding:12,resource:(Ze||this.rendererData.gpuEmptyCubeTexture).createView({dimension:"cube"})},{binding:13,resource:this.gpuBrdfSampler},{binding:14,resource:this.gpuBrdfLUT.createView()}]});m.setBindGroup(0,this.gpuVSUniformsBindGroup),m.setBindGroup(1,St),m.drawIndexed(n?T.Faces.length*2:T.Faces.length)}else for(let L=0;L<k.Layers.length;++L){const N=k.Layers[L],D=this.rendererData.materialLayerTextureID[P][L],V=this.model.Textures[D],$=n?this.gpuWireframePipeline:this.getGPUPipeline(N);m.setPipeline($),(f=this.gpuFSUniformsBuffers)[P]||(f[P]=[]);let I=this.gpuFSUniformsBuffers[P][L];I||(I=this.gpuFSUniformsBuffers[P][L]=this.device.createBuffer({label:`fs uniforms ${P} ${L}`,size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}));const pe=this.getTexCoordMatrix(N),K=new ArrayBuffer(80),Te={replaceableColor:new Float32Array(K,0,3),replaceableType:new Uint32Array(K,12,1),discardAlphaLevel:new Float32Array(K,16,1),wireframe:new Uint32Array(K,20,1),tVertexAnim:new Float32Array(K,32,12)};Te.replaceableColor.set(this.rendererData.teamColor),Te.replaceableType.set([V.ReplaceableId||0]),Te.discardAlphaLevel.set([N.FilterMode===Re.Transparent?.75:0]),Te.tVertexAnim.set(pe.slice(0,3)),Te.tVertexAnim.set(pe.slice(3,6),4),Te.tVertexAnim.set(pe.slice(6,9),8),Te.wireframe.set([n?1:0]),this.device.queue.writeBuffer(I,0,K);const Ie=this.device.createBindGroup({label:`fs uniforms ${P} ${L}`,layout:this.fsBindGroupLayout,entries:[{binding:0,resource:{buffer:I}},{binding:1,resource:this.rendererData.gpuSamplers[D]},{binding:2,resource:(this.rendererData.gpuTextures[V.Image]||this.rendererData.gpuEmptyTexture).createView()}]});m.setBindGroup(0,this.gpuVSUniformsBindGroup),m.setBindGroup(1,Ie),m.drawIndexed(n?T.Faces.length*2:T.Faces.length)}}this.particlesController.renderGPU(m,e,r),this.ribbonsController.renderGPU(m,e,r),m.end();const b=w.finish();this.device.queue.submit([b]);return}if(i&&this.renderEnvironment(e,r),this.gl.useProgram(this.shaderProgram),this.gl.uniformMatrix4fv(this.shaderProgramLocations.pMatrixUniform,!1,r),this.gl.uniformMatrix4fv(this.shaderProgramLocations.mvMatrixUniform,!1,e),this.gl.uniform1f(this.shaderProgramLocations.wireframeUniform,n?1:0),this.gl.enableVertexAttribArray(this.shaderProgramLocations.vertexPositionAttribute),this.gl.enableVertexAttribArray(this.shaderProgramLocations.normalsAttribute),this.gl.enableVertexAttribArray(this.shaderProgramLocations.textureCoordAttribute),this.isHD?(this.gl.enableVertexAttribArray(this.shaderProgramLocations.skinAttribute),this.gl.enableVertexAttribArray(this.shaderProgramLocations.weightAttribute),this.gl.enableVertexAttribArray(this.shaderProgramLocations.tangentAttribute)):this.softwareSkinning||this.gl.enableVertexAttribArray(this.shaderProgramLocations.groupAttribute),!this.softwareSkinning)for(let p=0;p<Ye;++p)this.rendererData.nodes[p]&&this.gl.uniformMatrix4fv(this.shaderProgramLocations.nodesMatricesAttributes[p],!1,this.rendererData.nodes[p].matrix);for(let p=0;p<this.model.Geosets.length;++p){const w=this.model.Geosets[p];if(this.rendererData.geosetAlpha[p]<1e-6||w.LevelOfDetail!==void 0&&w.LevelOfDetail!==o)continue;this.softwareSkinning&&this.generateGeosetVertices(p);const m=w.MaterialID,U=this.model.Materials[m];if(this.isHD){this.gl.uniform3fv(this.shaderProgramLocations.lightPosUniform,this.rendererData.lightPos),this.gl.uniform3fv(this.shaderProgramLocations.lightColorUniform,this.rendererData.lightColor),this.gl.uniform3fv(this.shaderProgramLocations.cameraPosUniform,this.rendererData.cameraPos),a&&c?(this.gl.uniform3f(this.shaderProgramLocations.shadowParamsUniform,1,u??1e-6,l??1/1024),this.gl.activeTexture(this.gl.TEXTURE3),this.gl.bindTexture(this.gl.TEXTURE_2D,a),this.gl.uniform1i(this.shaderProgramLocations.shadowMapSamplerUniform,3),this.gl.uniformMatrix4fv(this.shaderProgramLocations.shadowMapLightMatrixUniform,!1,c)):this.gl.uniform3f(this.shaderProgramLocations.shadowParamsUniform,0,0,0);const x=this.model.Version>=1100&&((h=U.Layers.find(P=>P.ShaderTypeId===1&&typeof P.ReflectionsTextureID=="number"))==null?void 0:h.ReflectionsTextureID)||((v=U.Layers[5])==null?void 0:v.TextureID),b=(S=this.model.Textures[x])==null?void 0:S.Image,y=this.rendererData.irradianceMap[b],T=this.rendererData.prefilteredEnvMap[b];s&&y&&T?(this.gl.uniform1i(this.shaderProgramLocations.hasEnvUniform,1),this.gl.activeTexture(this.gl.TEXTURE4),this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP,y),this.gl.uniform1i(this.shaderProgramLocations.irradianceMapUniform,4),this.gl.activeTexture(this.gl.TEXTURE5),this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP,T),this.gl.uniform1i(this.shaderProgramLocations.prefilteredEnvUniform,5),this.gl.activeTexture(this.gl.TEXTURE6),this.gl.bindTexture(this.gl.TEXTURE_2D,this.brdfLUT),this.gl.uniform1i(this.shaderProgramLocations.brdfLUTUniform,6)):(this.gl.uniform1i(this.shaderProgramLocations.hasEnvUniform,0),this.gl.uniform1i(this.shaderProgramLocations.irradianceMapUniform,4),this.gl.uniform1i(this.shaderProgramLocations.prefilteredEnvUniform,5),this.gl.uniform1i(this.shaderProgramLocations.brdfLUTUniform,6)),this.setLayerPropsHD(m,U.Layers),this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.vertexBuffer[p]),this.gl.vertexAttribPointer(this.shaderProgramLocations.vertexPositionAttribute,3,this.gl.FLOAT,!1,0,0),this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.normalBuffer[p]),this.gl.vertexAttribPointer(this.shaderProgramLocations.normalsAttribute,3,this.gl.FLOAT,!1,0,0),this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.texCoordBuffer[p]),this.gl.vertexAttribPointer(this.shaderProgramLocations.textureCoordAttribute,2,this.gl.FLOAT,!1,0,0),this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.skinWeightBuffer[p]),this.gl.vertexAttribPointer(this.shaderProgramLocations.skinAttribute,4,this.gl.UNSIGNED_BYTE,!1,8,0),this.gl.vertexAttribPointer(this.shaderProgramLocations.weightAttribute,4,this.gl.UNSIGNED_BYTE,!0,8,4),this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.tangentBuffer[p]),this.gl.vertexAttribPointer(this.shaderProgramLocations.tangentAttribute,4,this.gl.FLOAT,!1,0,0),n&&!this.wireframeIndexBuffer[p]&&this.createWireframeBuffer(p),this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER,n?this.wireframeIndexBuffer[p]:this.indexBuffer[p]),this.gl.drawElements(n?this.gl.LINES:this.gl.TRIANGLES,n?w.Faces.length*2:w.Faces.length,this.gl.UNSIGNED_SHORT,0),a&&c&&(this.gl.activeTexture(this.gl.TEXTURE3),this.gl.bindTexture(this.gl.TEXTURE_2D,null))}else for(let x=0;x<U.Layers.length;++x)this.setLayerProps(U.Layers[x],this.rendererData.materialLayerTextureID[m][x]),this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.vertexBuffer[p]),this.gl.vertexAttribPointer(this.shaderProgramLocations.vertexPositionAttribute,3,this.gl.FLOAT,!1,0,0),this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.normalBuffer[p]),this.gl.vertexAttribPointer(this.shaderProgramLocations.normalsAttribute,3,this.gl.FLOAT,!1,0,0),this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.texCoordBuffer[p]),this.gl.vertexAttribPointer(this.shaderProgramLocations.textureCoordAttribute,2,this.gl.FLOAT,!1,0,0),this.softwareSkinning||(this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.groupBuffer[p]),this.gl.vertexAttribPointer(this.shaderProgramLocations.groupAttribute,4,this.gl.UNSIGNED_SHORT,!1,0,0)),n&&!this.wireframeIndexBuffer[p]&&this.createWireframeBuffer(p),this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER,n?this.wireframeIndexBuffer[p]:this.indexBuffer[p]),this.gl.drawElements(n?this.gl.LINES:this.gl.TRIANGLES,n?w.Faces.length*2:w.Faces.length,this.gl.UNSIGNED_SHORT,0)}this.gl.disableVertexAttribArray(this.shaderProgramLocations.vertexPositionAttribute),this.gl.disableVertexAttribArray(this.shaderProgramLocations.normalsAttribute),this.gl.disableVertexAttribArray(this.shaderProgramLocations.textureCoordAttribute),this.isHD?(this.gl.disableVertexAttribArray(this.shaderProgramLocations.skinAttribute),this.gl.disableVertexAttribArray(this.shaderProgramLocations.weightAttribute),this.gl.disableVertexAttribArray(this.shaderProgramLocations.tangentAttribute)):this.softwareSkinning||this.gl.disableVertexAttribArray(this.shaderProgramLocations.groupAttribute),this.particlesController.render(e,r),this.ribbonsController.render(e,r)}}renderEnvironmentGPU(e,r,n){e.setPipeline(this.envPiepeline);const i=new ArrayBuffer(128),o={mvMatrix:new Float32Array(i,0,16),pMatrix:new Float32Array(i,64,16)};o.mvMatrix.set(r),o.pMatrix.set(n),this.device.queue.writeBuffer(this.envVSUniformsBuffer,0,i),e.setBindGroup(0,this.envVSBindGroup);for(const s in this.rendererData.gpuEnvTextures){const a=this.device.createBindGroup({label:`env fs uniforms ${s}`,layout:this.envFSBindGroupLayout,entries:[{binding:0,resource:this.envSampler},{binding:1,resource:this.rendererData.gpuEnvTextures[s].createView({dimension:"cube"})}]});e.setBindGroup(1,a),e.setPipeline(this.envPiepeline),e.setVertexBuffer(0,this.cubeGPUVertexBuffer),e.draw(36)}}renderEnvironment(e,r){if(mt(this.gl)){this.gl.disable(this.gl.BLEND),this.gl.disable(this.gl.DEPTH_TEST),this.gl.disable(this.gl.CULL_FACE);for(const n in this.rendererData.envTextures)this.gl.useProgram(this.envSphere.program),this.gl.uniformMatrix4fv(this.envSphere.uniforms.uPMatrix,!1,r),this.gl.uniformMatrix4fv(this.envSphere.uniforms.uMVMatrix,!1,e),this.gl.activeTexture(this.gl.TEXTURE0),this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP,this.rendererData.envTextures[n]),this.gl.uniform1i(this.envSphere.uniforms.uEnvironmentMap,0),this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.cubeVertexBuffer),this.gl.enableVertexAttribArray(this.envSphere.attributes.aPos),this.gl.vertexAttribPointer(this.envSphere.attributes.aPos,3,this.gl.FLOAT,!1,0,0),this.gl.drawArrays(this.gl.TRIANGLES,0,36),this.gl.disableVertexAttribArray(this.envSphere.attributes.aPos),this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP,null)}}renderSkeleton(e,r,n){var i,o,s;const a=[],c=[],u=(f,h)=>{yt(st,f.node.PivotPoint,f.matrix),a.push(st[0],st[1],st[2]),yt(st,h.node.PivotPoint,h.matrix),a.push(st[0],st[1],st[2]),c.push(0,1,0,0,0,1)},l=f=>{(f.node.Parent||f.node.Parent===0)&&(!n||n.includes(f.node.Name))&&u(f,this.rendererData.nodes[f.node.Parent]);for(const h of f.childs)l(h)};if(l(this.rendererData.rootNode),!a.length)return;const d=new Float32Array(a),g=new Float32Array(c);if(this.device){this.skeletonShaderModule||(this.skeletonShaderModule=this.device.createShaderModule({label:"skeleton",code:Dh})),this.skeletonBindGroupLayout||(this.skeletonBindGroupLayout=this.device.createBindGroupLayout({label:"skeleton bind group layout",entries:[{binding:0,visibility:GPUShaderStage.VERTEX,buffer:{type:"uniform",hasDynamicOffset:!1,minBindingSize:128}}]})),this.skeletonPipelineLayout||(this.skeletonPipelineLayout=this.device.createPipelineLayout({label:"skeleton pipeline layout",bindGroupLayouts:[this.skeletonBindGroupLayout]})),this.skeletonPipeline||(this.skeletonPipeline=this.device.createRenderPipeline({label:"skeleton pipeline",layout:this.skeletonPipelineLayout,vertex:{module:this.skeletonShaderModule,buffers:[{arrayStride:12,attributes:[{shaderLocation:0,offset:0,format:"float32x3"}]},{arrayStride:12,attributes:[{shaderLocation:1,offset:0,format:"float32x3"}]}]},fragment:{module:this.skeletonShaderModule,targets:[{format:navigator.gpu.getPreferredCanvasFormat(),blend:{color:{operation:"add",srcFactor:"src-alpha",dstFactor:"one-minus-src-alpha"},alpha:{operation:"add",srcFactor:"one",dstFactor:"one-minus-src-alpha"}}}]},primitive:{topology:"line-list"}})),(i=this.skeletonGPUVertexBuffer)==null||i.destroy(),(o=this.skeletonGPUColorBuffer)==null||o.destroy(),(s=this.skeletonGPUUniformsBuffer)==null||s.destroy();const f=this.skeletonGPUVertexBuffer=this.device.createBuffer({label:"skeleton vertex",size:d.byteLength,usage:GPUBufferUsage.VERTEX,mappedAtCreation:!0});new Float32Array(f.getMappedRange(0,f.size)).set(d),f.unmap();const h=this.skeletonGPUColorBuffer=this.device.createBuffer({label:"skeleton color",size:g.byteLength,usage:GPUBufferUsage.VERTEX,mappedAtCreation:!0});new Float32Array(h.getMappedRange(0,h.size)).set(g),h.unmap();const v=this.skeletonGPUUniformsBuffer=this.device.createBuffer({label:"skeleton vs uniforms",size:128,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}),S=this.device.createBindGroup({label:"skeleton uniforms bind group",layout:this.skeletonBindGroupLayout,entries:[{binding:0,resource:{buffer:v}}]}),p={label:"skeleton renderPass",colorAttachments:[{view:this.gpuContext.getCurrentTexture().createView(),clearValue:[.15,.15,.15,1],loadOp:"load",storeOp:"store"}]},w=this.device.createCommandEncoder(),m=w.beginRenderPass(p),U=new ArrayBuffer(128),x={mvMatrix:new Float32Array(U,0,16),pMatrix:new Float32Array(U,64,16)};x.mvMatrix.set(e),x.pMatrix.set(r),this.device.queue.writeBuffer(v,0,U),m.setVertexBuffer(0,f),m.setVertexBuffer(1,h),m.setPipeline(this.skeletonPipeline),m.setBindGroup(0,S),m.draw(d.length/3),m.end();const b=w.finish();this.device.queue.submit([b]);return}this.skeletonShaderProgram||(this.skeletonShaderProgram=this.initSkeletonShaderProgram()),this.gl.disable(this.gl.BLEND),this.gl.disable(this.gl.DEPTH_TEST),this.gl.useProgram(this.skeletonShaderProgram),this.gl.uniformMatrix4fv(this.skeletonShaderProgramLocations.pMatrixUniform,!1,r),this.gl.uniformMatrix4fv(this.skeletonShaderProgramLocations.mvMatrixUniform,!1,e),this.gl.enableVertexAttribArray(this.skeletonShaderProgramLocations.vertexPositionAttribute),this.gl.enableVertexAttribArray(this.skeletonShaderProgramLocations.colorAttribute),this.skeletonVertexBuffer||(this.skeletonVertexBuffer=this.gl.createBuffer()),this.skeletonColorBuffer||(this.skeletonColorBuffer=this.gl.createBuffer()),this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.skeletonVertexBuffer),this.gl.bufferData(this.gl.ARRAY_BUFFER,d,this.gl.DYNAMIC_DRAW),this.gl.vertexAttribPointer(this.skeletonShaderProgramLocations.vertexPositionAttribute,3,this.gl.FLOAT,!1,0,0),this.gl

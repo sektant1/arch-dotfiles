@@ -1,0 +1,37 @@
+import { createSignal, onMount } from 'solid-js';
+import type { Renderer } from '../renderer/Renderer';
+
+interface Props {
+  label: string;
+  initialChecked?: boolean;
+  renderer: Renderer;
+}
+
+export default function Checkbox(props: Props) {
+  let ref!: HTMLDivElement;
+  let visualRef!: HTMLDivElement;
+  const [checked, setChecked] = createSignal(props.initialChecked ?? false);
+
+  onMount(() => {
+    props.renderer.checkboxes.push({
+      ref: () => ref,
+      visualRef: () => visualRef,
+      checked,
+    });
+  });
+
+  return (
+    <div
+      ref={ref}
+      class="wc3-checkbox"
+      classList={{ checked: checked() }}
+      onClick={() => setChecked(v => !v)}
+    >
+      <div ref={visualRef} class="cb-visual">
+        <img class="cb-bg" src="" alt="" />
+        <img class="cb-check" src="" alt="" />
+      </div>
+      <span class="cb-label">{props.label}</span>
+    </div>
+  );
+}

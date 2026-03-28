@@ -1,0 +1,36 @@
+import React from "react";
+import { BAR_ASSETS } from "../utils/assets";
+
+export interface ManaBarProps {
+  value: number;
+  max: number;
+  showText?: boolean;
+  className?: string;
+}
+
+export function ManaBar({
+  value,
+  max,
+  showText = true,
+  className,
+}: ManaBarProps) {
+  const percent = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
+
+  return (
+    <div className={`wc3-bar wc3-bar--unit wc3-bar--mana ${className ?? ""}`}>
+      <div
+        className="wc3-bar-fill-wrap"
+        style={{ width: `${percent}%` }}
+      >
+        <div className="wc3-bar-fill wc3-bar-fill--mana" />
+        <div className="wc3-bar-highlight" />
+      </div>
+      <div className="wc3-bar-segments" />
+      {showText && (
+        <div className="wc3-bar-text">
+          {Math.round(value)} / {max}
+        </div>
+      )}
+    </div>
+  );
+}

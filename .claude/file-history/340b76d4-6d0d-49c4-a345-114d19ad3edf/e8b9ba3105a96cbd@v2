@@ -1,0 +1,40 @@
+import { useRef, useEffect } from 'react';
+import type { Race } from '@wc3-ui/core';
+
+interface Props {
+  race: Race;
+}
+
+export default function CursorOverlay({ race }: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const onMove = (e: MouseEvent) => {
+      el.style.left = e.clientX + 'px';
+      el.style.top = e.clientY + 'px';
+    };
+    const onLeave = () => { el.style.display = 'none'; };
+    const onEnter = () => { el.style.display = 'block'; };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseleave', onLeave);
+    document.addEventListener('mouseenter', onEnter);
+
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseleave', onLeave);
+      document.removeEventListener('mouseenter', onEnter);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      id="cursorOverlay"
+      style={{ backgroundImage: `url('war3/Cursor/${race}Cursor.png')` }}
+    />
+  );
+}

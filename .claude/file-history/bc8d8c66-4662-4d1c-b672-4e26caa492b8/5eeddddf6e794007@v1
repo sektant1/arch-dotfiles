@@ -1,0 +1,22 @@
+import { onMount } from 'solid-js';
+import type { Renderer } from '../renderer/Renderer';
+
+interface Props {
+  renderer: Renderer;
+}
+
+export default function MenuPanel(props: Props) {
+  let ref!: HTMLDivElement;
+
+  onMount(() => {
+    props.renderer.menuPanels.push({ ref: () => ref });
+  });
+
+  return (
+    <div
+      ref={ref}
+      class="menu-panel-demo"
+      style={{ width: '256px', height: '320px', 'border-radius': '4px' }}
+    />
+  );
+}

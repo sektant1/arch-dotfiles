@@ -1,0 +1,43 @@
+#version 330 core
+
+layout (location = 0) in vec3 a_position;
+layout (location = 1) in vec3 a_normal;
+layout (location = 2) in vec2 a_uv;
+layout (location = 3) in uvec4 a_bone_ids;
+layout (location = 4) in vec4 a_bone_weights;
+
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+uniform int  u_animated;
+uniform mat4 u_bones[128];
+
+out vec3 v_frag_pos;
+out vec3 v_normal;
+out vec2 v_uv;
+
+void main() {
+    vec4 pos;
+    vec3 norm;
+
+    if (u_animated == 1) {
+        mat4 bone_transform =
+            a_bone_weights.x * u_bones[a_bone_ids.x] +
+            a_bone_weights.y * u_bones[a_bone_ids.y] +
+            a_bone_weights.z * u_bones[a_bone_ids.z] +
+            a_bone_weights.w * u_bones[a_bone_ids.w];
+
+        pos  = bone_transform * vec4(a_position, 1.0);
+        norm = mat3(bone_transform) * a_normal;
+    } else {
+        pos  = vec4(a_position, 1.0);
+        norm = a_normal;
+    }
+
+    vec4 world_pos = u_model * pos;
+    v_frag_pos = vec3(world_pos);
+    v_normal   = mat3(transpose(inverse(u_model))) * norm;
+    v_uv       = a_uv;
+
+    gl_Position = u_projection * u_view * world_pos;
+}

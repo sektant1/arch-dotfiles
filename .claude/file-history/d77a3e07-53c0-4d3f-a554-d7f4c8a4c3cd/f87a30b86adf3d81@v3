@@ -1,0 +1,23 @@
+import { useEffect, useRef } from 'react';
+import type { Renderer } from '../renderer/Renderer';
+
+interface Props {
+  text: string;
+  renderer: Renderer;
+}
+
+export default function EditBox(props: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    props.renderer.editBoxes.push({ ref: () => ref.current! });
+  }, []);
+
+  return (
+    <div ref={ref} className="wc3-editbox">
+      <img className="eb-bg" src="" alt="" />
+      <img className="eb-border" src="" alt="" />
+      <div className="eb-text">{props.text}</div>
+    </div>
+  );
+}

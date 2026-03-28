@@ -1,0 +1,135 @@
+/usr/bin/ld: ../engine/assets/librts_assets.a(gltf_loader.cpp.o): in function `r
+ts::GltfLoader::load(std::__cxx11::basic_string<char, std::char_traits<char>, st
+d::allocator<char> > const&)':
+/home/garrosh/repos/rts-engine/engine/assets/src/gltf_loader.cpp:220:(.text+0x1c
+be): undefined reference to `tinygltf::TinyGLTF::LoadBinaryFromFile(tinygltf::Mo
+del*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<ch
+ar> >*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<
+char> >*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocato
+r<char> > const&, unsigned int)'
+/usr/bin/ld: /home/garrosh/repos/rts-engine/engine/assets/src/gltf_loader.cpp:22
+2:(.text+0x1cfa): undefined reference to `tinygltf::TinyGLTF::LoadASCIIFromFile(
+tinygltf::Model*, std::__cxx11::basic_string<char, std::char_traits<char>, std::
+allocator<char> >*, std::__cxx11::basic_string<char, std::char_traits<char>, std
+::allocator<char> >*, std::__cxx11::basic_string<char, std::char_traits<char>, s
+td::allocator<char> > const&, unsigned int)'
+/usr/bin/ld: ../engine/assets/librts_assets.a(gltf_loader.cpp.o): in function `t
+inygltf::TinyGLTF::TinyGLTF()':
+/home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:1398:(.text._ZN
+8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0xbf): undefined reference to 
+`tinygltf::FileExists(std::__cxx11::basic_string<char, std::char_traits<char>, s
+td::allocator<char> > const&, void*)'
+/usr/bin/ld: /home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:13
+98:(.text._ZN8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0xe4): undefined 
+reference to `tinygltf::ExpandFilePath(std::__cxx11::basic_string<char, std::cha
+r_traits<char>, std::allocator<char> > const&, void*)'
+/usr/bin/ld: /home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:13
+98:(.text._ZN8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0x109): undefined
+ reference to `tinygltf::ReadWholeFile(std::vector<unsigned char, std::allocator
+<unsigned char> >*, std::__cxx11::basic_string<char, std::char_traits<char>, std
+::allocator<char> >*, std::__cxx11::basic_string<char, std::char_traits<char>, s
+td::allocator<char> > const&, void*)'
+/usr/bin/ld: /home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:13
+98:(.text._ZN8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0x12e): undefined
+ reference to `tinygltf::WriteWholeFile(std::__cxx11::basic_string<char, std::ch
+ar_traits<char>, std::allocator<char> >*, std::__cxx11::basic_string<char, std::
+char_traits<char>, std::allocator<char> > const&, std::vector<unsigned char, std
+::allocator<unsigned char> > const&, void*)'
+/usr/bin/ld: /home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:13
+98:(.text._ZN8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0x153): undefined
+ reference to `tinygltf::GetFileSizeInBytes(unsigned long*, std::__cxx11::basic_
+string<char, std::char_traits<char>, std::allocator<char> >*, std::__cxx11::basi
+c_string<char, std::char_traits<char>, std::allocator<char> > const&, void*)'
+/usr/bin/ld: /home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:13
+98:(.text._ZN8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0x246): undefined
+ reference to `tinygltf::URIDecode(std::__cxx11::basic_string<char, std::char_tr
+aits<char>, std::allocator<char> > const&, std::__cxx11::basic_string<char, std:
+:char_traits<char>, std::allocator<char> >*, void*)'
+/usr/bin/ld: /home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:13
+98:(.text._ZN8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0x2a1): undefined
+ reference to `tinygltf::LoadImageData(tinygltf::Image*, int, std::__cxx11::basi
+c_string<char, std::char_traits<char>, std::allocator<char> >*, std::__cxx11::ba
+sic_string<char, std::char_traits<char>, std::allocator<char> >*, int, int, unsi
+gned char const*, int, void*)'
+/usr/bin/ld: /home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:13
+98:(.text._ZN8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0x2e0): undefined
+ reference to `tinygltf::WriteImageData(std::__cxx11::basic_string<char, std::ch
+ar_traits<char>, std::allocator<char> > const*, std::__cxx11::basic_string<char,
+ std::char_traits<char>, std::allocator<char> > const*, tinygltf::Image const*, 
+bool, tinygltf::FsCallbacks const*, tinygltf::URICallbacks const*, std::__cxx11:
+:basic_string<char, std::char_traits<char>, std::allocator<char> >*, void*)'
+/usr/bin/ld: ../engine/assets/librts_assets.a(gltf_loader.cpp.o): in function `r
+ts::GltfLoader::load(std::__cxx11::basic_string<char, std::char_traits<char>, st
+d::allocator<char> > const&)':
+/home/garrosh/repos/rts-engine/engine/assets/src/gltf_loader.cpp:220:(.text+0x1c
+be): undefined reference to `tinygltf::TinyGLTF::LoadBinaryFromFile(tinygltf::Mo
+del*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<ch
+ar> >*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<
+char> >*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocato
+r<char> > const&, unsigned int)'
+/usr/bin/ld: /home/garrosh/repos/rts-engine/engine/assets/src/gltf_loader.cpp:22
+2:(.text+0x1cfa): undefined reference to `tinygltf::TinyGLTF::LoadASCIIFromFile(
+tinygltf::Model*, std::__cxx11::basic_string<char, std::char_traits<char>, std::
+allocator<char> >*, std::__cxx11::basic_string<char, std::char_traits<char>, std
+::allocator<char> >*, std::__cxx11::basic_string<char, std::char_traits<char>, s
+td::allocator<char> > const&, unsigned int)'
+/usr/bin/ld: ../engine/assets/librts_assets.a(gltf_loader.cpp.o): in function `t
+inygltf::TinyGLTF::TinyGLTF()':
+/home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:1398:(.text._ZN
+8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0xbf): undefined reference to 
+`tinygltf::FileExists(std::__cxx11::basic_string<char, std::char_traits<char>, s
+td::allocator<char> > const&, void*)'
+/usr/bin/ld: /home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:13
+98:(.text._ZN8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0xe4): undefined 
+reference to `tinygltf::ExpandFilePath(std::__cxx11::basic_string<char, std::cha
+r_traits<char>, std::allocator<char> > const&, void*)'
+/usr/bin/ld: /home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:13
+98:(.text._ZN8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0x109): undefined
+ reference to `tinygltf::ReadWholeFile(std::vector<unsigned char, std::allocator
+<unsigned char> >*, std::__cxx11::basic_string<char, std::char_traits<char>, std
+::allocator<char> >*, std::__cxx11::basic_string<char, std::char_traits<char>, s
+td::allocator<char> > const&, void*)'
+/usr/bin/ld: /home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:13
+98:(.text._ZN8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0x12e): undefined
+ reference to `tinygltf::WriteWholeFile(std::__cxx11::basic_string<char, std::ch
+ar_traits<char>, std::allocator<char> >*, std::__cxx11::basic_string<char, std::
+char_traits<char>, std::allocator<char> > const&, std::vector<unsigned char, std
+::allocator<unsigned char> > const&, void*)'
+/usr/bin/ld: /home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:13
+98:(.text._ZN8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0x153): undefined
+ reference to `tinygltf::GetFileSizeInBytes(unsigned long*, std::__cxx11::basic_
+string<char, std::char_traits<char>, std::allocator<char> >*, std::__cxx11::basi
+c_string<char, std::char_traits<char>, std::allocator<char> > const&, void*)'
+/usr/bin/ld: /home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:13
+98:(.text._ZN8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0x246): undefined
+ reference to `tinygltf::URIDecode(std::__cxx11::basic_string<char, std::char_tr
+aits<char>, std::allocator<char> > const&, std::__cxx11::basic_string<char, std:
+:char_traits<char>, std::allocator<char> >*, void*)'
+/usr/bin/ld: /home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:13
+98:(.text._ZN8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0x2a1): undefined
+ reference to `tinygltf::LoadImageData(tinygltf::Image*, int, std::__cxx11::basi
+c_string<char, std::char_traits<char>, std::allocator<char> >*, std::__cxx11::ba
+sic_string<char, std::char_traits<char>, std::allocator<char> >*, int, int, unsi
+gned char const*, int, void*)'
+/usr/bin/ld: /home/garrosh/.conan2/p/tinyg6e1d8afcffe5e/p/include/tiny_gltf.h:13
+98:(.text._ZN8tinygltf8TinyGLTFC2Ev[_ZN8tinygltf8TinyGLTFC5Ev]+0x2e0): undefined
+ reference to `tinygltf::WriteImageData(std::__cxx11::basic_string<char, std::ch
+ar_traits<char>, std::allocator<char> > const*, std::__cxx11::basic_string<char,
+ std::char_traits<char>, std::allocator<char> > const*, tinygltf::Image const*, 
+bool, tinygltf::FsCallbacks const*, tinygltf::URICallbacks const*, std::__cxx11:
+:basic_string<char, std::char_traits<char>, std::allocator<char> >*, void*)'
+collect2: error: ld returned 1 exit status
+make[2]: *** [editor/CMakeFiles/editor.dir/build.make:148: editor/editor] Error 
+1
+make[1]: *** [CMakeFiles/Makefile2:507: editor/CMakeFiles/editor.dir/all] Error 
+2
+make[1]: *** Waiting for unfinished jobs....
+collect2: error: ld returned 1 exit status
+make[2]: *** [tests/CMakeFiles/rts_tests.dir/build.make:241: tests/rts_tests] Er
+ror 1
+make[1]: *** [CMakeFiles/Makefile2:544: tests/CMakeFiles/rts_tests.dir/all] Erro
+r 2
+make: *** [Makefile:101: all] Error 2
+
+~/repos/rts-engine master* 8s                                          20:59:25
+λ 

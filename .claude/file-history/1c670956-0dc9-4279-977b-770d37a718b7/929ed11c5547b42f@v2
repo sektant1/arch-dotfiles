@@ -1,0 +1,37 @@
+#pragma once
+
+#include <rts/core/types.hpp>
+#include <vector>
+
+namespace rts {
+
+struct Vertex {
+    Vec3 position;
+    Vec3 normal;
+    Vec2 uv;
+    u32  bone_ids[4]     = {0, 0, 0, 0};
+    f32  bone_weights[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+};
+
+class Mesh {
+public:
+    Mesh(const std::vector<Vertex>& vertices, const std::vector<u32>& indices);
+    ~Mesh();
+
+    Mesh(const Mesh&) = delete;
+    Mesh& operator=(const Mesh&) = delete;
+    Mesh(Mesh&& other) noexcept;
+    Mesh& operator=(Mesh&& other) noexcept;
+
+    void bind()   const;
+    void unbind() const;
+    u32  index_count() const { return m_index_count; }
+
+private:
+    u32 m_vao = 0;
+    u32 m_vbo = 0;
+    u32 m_ebo = 0;
+    u32 m_index_count = 0;
+};
+
+}  // namespace rts

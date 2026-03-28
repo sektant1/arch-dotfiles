@@ -1,0 +1,198 @@
+import { useEffect, useState } from "react";
+import {
+  useTimerRunning,
+  useElapsedSeconds,
+  startTimer,
+  pauseTimer,
+  resetTimer,
+} from "../../state/timer";
+import { useCurrentRace } from "../../state/race";
+import type { Race } from "../../lib/types";
+import GlueSmallButton from "../GlueSmallButton";
+import { BUILD_ORDERS_2026 } from "../../data/buildOrders";
+import type { BuildOrder } from "../../data/buildOrders";
+import {
+  loadBlpDataUrl,
+  loadDataUrlImage,
+  composeBorderImageFromAtlas,
+} from "../../utils/glueButton";
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function parseStepTime(time: string): number {
+  const [m, s] = time.split(":").map(Number);
+  return m * 60 + (s ?? 0);
+}
+
+function getCardBorderPath(race: Race | null): string {
+  if (race === "Orc") return "/buttons/esc/orc/orc-options-menu-border.blp";
+  if (race === "NightElf")
+    return "/buttons/esc/nightelf/nightelf-options-menu-border.blp";
+  if (race === "Undead")
+    return "/buttons/esc/undead/undead-options-menu-border.blp";
+  return "/buttons/esc/human/human-options-menu-border.blp";
+}
+
+function useCardBorderImage(race: Race | null): string {
+  const [borderImageUrl, setBorderImageUrl] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    const path = getCardBorderPath(race);
+    void loadBlpDataUrl(path)
+      .then((url) => loadDataUrlImage(url))
+      .then((img) => {
+        if (cancelled) return;
+        setBorderImageUrl(composeBorderImageFromAtlas(img));
+      })
+      .catch((err) => console.error(err));
+    return () => {
+      cancelled = true;
+    };
+  }, [race]);
+
+  return borderImageUrl;
+}
+
+interface BuildCardProps {
+  build: BuildOrder;
+  elapsed: number;
+  running: boolean;
+  borderImageUrl: string;
+}
+
+function BuildCard({ build, elapsed, running, borderImageUrl }: BuildCardProps) {
+  const activeStepIndex = (() => {
+    let idx = -1;
+    for (let i = 0; i < build.steps.length; i++) {
+      if (parseStepTime(build.steps[i].time) <= elapsed) idx = i;
+    }
+    return idx;
+  })();
+
+  const activeBorderStyle: React.CSSProperties = borderImageUrl
+    ? {
+        border: "12px solid transparent",
+        borderRadius: 0,
+        borderImageSource: `url("${borderImageUrl}")`,
+        borderImageSlice: 64,
+        borderImageWidth: 1,
+        borderImageRepeat: "round",
+      }
+    : {
+        border: "1px solid var(--wc3-gold)",
+      };
+
+  return (
+    <div className="build-card">
+      {/* Left column: info + controls */}
+      <div className="build-card-info">
+        <h4 className="build-card-title">{build.name}</h4>
+        {build.vs && (
+          <p className="build-card-matchup">Good vs {build.vs}</p>
+        )}
+        {build.description && (
+          <p className="build-card-desc">{build.description}</p>
+        )}
+        {build.note && (
+          <p className="build-card-note">{build.note}</p>
+        )}
+        {build.keyTiming && (
+          <div className="build-card-key-timing">
+            <span className="build-card-key-timing-label">Key timing</span>{" "}
+            {formatTime(build.keyTiming.minute * 60)} – {build.keyTiming.note}
+          </div>
+        )}
+
+        <div className="build-card-timer">
+          <span className="build-card-elapsed">{formatTime(elapsed)}</span>
+          <div className="build-card-controls">
+            <GlueSmallButton onClick={running ? pauseTimer : startTimer}>
+              {running ? "Pause" : "Start"}
+            </GlueSmallButton>
+            <GlueSmallButton
+              onClick={resetTimer}
+              disabled={elapsed === 0 && !running}
+            >
+              Reset
+            </GlueSmallButton>
+          </div>
+        </div>
+      </div>
+
+      {/* Right column: step table */}
+      <div className="build-card-steps">
+        <table className="build-steps-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Time</th>
+              <th>Instruction</th>
+              <th>Food</th>
+            </tr>
+          </thead>
+          <tbody>
+            {build.steps.map((step, j) => {
+              const isActive = j === activeStepIndex;
+              const isPast = j < activeStepIndex;
+              return (
+                <tr
+                  key={j}
+                  className={`build-step-row${isPast ? " build-step-row--past" : ""}${isActive ? " build-step-row--active" : ""}`}
+                  style={isActive ? activeBorderStyle : undefined}
+                >
+                  <td className="build-step-order">{step.order}</td>
+                  <td className="build-step-time">{step.time}</td>
+                  <td className="build-step-instruction">{step.instruction}</td>
+                  <td className="build-step-food">{step.food}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export default function BuildOrdersSection() {
+  const running = useTimerRunning();
+  const elapsed = useElapsedSeconds();
+  const currentRace = useCurrentRace();
+  const borderImageUrl = useCardBorderImage(currentRace);
+
+  const relevantBuilds = BUILD_ORDERS_2026.filter(
+    (b) => !currentRace || b.race === currentRace,
+  );
+
+  return (
+    <div className="tab-content">
+      <section className="section-card build-orders-section">
+        <h3>
+          {currentRace ? `${currentRace} ` : ""}Build Orders
+        </h3>
+        {relevantBuilds.length === 0 ? (
+          <p className="text-center text-wc3-gold/80">
+            Select a race in the top HUD to see filtered builds.
+          </p>
+        ) : (
+          <div className="build-orders-list">
+            {relevantBuilds.map((build, i) => (
+              <BuildCard
+                key={i}
+                build={build}
+                elapsed={elapsed}
+                running={running}
+                borderImageUrl={borderImageUrl}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

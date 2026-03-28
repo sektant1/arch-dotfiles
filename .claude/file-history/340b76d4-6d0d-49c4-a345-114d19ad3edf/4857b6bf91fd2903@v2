@@ -1,0 +1,125 @@
+# Plan: Port warcraft-components to React
+
+## Context
+
+The library is currently a private SolidJS SPA with no library exports. The goal is to make the WC3 UI components importable by external React projects. The WebGL renderer is already framework-agnostic (pure TypeScript), so the work is: (1) extract shared code into a core package, (2) rewrite SolidJS components as React components, and (3) set up a library build.
+
+## Architecture Decisions
+
+- **Monorepo with workspaces**: `packages/core` (renderer + types), `packages/react` (React components), keep existing SolidJS code in `apps/showcase`
+- **Renderer shared, not duplicated**: React components register with the same `Renderer` class via a React context provider
+- **Standard React prop patterns**: Components accept `fillPercent: number` not `() => number`; internally wrap with `useRef` callbacks for the renderer
+- **No global state in library**: Current SolidJS signals (`currentRace`, `goldCurrent`) are app-level concerns — React components accept values as props, consumers bring their own state management
+- **CSS shipped as a separate importable file**: `import '@wc3-ui/react/styles.css'`
+
+## Known Issues to Fix During Port
+
+- `TextureEntry` interface imported from `src/lib/types.ts` but not defined there — must be added (shape: `{ tex: WebGLTexture, width: number, height: number, loaded: boolean }`)
+- `GlueButton` component imported by `MenuButton` but file doesn't exist — must be created based on `GlueButtonReg` interface in `Renderer.ts`
+- Current SolidJS components never unregister from renderer arrays on unmount — React versions must add cleanup to avoid stale refs
+
+## Phases
+
+### Phase 1: Extract `packages/core`
+
+Create npm workspace. Move framework-agnostic code to `packages/core/`:
+
+- `src/renderer/*` (all 8 files) → `packages/core/src/renderer/`
+- `src/lib/types.ts` → `packages/core/src/types.ts` (add missing `TextureEntry` interface)
+- `RACE_PREFIXES` constant from `src/state/race.ts` → `packages/core/src/data/races.ts`
+- Barrel export from `packages/core/src/index.ts`: `Renderer`, all `*Reg` interfaces, `Race`, `RacePrefix`, `TextureEntry`, `RACE_PREFIXES`
+
+Update existing SolidJS code to import from `@wc3-ui/core`.
+
+**Files to create:**
+- `pnpm-workspace.yaml` (or `package.json` workspaces field)
+- `packages/core/package.json`, `packages/core/tsconfig.json`
+- `packages/core/src/index.ts`
+
+**Files to move/modify:**
+- `src/renderer/*` → `packages/core/src/renderer/`
+- `src/lib/types.ts` → `packages/core/src/types.ts`
+
+### Phase 2: Scaffold `packages/react`
+
+**Files to create:**
+- `packages/react/package.json` — name `@wc3-ui/react`, peerDeps: `react ^18||^19`, dep: `@wc3-ui/core`
+- `packages/react/tsconfig.json` — `jsxImportSource: "react"`
+- `packages/react/vite.config.ts` — Vite library mode, externalize react/react-dom/@wc3-ui/core
+- `packages/react/src/context/WC3RendererContext.tsx` — React context providing `Renderer` instance
+- `packages/react/src/hooks/useRendererRegistration.ts` — shared hook: get renderer from context, push to registry on mount, splice out on unmount
+
+### Phase 3: Port Simple Components (4)
+
+Each follows the pattern: `useRef` for DOM element, `useEffect` to register with renderer, cleanup to unregister.
+
+| Component | Key Notes |
+|-----------|-----------|
+| `Tooltip` | Wraps children, registers ref to `renderer.tooltips` |
+| `EditBox` | Registers ref to `renderer.editBoxes` |
+| `MenuPanel` | Registers ref to `renderer.glueMenuFrames` |
+| `BottomHud` | Pure DOM/images, accepts `race: Race` prop (no renderer) |
+
+### Phase 4: Port Medium Components (7)
+
+SolidJS → React mapping applied:
+- `createSignal` → `useState` (or controlled/uncontrolled pattern)
+- `classList={{ x: cond }}` → template literal className
+- `Accessor<T>` props → plain value props, wrapped in `useRef` for renderer callbacks
+
+| Component | Key Notes |
+|-----------|-----------|
+| `Checkbox` | Controlled/uncontrolled: `checked`/`defaultChecked` + `onChange` |
+| `RadioButton` | `selected: boolean` prop instead of `Accessor<boolean>` |
+| `StatBar` | `fillPercent: number` + `type` prop |
+| `LoadingBar` | `progress: number` prop |
+| `Slider` | Controlled/uncontrolled, document mouse/touch listeners in `useEffect` with cleanup |
+| `GlueButton` | **New file** — implement based on `GlueButtonReg` interface (hovered/pressed state, texture paths) |
+| `MenuButton` | Wraps GlueButton + registers frame |
+| `CursorOverlay` | `race: Race` prop, document listeners with cleanup |
+
+### Phase 5: Port Complex WebGL Components (5)
+
+All follow: `useRef` for canvas + mutable GL state, `useEffect([], ...)` for init, `useEffect([race], ...)` for prop-reactive effects, cleanup for RAF/ResizeObserver/GL disposal.
+
+| Component | Key Notes |
+|-----------|-----------|
+| `TopHudWebGL` | Own WebGL1 canvas, shader program, texture loading, ResizeObserver |
+| `TimeIndicatorModel` | WebGL canvas + `war3-model` integration, RAF loop |
+| `HeroPortraitModel` | 3D model rendering, async model loading, race-reactive effect |
+| `WorkerUnitModel` | Similar to HeroPortraitModel |
+| `TopHud` | Composite: contains UpperButton (useState for hover/press) and ResourceSlot sub-components |
+
+### Phase 6: CSS + Build + Exports
+
+1. Copy/adapt `global.css` + `showcase-tooltip-center.css` into `packages/react/src/styles.css`
+2. Configure Vite to emit CSS alongside JS
+3. Create barrel `packages/react/src/index.ts` exporting all components + context + hooks + re-exported types
+4. Set `package.json` exports: `"."` → built JS, `"./styles.css"` → CSS file
+5. Generate `.d.ts` declarations
+
+## Consumer Usage (End Result)
+
+```tsx
+import { WC3RendererProvider, Checkbox, StatBar, Tooltip } from '@wc3-ui/react';
+import '@wc3-ui/react/styles.css';
+
+function App() {
+  const [hp, setHp] = useState(75);
+  return (
+    <WC3RendererProvider>
+      <StatBar type="health" fillPercent={hp} />
+      <Checkbox defaultChecked onChange={setChecked} />
+      <Tooltip>Attack: 42-48</Tooltip>
+    </WC3RendererProvider>
+  );
+}
+```
+
+## Verification
+
+1. `npm run build` in `packages/core` succeeds with no SolidJS imports
+2. `npm run build` in `packages/react` produces ES module + CJS + CSS + declarations
+3. Create a minimal `apps/react-demo` with `create-vite` React template, import `@wc3-ui/react`, render each component — visually verify they match the existing SolidJS showcase
+4. Mount/unmount components dynamically to verify renderer cleanup works (no stale refs or memory leaks)
+5. Check the existing SolidJS showcase still works after core extraction (`npm run dev` from `apps/showcase`)

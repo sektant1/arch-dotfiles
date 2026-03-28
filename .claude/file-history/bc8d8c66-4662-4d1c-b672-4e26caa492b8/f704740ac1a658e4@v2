@@ -1,0 +1,68 @@
+// ── Components ──
+export { default as StatBar } from './components/StatBar';
+export { default as Checkbox } from './components/Checkbox';
+export { default as Slider } from './components/Slider';
+export { default as RadioButton } from './components/RadioButton';
+export { default as EditBox } from './components/EditBox';
+// MenuButton excluded: depends on GlueButton which doesn't exist yet
+export { default as MenuPanel } from './components/MenuPanel';
+export { default as Tooltip } from './components/Tooltip';
+export { default as LoadingBar } from './components/LoadingBar';
+export { default as TopHud } from './components/TopHud';
+export { default as TopHudWebGL } from './components/TopHudWebGL';
+export { default as BottomHud } from './components/BottomHud';
+export { default as HeroPortraitModel } from './components/HeroPortraitModel';
+export { default as WorkerUnitModel } from './components/WorkerUnitModel';
+export { default as TimeIndicatorModel } from './components/TimeIndicatorModel';
+export { default as CursorOverlay } from './components/CursorOverlay';
+// HeroGallery excluded: depends on HEROES/HeroData which don't exist yet
+
+// ── State ──
+export { createExternalStore } from './state/createStore';
+export {
+  RACES,
+  RACE_PREFIXES,
+  currentRace,
+  setCurrentRace,
+  useCurrentRace,
+} from './state/race';
+export {
+  tickResources,
+  animateCounters,
+  goldCurrent,
+  lumberCurrent,
+  goldTarget,
+  lumberTarget,
+  setGoldTarget,
+  setLumberTarget,
+  useGoldCurrent,
+  useLumberCurrent,
+  useGoldTarget,
+  useLumberTarget,
+  handleCheatKey,
+} from './state/resources';
+export { useAnimatedBars, useLoadingBar } from './state/ui';
+
+// ── Renderer ──
+export { Renderer } from './renderer/Renderer';
+export type {
+  CheckboxReg,
+  RadioReg,
+  SliderReg,
+  EditBoxReg,
+  GlueButtonReg,
+  GlueMenuFrameReg,
+  OptionButtonReg,
+  TooltipReg,
+  StatBarReg,
+  LoadingBarReg,
+  MenuPanelReg,
+  UpperButtonReg,
+  ResourceIconReg,
+} from './renderer/Renderer';
+
+// ── Types ──
+export type { Race, RacePrefix, TextureEntry } from './lib/types';
+
+// ── CSS (Vite extracts this as dist/style.css) ──
+import './global.css';

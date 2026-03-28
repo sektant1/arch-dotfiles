@@ -1,0 +1,1 @@
+- [No 'any' type](feedback_no_any_type.md) — Always create type interfaces instead of using `any` in TypeScript

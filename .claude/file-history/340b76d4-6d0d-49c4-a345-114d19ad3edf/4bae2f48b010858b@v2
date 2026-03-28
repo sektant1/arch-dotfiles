@@ -1,0 +1,38 @@
+import { useRef } from 'react';
+import { useRendererRegistration } from '../hooks/useRendererRegistration';
+
+interface Props {
+  label: string;
+  selected: boolean;
+  onSelect: () => void;
+}
+
+export default function RadioButton({ label, selected, onSelect }: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+  const visualRef = useRef<HTMLDivElement>(null);
+
+  // Keep a ref so the renderer's RAF loop always reads the latest value
+  // without needing to re-register on every prop change.
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+
+  useRendererRegistration('radios', () => ({
+    ref: () => ref.current!,
+    visualRef: () => visualRef.current!,
+    selected: () => selectedRef.current,
+  }));
+
+  return (
+    <div
+      ref={ref}
+      className={`wc3-radio${selected ? ' selected' : ''}`}
+      onClick={onSelect}
+    >
+      <div ref={visualRef} className="rb-visual">
+        <img className="rb-bg" src="" alt="" />
+        <img className="rb-dot" src="" alt="" />
+      </div>
+      <span className="cb-label">{label}</span>
+    </div>
+  );
+}

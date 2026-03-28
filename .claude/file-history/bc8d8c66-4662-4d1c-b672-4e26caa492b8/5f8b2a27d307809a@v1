@@ -1,0 +1,104 @@
+import { createSignal, onMount, onCleanup, For } from 'solid-js';
+import type { Renderer } from '../renderer/Renderer';
+import { currentRace, setCurrentRace, RACE_PREFIXES, RACES } from '../state/race';
+import { goldCurrent, lumberCurrent } from '../state/resources';
+import type { Race } from '../lib/types';
+import TimeIndicatorModel from './TimeIndicatorModel';
+
+interface Props {
+  renderer: Renderer;
+}
+
+export default function TopHud(props: Props) {
+  return (
+    <div class="top-hud">
+      <div class="top-hud-tiles">
+        <div class="top-hud-left">
+          <div class="ths ths-1" />
+          <div class="ths ths-2" />
+        </div>
+        <div class="top-hud-right">
+          <div class="ths ths-3" />
+          <div class="ths ths-4" />
+          <div class="ths ths-5" />
+        </div>
+      </div>
+      <div class="time-indicator">
+        <TimeIndicatorModel />
+      </div>
+      <div class="top-hud-overlay">
+        <div class="upper-buttons">
+          <For each={RACES}>{(race) =>
+            <UpperButton race={race} renderer={props.renderer} />
+          }</For>
+        </div>
+        <div class="resources">
+          <ResourceSlot type="gold" renderer={props.renderer} />
+          <ResourceSlot type="lumber" renderer={props.renderer} />
+          <ResourceSlot type="supply" renderer={props.renderer} />
+          <span class="upkeep-text upkeep-green">No Upkeep</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UpperButton(props: { race: Race; renderer: Renderer }) {
+  let ref!: HTMLButtonElement;
+  const [hovered, setHovered] = createSignal(false);
+  const [pressed, setPressed] = createSignal(false);
+
+  onMount(() => {
+    props.renderer.upperButtons.push({
+      ref: () => ref,
+      race: props.race,
+      hovered,
+      pressed,
+    });
+  });
+
+  return (
+    <button
+      ref={ref}
+      class="upper-btn"
+      classList={{ active: currentRace() === props.race }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setPressed(false); }}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onClick={() => setCurrentRace(props.race)}
+    >
+      {RACE_PREFIXES[props.race].display}
+    </button>
+  );
+}
+
+function ResourceSlot(props: { type: 'gold' | 'lumber' | 'supply'; renderer: Renderer }) {
+  let imgRef!: HTMLImageElement;
+
+  onMount(() => {
+    props.renderer.resourceIcons.push({
+      ref: () => imgRef,
+      type: props.type,
+    });
+  });
+
+  const imgSrc = () => {
+    if (props.type === 'gold') return 'war3/Feedback/Resources/ResourceGold.png';
+    if (props.type === 'lumber') return 'war3/Feedback/Resources/ResourceLumber.png';
+    return `war3/Feedback/Resources/Resource${currentRace()}.png`;
+  };
+
+  const value = () => {
+    if (props.type === 'gold') return goldCurrent();
+    if (props.type === 'lumber') return lumberCurrent();
+    return '50 / 80';
+  };
+
+  return (
+    <div class="resource-slot">
+      <img ref={imgRef} src={imgSrc()} alt={props.type} />
+      <span class="res-value">{value()}</span>
+    </div>
+  );
+}

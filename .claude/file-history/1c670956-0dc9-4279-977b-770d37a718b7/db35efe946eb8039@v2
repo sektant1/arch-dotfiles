@@ -1,0 +1,4240 @@
+# RTS Engine Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Build a modular low-poly 3D RTS engine (Warcraft 3 style) that renders terrain and animated models with an RTS camera, supporting both WC3 formats (.mdx/.blp) and standard formats (glTF/PNG/JPG).
+
+**Architecture:** Modular static libraries (core, platform, renderer, assets, terrain, camera) consumed by an editor executable. Each module exposes abstract interfaces for swappability. Communication between modules via a pub/sub EventBus.
+
+**Tech Stack:** C++17, OpenGL 3.3, GLFW 3.4 (Wayland), CMake, Conan 2.x, Google Test, ImGui, spdlog, glm, stb, tinygltf, glad, Doxygen + Sphinx/Breathe.
+
+**Spec:** `docs/superpowers/specs/2026-03-27-rts-engine-design.md`
+
+---
+
+## File Structure
+
+```
+rts-engine/
+├── CMakeLists.txt                          # Root CMake
+├── conanfile.py                            # Conan 2.x deps
+├── engine/
+│   ├── core/
+│   │   ├── CMakeLists.txt
+│   │   ├── include/rts/core/
+│   │   │   ├── logger.hpp
+│   │   │   ├── event_bus.hpp
+│   │   │   └── types.hpp
+│   │   └── src/
+│   │       ├── logger.cpp
+│   │       └── event_bus.cpp
+│   ├── platform/
+│   │   ├── CMakeLists.txt
+│   │   ├── include/rts/platform/
+│   │   │   ├── window.hpp
+│   │   │   ├── input.hpp
+│   │   │   └── time.hpp
+│   │   └── src/
+│   │       ├── window.cpp
+│   │       ├── input.cpp
+│   │       └── time.cpp
+│   ├── renderer/
+│   │   ├── CMakeLists.txt
+│   │   ├── include/rts/renderer/
+│   │   │   ├── renderer.hpp
+│   │   │   ├── mesh.hpp
+│   │   │   ├── texture.hpp
+│   │   │   ├── shader.hpp
+│   │   │   └── render_command.hpp
+│   │   └── src/
+│   │       ├── renderer.cpp
+│   │       ├── mesh.cpp
+│   │       ├── texture.cpp
+│   │       └── shader.cpp
+│   ├── assets/
+│   │   ├── CMakeLists.txt
+│   │   ├── include/rts/assets/
+│   │   │   ├── asset_manager.hpp
+│   │   │   ├── model_loader.hpp
+│   │   │   ├── texture_loader.hpp
+│   │   │   ├── mdx_loader.hpp
+│   │   │   ├── gltf_loader.hpp
+│   │   │   ├── blp_loader.hpp
+│   │   │   ├── stb_loader.hpp
+│   │   │   ├── model_data.hpp
+│   │   │   └── skeleton.hpp
+│   │   └── src/
+│   │       ├── asset_manager.cpp
+│   │       ├── mdx_loader.cpp
+│   │       ├── gltf_loader.cpp
+│   │       ├── blp_loader.cpp
+│   │       └── stb_loader.cpp
+│   ├── terrain/
+│   │   ├── CMakeLists.txt
+│   │   ├── include/rts/terrain/
+│   │   │   └── terrain.hpp
+│   │   └── src/
+│   │       └── terrain.cpp
+│   └── camera/
+│       ├── CMakeLists.txt
+│       ├── include/rts/camera/
+│       │   └── camera.hpp
+│       └── src/
+│           └── camera.cpp
+├── editor/
+│   ├── CMakeLists.txt
+│   └── src/
+│       └── main.cpp
+├── tests/
+│   ├── CMakeLists.txt
+│   ├── core/
+│   │   ├── test_logger.cpp
+│   │   └── test_event_bus.cpp
+│   ├── assets/
+│   │   ├── test_blp_loader.cpp
+│   │   ├── test_stb_loader.cpp
+│   │   ├── test_mdx_loader.cpp
+│   │   ├── test_gltf_loader.cpp
+│   │   └── test_asset_manager.cpp
+│   ├── terrain/
+│   │   └── test_terrain.cpp
+│   └── camera/
+│       └── test_camera.cpp
+├── assets/
+│   └── shaders/
+│       ├── model.vert
+│       ├── model.frag
+│       ├── terrain.vert
+│       └── terrain.frag
+├── third_party/
+│   └── glad/
+│       ├── include/
+│       │   ├── glad/glad.h
+│       │   └── KHR/khrplatform.h
+│       └── src/glad.c
+└── docs/
+    ├── Doxyfile
+    └── conf.py
+```
+
+---
+
+## Task 1: Project Scaffolding
+
+**Files:**
+- Create: `CMakeLists.txt`
+- Create: `conanfile.py`
+- Create: `cmake/conan_provider.cmake`
+- Create: `third_party/glad/include/glad/glad.h`
+- Create: `third_party/glad/include/KHR/khrplatform.h`
+- Create: `third_party/glad/src/glad.c`
+
+- [ ] **Step 1: Create conanfile.py**
+
+```python
+from conan import ConanFile
+from conan.tools.cmake import cmake_layout
+
+
+class RtsEngineConan(ConanFile):
+    name = "rts-engine"
+    version = "0.1.0"
+    settings = "os", "compiler", "build_type", "arch"
+    generators = "CMakeDeps", "CMakeToolchain"
+
+    def requirements(self):
+        self.requires("glfw/3.4")
+        self.requires("glm/1.0.1")
+        self.requires("spdlog/1.15.1")
+        self.requires("stb/cci.20240531")
+        self.requires("gtest/1.15.0")
+        self.requires("imgui/1.91.8")
+        self.requires("tinygltf/2.9.5")
+
+    def layout(self):
+        cmake_layout(self)
+```
+
+- [ ] **Step 2: Generate glad files for OpenGL 3.3 Core**
+
+Run: Visit https://glad.dav1d.de/ — Language: C, Specification: OpenGL, Profile: Core, API gl: 3.3, Generate a loader: yes. Download and extract to `third_party/glad/`.
+
+Alternatively, install glad via pip and generate:
+```bash
+pip install glad
+glad --generator=c --spec=gl --out-path=third_party/glad --api="gl=3.3" --profile=core
+```
+
+Resulting structure:
+```
+third_party/glad/
+├── include/
+│   ├── glad/glad.h
+│   └── KHR/khrplatform.h
+└── src/glad.c
+```
+
+- [ ] **Step 3: Create root CMakeLists.txt**
+
+```cmake
+cmake_minimum_required(VERSION 3.22)
+project(rts-engine VERSION 0.1.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+find_package(glfw3 REQUIRED)
+find_package(glm REQUIRED)
+find_package(spdlog REQUIRED)
+find_package(Stb REQUIRED)
+find_package(imgui REQUIRED)
+find_package(tinygltf REQUIRED)
+find_package(GTest REQUIRED)
+
+# glad (vendored)
+add_library(glad STATIC third_party/glad/src/glad.c)
+target_include_directories(glad PUBLIC third_party/glad/include)
+
+# Engine modules
+add_subdirectory(engine/core)
+add_subdirectory(engine/platform)
+add_subdirectory(engine/renderer)
+add_subdirectory(engine/assets)
+add_subdirectory(engine/terrain)
+add_subdirectory(engine/camera)
+
+# Editor
+add_subdirectory(editor)
+
+# Tests
+enable_testing()
+add_subdirectory(tests)
+```
+
+- [ ] **Step 4: Create directory structure**
+
+```bash
+mkdir -p engine/{core,platform,renderer,assets,terrain,camera}/{include/rts/{core,platform,renderer,assets,terrain,camera},src}
+mkdir -p editor/src
+mkdir -p tests/{core,assets,terrain,camera}
+mkdir -p assets/shaders
+mkdir -p docs
+```
+
+- [ ] **Step 5: Install conan deps and verify build**
+
+```bash
+conan install . --output-folder=build --build=missing -s build_type=Debug
+cd build && cmake .. -DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Debug
+```
+
+Expected: CMake configures (may warn about missing subdirectory CMakeLists — that's fine, we'll add them next).
+
+- [ ] **Step 6: Commit**
+
+```bash
+git init
+git add CMakeLists.txt conanfile.py third_party/
+git commit -m "chore: project scaffolding with CMake, Conan, and glad"
+```
+
+---
+
+## Task 2: Core — Types & Logger
+
+**Files:**
+- Create: `engine/core/CMakeLists.txt`
+- Create: `engine/core/include/rts/core/types.hpp`
+- Create: `engine/core/include/rts/core/logger.hpp`
+- Create: `engine/core/src/logger.cpp`
+- Create: `tests/core/test_logger.cpp`
+
+- [ ] **Step 1: Create core CMakeLists.txt**
+
+```cmake
+add_library(rts_core STATIC
+    src/logger.cpp
+    src/event_bus.cpp
+)
+
+target_include_directories(rts_core PUBLIC include)
+target_link_libraries(rts_core PUBLIC glm::glm spdlog::spdlog)
+
+add_library(rts::core ALIAS rts_core)
+```
+
+Note: `event_bus.cpp` will be created in Task 3. Create an empty placeholder for now so CMake doesn't fail:
+```bash
+touch engine/core/src/event_bus.cpp
+```
+
+- [ ] **Step 2: Create types.hpp**
+
+```cpp
+#pragma once
+
+#include <cstdint>
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+
+namespace rts {
+
+using u8  = std::uint8_t;
+using u16 = std::uint16_t;
+using u32 = std::uint32_t;
+using u64 = std::uint64_t;
+using i32 = std::int32_t;
+using f32 = float;
+using f64 = double;
+
+using Vec2 = glm::vec2;
+using Vec3 = glm::vec3;
+using Vec4 = glm::vec4;
+using Mat4 = glm::mat4;
+using Quat = glm::quat;
+
+}  // namespace rts
+```
+
+- [ ] **Step 3: Write the failing test for Logger**
+
+```cpp
+// tests/core/test_logger.cpp
+#include <gtest/gtest.h>
+#include <rts/core/logger.hpp>
+
+TEST(LoggerTest, InitializeDoesNotThrow) {
+    EXPECT_NO_THROW(rts::Logger::init());
+}
+
+TEST(LoggerTest, InitializeTwiceDoesNotThrow) {
+    rts::Logger::init();
+    EXPECT_NO_THROW(rts::Logger::init());
+}
+
+TEST(LoggerTest, LogAfterInit) {
+    rts::Logger::init();
+    EXPECT_NO_THROW(RTS_LOG_INFO("test message {}", 42));
+}
+```
+
+- [ ] **Step 4: Create tests CMakeLists.txt**
+
+```cmake
+# tests/CMakeLists.txt
+add_executable(rts_tests
+    core/test_logger.cpp
+    core/test_event_bus.cpp
+)
+
+target_link_libraries(rts_tests PRIVATE
+    rts::core
+    GTest::gtest
+    GTest::gtest_main
+)
+
+include(GoogleTest)
+gtest_discover_tests(rts_tests)
+```
+
+Note: `test_event_bus.cpp` will be created in Task 3. Create an empty placeholder:
+```bash
+touch tests/core/test_event_bus.cpp
+```
+
+- [ ] **Step 5: Run test to verify it fails**
+
+```bash
+cd build && cmake .. -DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Debug && cmake --build .
+ctest --output-on-failure
+```
+
+Expected: FAIL — `rts::Logger` not defined.
+
+- [ ] **Step 6: Implement Logger**
+
+```cpp
+// engine/core/include/rts/core/logger.hpp
+#pragma once
+
+#include <spdlog/spdlog.h>
+#include <memory>
+
+namespace rts {
+
+class Logger {
+public:
+    static void init();
+    static std::shared_ptr<spdlog::logger>& get();
+
+private:
+    static std::shared_ptr<spdlog::logger> s_logger;
+};
+
+}  // namespace rts
+
+#define RTS_LOG_TRACE(...)    ::rts::Logger::get()->trace(__VA_ARGS__)
+#define RTS_LOG_DEBUG(...)    ::rts::Logger::get()->debug(__VA_ARGS__)
+#define RTS_LOG_INFO(...)     ::rts::Logger::get()->info(__VA_ARGS__)
+#define RTS_LOG_WARN(...)     ::rts::Logger::get()->warn(__VA_ARGS__)
+#define RTS_LOG_ERROR(...)    ::rts::Logger::get()->error(__VA_ARGS__)
+#define RTS_LOG_CRITICAL(...) ::rts::Logger::get()->critical(__VA_ARGS__)
+```
+
+```cpp
+// engine/core/src/logger.cpp
+#include <rts/core/logger.hpp>
+#include <spdlog/sinks/stdout_color_sinks.h>
+
+namespace rts {
+
+std::shared_ptr<spdlog::logger> Logger::s_logger;
+
+void Logger::init() {
+    if (s_logger) return;
+
+    s_logger = spdlog::stdout_color_mt("RTS");
+    s_logger->set_level(spdlog::level::trace);
+    s_logger->set_pattern("[%H:%M:%S.%e] [%n] [%^%l%$] %v");
+}
+
+std::shared_ptr<spdlog::logger>& Logger::get() {
+    return s_logger;
+}
+
+}  // namespace rts
+```
+
+- [ ] **Step 7: Run tests to verify they pass**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+Expected: All LoggerTest tests PASS.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add engine/core/ tests/ CMakeLists.txt
+git commit -m "feat(core): add types and logger with spdlog wrapper"
+```
+
+---
+
+## Task 3: Core — EventBus
+
+**Files:**
+- Modify: `engine/core/src/event_bus.cpp` (replace placeholder)
+- Create: `engine/core/include/rts/core/event_bus.hpp`
+- Modify: `tests/core/test_event_bus.cpp` (replace placeholder)
+
+- [ ] **Step 1: Write the failing tests for EventBus**
+
+```cpp
+// tests/core/test_event_bus.cpp
+#include <gtest/gtest.h>
+#include <rts/core/event_bus.hpp>
+
+struct TestEvent {
+    int value;
+};
+
+struct AnotherEvent {
+    float x, y;
+};
+
+TEST(EventBusTest, SubscribeAndPublish) {
+    rts::EventBus bus;
+    int received = 0;
+
+    bus.subscribe<TestEvent>([&](const TestEvent& e) {
+        received = e.value;
+    });
+
+    bus.publish(TestEvent{42});
+    EXPECT_EQ(received, 42);
+}
+
+TEST(EventBusTest, MultipleSubscribers) {
+    rts::EventBus bus;
+    int count = 0;
+
+    bus.subscribe<TestEvent>([&](const TestEvent&) { count++; });
+    bus.subscribe<TestEvent>([&](const TestEvent&) { count++; });
+
+    bus.publish(TestEvent{1});
+    EXPECT_EQ(count, 2);
+}
+
+TEST(EventBusTest, DifferentEventTypes) {
+    rts::EventBus bus;
+    int int_val = 0;
+    float float_val = 0.0f;
+
+    bus.subscribe<TestEvent>([&](const TestEvent& e) { int_val = e.value; });
+    bus.subscribe<AnotherEvent>([&](const AnotherEvent& e) { float_val = e.x; });
+
+    bus.publish(TestEvent{10});
+    bus.publish(AnotherEvent{3.14f, 0.0f});
+
+    EXPECT_EQ(int_val, 10);
+    EXPECT_FLOAT_EQ(float_val, 3.14f);
+}
+
+TEST(EventBusTest, NoSubscribersDoesNotCrash) {
+    rts::EventBus bus;
+    EXPECT_NO_THROW(bus.publish(TestEvent{1}));
+}
+
+TEST(EventBusTest, UnsubscribeById) {
+    rts::EventBus bus;
+    int count = 0;
+
+    auto id = bus.subscribe<TestEvent>([&](const TestEvent&) { count++; });
+    bus.publish(TestEvent{1});
+    EXPECT_EQ(count, 1);
+
+    bus.unsubscribe<TestEvent>(id);
+    bus.publish(TestEvent{2});
+    EXPECT_EQ(count, 1);
+}
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+Expected: FAIL — `rts::EventBus` not defined.
+
+- [ ] **Step 3: Implement EventBus**
+
+```cpp
+// engine/core/include/rts/core/event_bus.hpp
+#pragma once
+
+#include <functional>
+#include <typeindex>
+#include <unordered_map>
+#include <vector>
+#include <any>
+#include <rts/core/types.hpp>
+
+namespace rts {
+
+using SubscriptionId = u32;
+
+class EventBus {
+public:
+    template <typename Event>
+    SubscriptionId subscribe(std::function<void(const Event&)> callback) {
+        auto id = m_next_id++;
+        auto key = std::type_index(typeid(Event));
+        m_subscribers[key].push_back({id, [cb = std::move(callback)](const std::any& e) {
+            cb(std::any_cast<const Event&>(e));
+        }});
+        return id;
+    }
+
+    template <typename Event>
+    void unsubscribe(SubscriptionId id) {
+        auto key = std::type_index(typeid(Event));
+        auto it = m_subscribers.find(key);
+        if (it == m_subscribers.end()) return;
+
+        auto& subs = it->second;
+        subs.erase(
+            std::remove_if(subs.begin(), subs.end(),
+                [id](const Subscriber& s) { return s.id == id; }),
+            subs.end()
+        );
+    }
+
+    template <typename Event>
+    void publish(const Event& event) {
+        auto key = std::type_index(typeid(Event));
+        auto it = m_subscribers.find(key);
+        if (it == m_subscribers.end()) return;
+
+        for (auto& sub : it->second) {
+            sub.callback(event);
+        }
+    }
+
+private:
+    struct Subscriber {
+        SubscriptionId id;
+        std::function<void(const std::any&)> callback;
+    };
+
+    std::unordered_map<std::type_index, std::vector<Subscriber>> m_subscribers;
+    SubscriptionId m_next_id = 0;
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/core/src/event_bus.cpp
+// EventBus is header-only (template-based). This file is kept for CMake target consistency.
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+Expected: All EventBusTest and LoggerTest tests PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add engine/core/ tests/core/
+git commit -m "feat(core): add EventBus pub/sub system"
+```
+
+---
+
+## Task 4: Platform — Window
+
+**Files:**
+- Create: `engine/platform/CMakeLists.txt`
+- Create: `engine/platform/include/rts/platform/window.hpp`
+- Create: `engine/platform/src/window.cpp`
+
+- [ ] **Step 1: Create platform CMakeLists.txt**
+
+```cmake
+add_library(rts_platform STATIC
+    src/window.cpp
+    src/input.cpp
+    src/time.cpp
+)
+
+target_include_directories(rts_platform PUBLIC include)
+target_link_libraries(rts_platform PUBLIC rts::core glfw glad)
+
+add_library(rts::platform ALIAS rts_platform)
+```
+
+Create empty placeholders for input.cpp and time.cpp:
+```bash
+touch engine/platform/src/input.cpp engine/platform/src/time.cpp
+```
+
+- [ ] **Step 2: Implement IWindow interface and GlfwWindow**
+
+```cpp
+// engine/platform/include/rts/platform/window.hpp
+#pragma once
+
+#include <rts/core/types.hpp>
+#include <string>
+
+struct GLFWwindow;
+
+namespace rts {
+
+struct WindowConfig {
+    std::string title = "RTS Engine";
+    u32 width = 1280;
+    u32 height = 720;
+    bool vsync = true;
+};
+
+class IWindow {
+public:
+    virtual ~IWindow() = default;
+
+    virtual bool should_close() const = 0;
+    virtual void poll_events() = 0;
+    virtual void swap_buffers() = 0;
+    virtual u32 width() const = 0;
+    virtual u32 height() const = 0;
+    virtual GLFWwindow* native_handle() const = 0;
+};
+
+class GlfwWindow : public IWindow {
+public:
+    explicit GlfwWindow(const WindowConfig& config);
+    ~GlfwWindow() override;
+
+    GlfwWindow(const GlfwWindow&) = delete;
+    GlfwWindow& operator=(const GlfwWindow&) = delete;
+
+    bool should_close() const override;
+    void poll_events() override;
+    void swap_buffers() override;
+    u32 width() const override;
+    u32 height() const override;
+    GLFWwindow* native_handle() const override;
+
+private:
+    GLFWwindow* m_window = nullptr;
+    u32 m_width = 0;
+    u32 m_height = 0;
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/platform/src/window.cpp
+#include <rts/platform/window.hpp>
+#include <rts/core/logger.hpp>
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
+#include <stdexcept>
+
+namespace rts {
+
+GlfwWindow::GlfwWindow(const WindowConfig& config)
+    : m_width(config.width), m_height(config.height) {
+    if (!glfwInit()) {
+        throw std::runtime_error("Failed to initialize GLFW");
+    }
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    m_window = glfwCreateWindow(
+        static_cast<int>(m_width),
+        static_cast<int>(m_height),
+        config.title.c_str(),
+        nullptr, nullptr
+    );
+
+    if (!m_window) {
+        glfwTerminate();
+        throw std::runtime_error("Failed to create GLFW window");
+    }
+
+    glfwMakeContextCurrent(m_window);
+
+    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) {
+        glfwDestroyWindow(m_window);
+        glfwTerminate();
+        throw std::runtime_error("Failed to initialize glad");
+    }
+
+    if (config.vsync) {
+        glfwSwapInterval(1);
+    }
+
+    glfwSetWindowUserPointer(m_window, this);
+
+    glfwSetFramebufferSizeCallback(m_window, [](GLFWwindow* win, int w, int h) {
+        auto* self = static_cast<GlfwWindow*>(glfwGetWindowUserPointer(win));
+        self->m_width = static_cast<u32>(w);
+        self->m_height = static_cast<u32>(h);
+        glViewport(0, 0, w, h);
+    });
+
+    RTS_LOG_INFO("Window created: {}x{}", m_width, m_height);
+}
+
+GlfwWindow::~GlfwWindow() {
+    if (m_window) {
+        glfwDestroyWindow(m_window);
+    }
+    glfwTerminate();
+}
+
+bool GlfwWindow::should_close() const {
+    return glfwWindowShouldClose(m_window);
+}
+
+void GlfwWindow::poll_events() {
+    glfwPollEvents();
+}
+
+void GlfwWindow::swap_buffers() {
+    glfwSwapBuffers(m_window);
+}
+
+u32 GlfwWindow::width() const { return m_width; }
+u32 GlfwWindow::height() const { return m_height; }
+GLFWwindow* GlfwWindow::native_handle() const { return m_window; }
+
+}  // namespace rts
+```
+
+- [ ] **Step 3: Manual test — verify window opens**
+
+Create a temporary `editor/src/main.cpp` to test:
+
+```cpp
+#include <rts/core/logger.hpp>
+#include <rts/platform/window.hpp>
+
+int main() {
+    rts::Logger::init();
+    rts::GlfwWindow window({});
+
+    while (!window.should_close()) {
+        window.poll_events();
+        window.swap_buffers();
+    }
+
+    return 0;
+}
+```
+
+Create minimal `editor/CMakeLists.txt`:
+```cmake
+add_executable(editor src/main.cpp)
+target_link_libraries(editor PRIVATE rts::platform)
+```
+
+Build and run:
+```bash
+cd build && cmake --build . && ./editor
+```
+
+Expected: A 1280x720 window titled "RTS Engine" appears. Close it to exit.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add engine/platform/ editor/
+git commit -m "feat(platform): add GLFW window with OpenGL 3.3 context"
+```
+
+---
+
+## Task 5: Platform — Input
+
+**Files:**
+- Create: `engine/platform/include/rts/platform/input.hpp`
+- Modify: `engine/platform/src/input.cpp` (replace placeholder)
+
+- [ ] **Step 1: Implement Input system**
+
+```cpp
+// engine/platform/include/rts/platform/input.hpp
+#pragma once
+
+#include <rts/core/types.hpp>
+
+struct GLFWwindow;
+
+namespace rts {
+
+class Input {
+public:
+    explicit Input(GLFWwindow* window);
+
+    bool is_key_pressed(int key) const;
+    bool is_mouse_button_pressed(int button) const;
+    Vec2 mouse_position() const;
+    Vec2 mouse_delta() const;
+    f32 scroll_delta() const;
+
+    void update();
+
+private:
+    static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+
+    GLFWwindow* m_window = nullptr;
+    Vec2 m_last_mouse_pos{0.0f};
+    Vec2 m_mouse_delta{0.0f};
+    f32 m_scroll_delta = 0.0f;
+    f32 m_scroll_accumulator = 0.0f;
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/platform/src/input.cpp
+#include <rts/platform/input.hpp>
+#include <GLFW/glfw3.h>
+
+namespace rts {
+
+Input::Input(GLFWwindow* window) : m_window(window) {
+    double mx, my;
+    glfwGetCursorPos(m_window, &mx, &my);
+    m_last_mouse_pos = {static_cast<f32>(mx), static_cast<f32>(my)};
+
+    glfwSetWindowUserPointer(m_window, this);
+    glfwSetScrollCallback(m_window, scroll_callback);
+}
+
+bool Input::is_key_pressed(int key) const {
+    return glfwGetKey(m_window, key) == GLFW_PRESS;
+}
+
+bool Input::is_mouse_button_pressed(int button) const {
+    return glfwGetMouseButton(m_window, button) == GLFW_PRESS;
+}
+
+Vec2 Input::mouse_position() const {
+    double mx, my;
+    glfwGetCursorPos(m_window, &mx, &my);
+    return {static_cast<f32>(mx), static_cast<f32>(my)};
+}
+
+Vec2 Input::mouse_delta() const {
+    return m_mouse_delta;
+}
+
+f32 Input::scroll_delta() const {
+    return m_scroll_delta;
+}
+
+void Input::update() {
+    Vec2 current = mouse_position();
+    m_mouse_delta = current - m_last_mouse_pos;
+    m_last_mouse_pos = current;
+
+    m_scroll_delta = m_scroll_accumulator;
+    m_scroll_accumulator = 0.0f;
+}
+
+void Input::scroll_callback(GLFWwindow* window, double /*xoffset*/, double yoffset) {
+    auto* self = static_cast<Input*>(glfwGetWindowUserPointer(window));
+    self->m_scroll_accumulator += static_cast<f32>(yoffset);
+}
+
+}  // namespace rts
+```
+
+- [ ] **Step 2: Manual test — add input logging to editor main**
+
+Update `editor/src/main.cpp` to include input and log mouse position:
+
+```cpp
+#include <rts/core/logger.hpp>
+#include <rts/platform/window.hpp>
+#include <rts/platform/input.hpp>
+#include <GLFW/glfw3.h>
+
+int main() {
+    rts::Logger::init();
+    rts::GlfwWindow window({});
+    rts::Input input(window.native_handle());
+
+    while (!window.should_close()) {
+        window.poll_events();
+        input.update();
+
+        if (input.is_key_pressed(GLFW_KEY_ESCAPE)) {
+            break;
+        }
+
+        auto scroll = input.scroll_delta();
+        if (scroll != 0.0f) {
+            RTS_LOG_INFO("Scroll: {}", scroll);
+        }
+
+        window.swap_buffers();
+    }
+
+    return 0;
+}
+```
+
+Build and run. Expected: Window opens. Scroll wheel logs values. ESC closes.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add engine/platform/ editor/
+git commit -m "feat(platform): add input system with keyboard, mouse, and scroll"
+```
+
+---
+
+## Task 6: Platform — Time
+
+**Files:**
+- Create: `engine/platform/include/rts/platform/time.hpp`
+- Modify: `engine/platform/src/time.cpp` (replace placeholder)
+
+- [ ] **Step 1: Implement Time**
+
+```cpp
+// engine/platform/include/rts/platform/time.hpp
+#pragma once
+
+#include <rts/core/types.hpp>
+
+namespace rts {
+
+class Time {
+public:
+    void update();
+
+    f32 delta_time() const { return m_delta_time; }
+    f64 elapsed() const { return m_elapsed; }
+
+private:
+    f64 m_last_time = 0.0;
+    f32 m_delta_time = 0.0f;
+    f64 m_elapsed = 0.0;
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/platform/src/time.cpp
+#include <rts/platform/time.hpp>
+#include <GLFW/glfw3.h>
+
+namespace rts {
+
+void Time::update() {
+    f64 current = glfwGetTime();
+    m_delta_time = static_cast<f32>(current - m_last_time);
+    m_last_time = current;
+    m_elapsed = current;
+
+    // Clamp to avoid huge delta on first frame or debugger pause
+    if (m_delta_time > 0.1f) {
+        m_delta_time = 0.016f;
+    }
+}
+
+}  // namespace rts
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add engine/platform/
+git commit -m "feat(platform): add Time for delta time tracking"
+```
+
+---
+
+## Task 7: Renderer — Shader Program
+
+**Files:**
+- Create: `engine/renderer/CMakeLists.txt`
+- Create: `engine/renderer/include/rts/renderer/shader.hpp`
+- Create: `engine/renderer/src/shader.cpp`
+
+- [ ] **Step 1: Create renderer CMakeLists.txt**
+
+```cmake
+add_library(rts_renderer STATIC
+    src/shader.cpp
+    src/mesh.cpp
+    src/texture.cpp
+    src/renderer.cpp
+)
+
+target_include_directories(rts_renderer PUBLIC include)
+target_link_libraries(rts_renderer PUBLIC rts::core glm::glm glad)
+
+add_library(rts::renderer ALIAS rts_renderer)
+```
+
+Create empty placeholders:
+```bash
+touch engine/renderer/src/{mesh.cpp,texture.cpp,renderer.cpp}
+```
+
+- [ ] **Step 2: Implement ShaderProgram**
+
+```cpp
+// engine/renderer/include/rts/renderer/shader.hpp
+#pragma once
+
+#include <rts/core/types.hpp>
+#include <string>
+
+namespace rts {
+
+class ShaderProgram {
+public:
+    ShaderProgram(const std::string& vertex_source, const std::string& fragment_source);
+    ~ShaderProgram();
+
+    ShaderProgram(const ShaderProgram&) = delete;
+    ShaderProgram& operator=(const ShaderProgram&) = delete;
+    ShaderProgram(ShaderProgram&& other) noexcept;
+    ShaderProgram& operator=(ShaderProgram&& other) noexcept;
+
+    void bind() const;
+    void unbind() const;
+
+    void set_int(const std::string& name, int value) const;
+    void set_float(const std::string& name, f32 value) const;
+    void set_vec3(const std::string& name, const Vec3& value) const;
+    void set_vec4(const std::string& name, const Vec4& value) const;
+    void set_mat4(const std::string& name, const Mat4& value) const;
+
+    u32 id() const { return m_program; }
+
+    static ShaderProgram from_files(const std::string& vertex_path, const std::string& fragment_path);
+
+private:
+    u32 m_program = 0;
+
+    static u32 compile(const std::string& source, u32 type);
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/renderer/src/shader.cpp
+#include <rts/renderer/shader.hpp>
+#include <rts/core/logger.hpp>
+#include <glad/glad.h>
+#include <glm/gtc/type_ptr.hpp>
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
+
+namespace rts {
+
+ShaderProgram::ShaderProgram(const std::string& vertex_source, const std::string& fragment_source) {
+    u32 vert = compile(vertex_source, GL_VERTEX_SHADER);
+    u32 frag = compile(fragment_source, GL_FRAGMENT_SHADER);
+
+    m_program = glCreateProgram();
+    glAttachShader(m_program, vert);
+    glAttachShader(m_program, frag);
+    glLinkProgram(m_program);
+
+    int success;
+    glGetProgramiv(m_program, GL_LINK_STATUS, &success);
+    if (!success) {
+        char log[512];
+        glGetProgramInfoLog(m_program, 512, nullptr, log);
+        glDeleteProgram(m_program);
+        glDeleteShader(vert);
+        glDeleteShader(frag);
+        throw std::runtime_error(std::string("Shader link error: ") + log);
+    }
+
+    glDeleteShader(vert);
+    glDeleteShader(frag);
+}
+
+ShaderProgram::~ShaderProgram() {
+    if (m_program) glDeleteProgram(m_program);
+}
+
+ShaderProgram::ShaderProgram(ShaderProgram&& other) noexcept : m_program(other.m_program) {
+    other.m_program = 0;
+}
+
+ShaderProgram& ShaderProgram::operator=(ShaderProgram&& other) noexcept {
+    if (this != &other) {
+        if (m_program) glDeleteProgram(m_program);
+        m_program = other.m_program;
+        other.m_program = 0;
+    }
+    return *this;
+}
+
+void ShaderProgram::bind() const { glUseProgram(m_program); }
+void ShaderProgram::unbind() const { glUseProgram(0); }
+
+void ShaderProgram::set_int(const std::string& name, int value) const {
+    glUniform1i(glGetUniformLocation(m_program, name.c_str()), value);
+}
+
+void ShaderProgram::set_float(const std::string& name, f32 value) const {
+    glUniform1f(glGetUniformLocation(m_program, name.c_str()), value);
+}
+
+void ShaderProgram::set_vec3(const std::string& name, const Vec3& value) const {
+    glUniform3fv(glGetUniformLocation(m_program, name.c_str()), 1, glm::value_ptr(value));
+}
+
+void ShaderProgram::set_vec4(const std::string& name, const Vec4& value) const {
+    glUniform4fv(glGetUniformLocation(m_program, name.c_str()), 1, glm::value_ptr(value));
+}
+
+void ShaderProgram::set_mat4(const std::string& name, const Mat4& value) const {
+    glUniformMatrix4fv(glGetUniformLocation(m_program, name.c_str()), 1, GL_FALSE, glm::value_ptr(value));
+}
+
+ShaderProgram ShaderProgram::from_files(const std::string& vertex_path, const std::string& fragment_path) {
+    auto read_file = [](const std::string& path) -> std::string {
+        std::ifstream file(path);
+        if (!file.is_open()) {
+            throw std::runtime_error("Failed to open shader file: " + path);
+        }
+        std::stringstream ss;
+        ss << file.rdbuf();
+        return ss.str();
+    };
+
+    return ShaderProgram(read_file(vertex_path), read_file(fragment_path));
+}
+
+u32 ShaderProgram::compile(const std::string& source, u32 type) {
+    u32 shader = glCreateShader(type);
+    const char* src = source.c_str();
+    glShaderSource(shader, 1, &src, nullptr);
+    glCompileShader(shader);
+
+    int success;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        char log[512];
+        glGetShaderInfoLog(shader, 512, nullptr, log);
+        glDeleteShader(shader);
+        throw std::runtime_error(std::string("Shader compile error: ") + log);
+    }
+
+    return shader;
+}
+
+}  // namespace rts
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add engine/renderer/
+git commit -m "feat(renderer): add ShaderProgram with compile, link, and uniform setters"
+```
+
+---
+
+## Task 8: Renderer — Mesh & Texture
+
+**Files:**
+- Create: `engine/renderer/include/rts/renderer/mesh.hpp`
+- Create: `engine/renderer/include/rts/renderer/texture.hpp`
+- Modify: `engine/renderer/src/mesh.cpp` (replace placeholder)
+- Modify: `engine/renderer/src/texture.cpp` (replace placeholder)
+
+- [ ] **Step 1: Implement Mesh**
+
+```cpp
+// engine/renderer/include/rts/renderer/mesh.hpp
+#pragma once
+
+#include <rts/core/types.hpp>
+#include <vector>
+
+namespace rts {
+
+struct Vertex {
+    Vec3 position;
+    Vec3 normal;
+    Vec2 uv;
+    // Skeletal animation data
+    u32 bone_ids[4] = {0, 0, 0, 0};
+    f32 bone_weights[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+};
+
+class Mesh {
+public:
+    Mesh(const std::vector<Vertex>& vertices, const std::vector<u32>& indices);
+    ~Mesh();
+
+    Mesh(const Mesh&) = delete;
+    Mesh& operator=(const Mesh&) = delete;
+    Mesh(Mesh&& other) noexcept;
+    Mesh& operator=(Mesh&& other) noexcept;
+
+    void bind() const;
+    void unbind() const;
+    u32 index_count() const { return m_index_count; }
+
+private:
+    u32 m_vao = 0;
+    u32 m_vbo = 0;
+    u32 m_ebo = 0;
+    u32 m_index_count = 0;
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/renderer/src/mesh.cpp
+#include <rts/renderer/mesh.hpp>
+#include <glad/glad.h>
+
+namespace rts {
+
+Mesh::Mesh(const std::vector<Vertex>& vertices, const std::vector<u32>& indices)
+    : m_index_count(static_cast<u32>(indices.size())) {
+    glGenVertexArrays(1, &m_vao);
+    glGenBuffers(1, &m_vbo);
+    glGenBuffers(1, &m_ebo);
+
+    glBindVertexArray(m_vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(vertices.size() * sizeof(Vertex)),
+                 vertices.data(), GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(indices.size() * sizeof(u32)),
+                 indices.data(), GL_STATIC_DRAW);
+
+    // position
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          reinterpret_cast<void*>(offsetof(Vertex, position)));
+    // normal
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          reinterpret_cast<void*>(offsetof(Vertex, normal)));
+    // uv
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          reinterpret_cast<void*>(offsetof(Vertex, uv)));
+    // bone_ids
+    glEnableVertexAttribArray(3);
+    glVertexAttribIPointer(3, 4, GL_UNSIGNED_INT, sizeof(Vertex),
+                           reinterpret_cast<void*>(offsetof(Vertex, bone_ids)));
+    // bone_weights
+    glEnableVertexAttribArray(4);
+    glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          reinterpret_cast<void*>(offsetof(Vertex, bone_weights)));
+
+    glBindVertexArray(0);
+}
+
+Mesh::~Mesh() {
+    if (m_vao) {
+        glDeleteVertexArrays(1, &m_vao);
+        glDeleteBuffers(1, &m_vbo);
+        glDeleteBuffers(1, &m_ebo);
+    }
+}
+
+Mesh::Mesh(Mesh&& other) noexcept
+    : m_vao(other.m_vao), m_vbo(other.m_vbo), m_ebo(other.m_ebo), m_index_count(other.m_index_count) {
+    other.m_vao = other.m_vbo = other.m_ebo = 0;
+    other.m_index_count = 0;
+}
+
+Mesh& Mesh::operator=(Mesh&& other) noexcept {
+    if (this != &other) {
+        if (m_vao) {
+            glDeleteVertexArrays(1, &m_vao);
+            glDeleteBuffers(1, &m_vbo);
+            glDeleteBuffers(1, &m_ebo);
+        }
+        m_vao = other.m_vao; m_vbo = other.m_vbo;
+        m_ebo = other.m_ebo; m_index_count = other.m_index_count;
+        other.m_vao = other.m_vbo = other.m_ebo = 0;
+        other.m_index_count = 0;
+    }
+    return *this;
+}
+
+void Mesh::bind() const { glBindVertexArray(m_vao); }
+void Mesh::unbind() const { glBindVertexArray(0); }
+
+}  // namespace rts
+```
+
+- [ ] **Step 2: Implement Texture**
+
+```cpp
+// engine/renderer/include/rts/renderer/texture.hpp
+#pragma once
+
+#include <rts/core/types.hpp>
+#include <string>
+
+namespace rts {
+
+class Texture {
+public:
+    Texture(const u8* data, u32 width, u32 height, u32 channels);
+    ~Texture();
+
+    Texture(const Texture&) = delete;
+    Texture& operator=(const Texture&) = delete;
+    Texture(Texture&& other) noexcept;
+    Texture& operator=(Texture&& other) noexcept;
+
+    void bind(u32 slot = 0) const;
+    void unbind() const;
+
+    u32 id() const { return m_texture; }
+    u32 width() const { return m_width; }
+    u32 height() const { return m_height; }
+
+private:
+    u32 m_texture = 0;
+    u32 m_width = 0;
+    u32 m_height = 0;
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/renderer/src/texture.cpp
+#include <rts/renderer/texture.hpp>
+#include <glad/glad.h>
+
+namespace rts {
+
+Texture::Texture(const u8* data, u32 width, u32 height, u32 channels)
+    : m_width(width), m_height(height) {
+    glGenTextures(1, &m_texture);
+    glBindTexture(GL_TEXTURE_2D, m_texture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    GLenum format = GL_RGBA;
+    if (channels == 1) format = GL_RED;
+    else if (channels == 3) format = GL_RGB;
+
+    glTexImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(format),
+                 static_cast<GLsizei>(width), static_cast<GLsizei>(height),
+                 0, format, GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+Texture::~Texture() {
+    if (m_texture) glDeleteTextures(1, &m_texture);
+}
+
+Texture::Texture(Texture&& other) noexcept
+    : m_texture(other.m_texture), m_width(other.m_width), m_height(other.m_height) {
+    other.m_texture = 0;
+}
+
+Texture& Texture::operator=(Texture&& other) noexcept {
+    if (this != &other) {
+        if (m_texture) glDeleteTextures(1, &m_texture);
+        m_texture = other.m_texture;
+        m_width = other.m_width;
+        m_height = other.m_height;
+        other.m_texture = 0;
+    }
+    return *this;
+}
+
+void Texture::bind(u32 slot) const {
+    glActiveTexture(GL_TEXTURE0 + slot);
+    glBindTexture(GL_TEXTURE_2D, m_texture);
+}
+
+void Texture::unbind() const {
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+}  // namespace rts
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add engine/renderer/
+git commit -m "feat(renderer): add Mesh and Texture GPU abstractions"
+```
+
+---
+
+## Task 9: Renderer — RenderCommand & Renderer
+
+**Files:**
+- Create: `engine/renderer/include/rts/renderer/render_command.hpp`
+- Create: `engine/renderer/include/rts/renderer/renderer.hpp`
+- Modify: `engine/renderer/src/renderer.cpp` (replace placeholder)
+
+- [ ] **Step 1: Define RenderCommand**
+
+```cpp
+// engine/renderer/include/rts/renderer/render_command.hpp
+#pragma once
+
+#include <rts/core/types.hpp>
+
+namespace rts {
+
+class Mesh;
+class Texture;
+class ShaderProgram;
+
+struct RenderCommand {
+    const Mesh* mesh = nullptr;
+    const Texture* texture = nullptr;
+    const ShaderProgram* shader = nullptr;
+    Mat4 transform = Mat4(1.0f);
+    const Mat4* bone_transforms = nullptr;
+    u32 bone_count = 0;
+};
+
+}  // namespace rts
+```
+
+- [ ] **Step 2: Implement Renderer**
+
+```cpp
+// engine/renderer/include/rts/renderer/renderer.hpp
+#pragma once
+
+#include <rts/core/types.hpp>
+#include <rts/renderer/render_command.hpp>
+#include <vector>
+
+namespace rts {
+
+class Renderer {
+public:
+    void init();
+    void begin_frame(const Vec4& clear_color = {0.1f, 0.1f, 0.15f, 1.0f});
+    void submit(const RenderCommand& command);
+    void flush();
+
+    void set_viewport(u32 width, u32 height);
+
+private:
+    std::vector<RenderCommand> m_commands;
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/renderer/src/renderer.cpp
+#include <rts/renderer/renderer.hpp>
+#include <rts/renderer/mesh.hpp>
+#include <rts/renderer/texture.hpp>
+#include <rts/renderer/shader.hpp>
+#include <rts/core/logger.hpp>
+#include <glad/glad.h>
+#include <algorithm>
+
+namespace rts {
+
+void Renderer::init() {
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    RTS_LOG_INFO("Renderer initialized (OpenGL {})", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
+}
+
+void Renderer::begin_frame(const Vec4& clear_color) {
+    glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    m_commands.clear();
+}
+
+void Renderer::submit(const RenderCommand& command) {
+    m_commands.push_back(command);
+}
+
+void Renderer::flush() {
+    // Sort front-to-back for opaque objects (by z of translation column)
+    std::sort(m_commands.begin(), m_commands.end(),
+        [](const RenderCommand& a, const RenderCommand& b) {
+            return a.transform[3][2] < b.transform[3][2];
+        });
+
+    for (const auto& cmd : m_commands) {
+        if (!cmd.mesh || !cmd.shader) continue;
+
+        cmd.shader->bind();
+        cmd.shader->set_mat4("u_model", cmd.transform);
+
+        if (cmd.bone_transforms && cmd.bone_count > 0) {
+            cmd.shader->set_int("u_animated", 1);
+            for (u32 i = 0; i < cmd.bone_count; ++i) {
+                cmd.shader->set_mat4("u_bones[" + std::to_string(i) + "]", cmd.bone_transforms[i]);
+            }
+        } else {
+            cmd.shader->set_int("u_animated", 0);
+        }
+
+        if (cmd.texture) {
+            cmd.texture->bind(0);
+            cmd.shader->set_int("u_texture", 0);
+        }
+
+        cmd.mesh->bind();
+        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(cmd.mesh->index_count()),
+                       GL_UNSIGNED_INT, nullptr);
+        cmd.mesh->unbind();
+    }
+}
+
+void Renderer::set_viewport(u32 width, u32 height) {
+    glViewport(0, 0, static_cast<GLsizei>(width), static_cast<GLsizei>(height));
+}
+
+}  // namespace rts
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add engine/renderer/
+git commit -m "feat(renderer): add Renderer with RenderCommand queue and front-to-back sorting"
+```
+
+---
+
+## Task 10: Shaders
+
+**Files:**
+- Create: `assets/shaders/model.vert`
+- Create: `assets/shaders/model.frag`
+- Create: `assets/shaders/terrain.vert`
+- Create: `assets/shaders/terrain.frag`
+
+- [ ] **Step 1: Create model shaders**
+
+```glsl
+// assets/shaders/model.vert
+#version 330 core
+
+layout (location = 0) in vec3 a_position;
+layout (location = 1) in vec3 a_normal;
+layout (location = 2) in vec2 a_uv;
+layout (location = 3) in uvec4 a_bone_ids;
+layout (location = 4) in vec4 a_bone_weights;
+
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+uniform int u_animated;
+uniform mat4 u_bones[128];
+
+out vec3 v_frag_pos;
+out vec3 v_normal;
+out vec2 v_uv;
+
+void main() {
+    vec4 pos;
+    vec3 norm;
+
+    if (u_animated == 1) {
+        mat4 bone_transform =
+            a_bone_weights.x * u_bones[a_bone_ids.x] +
+            a_bone_weights.y * u_bones[a_bone_ids.y] +
+            a_bone_weights.z * u_bones[a_bone_ids.z] +
+            a_bone_weights.w * u_bones[a_bone_ids.w];
+
+        pos = bone_transform * vec4(a_position, 1.0);
+        norm = mat3(bone_transform) * a_normal;
+    } else {
+        pos = vec4(a_position, 1.0);
+        norm = a_normal;
+    }
+
+    vec4 world_pos = u_model * pos;
+    v_frag_pos = vec3(world_pos);
+    v_normal = mat3(transpose(inverse(u_model))) * norm;
+    v_uv = a_uv;
+
+    gl_Position = u_projection * u_view * world_pos;
+}
+```
+
+```glsl
+// assets/shaders/model.frag
+#version 330 core
+
+in vec3 v_frag_pos;
+in vec3 v_normal;
+in vec2 v_uv;
+
+uniform sampler2D u_texture;
+uniform vec3 u_light_dir;
+uniform vec3 u_light_color;
+uniform vec3 u_ambient;
+
+out vec4 frag_color;
+
+void main() {
+    vec3 norm = normalize(v_normal);
+    vec3 light = normalize(-u_light_dir);
+
+    float diff = max(dot(norm, light), 0.0);
+    vec3 diffuse = diff * u_light_color;
+
+    vec4 tex_color = texture(u_texture, v_uv);
+    vec3 result = (u_ambient + diffuse) * tex_color.rgb;
+
+    frag_color = vec4(result, tex_color.a);
+}
+```
+
+- [ ] **Step 2: Create terrain shaders**
+
+```glsl
+// assets/shaders/terrain.vert
+#version 330 core
+
+layout (location = 0) in vec3 a_position;
+layout (location = 1) in vec3 a_normal;
+layout (location = 2) in vec2 a_uv;
+
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+
+out vec3 v_frag_pos;
+out vec3 v_normal;
+out vec2 v_uv;
+
+void main() {
+    vec4 world_pos = u_model * vec4(a_position, 1.0);
+    v_frag_pos = vec3(world_pos);
+    v_normal = mat3(transpose(inverse(u_model))) * a_normal;
+    v_uv = a_uv;
+
+    gl_Position = u_projection * u_view * world_pos;
+}
+```
+
+```glsl
+// assets/shaders/terrain.frag
+#version 330 core
+
+in vec3 v_frag_pos;
+in vec3 v_normal;
+in vec2 v_uv;
+
+uniform sampler2D u_splat_map;
+uniform sampler2D u_texture_r;  // terrain layer 1
+uniform sampler2D u_texture_g;  // terrain layer 2
+uniform sampler2D u_texture_b;  // terrain layer 3
+uniform sampler2D u_texture_a;  // terrain layer 4
+
+uniform vec3 u_light_dir;
+uniform vec3 u_light_color;
+uniform vec3 u_ambient;
+uniform float u_tile_scale;
+
+out vec4 frag_color;
+
+void main() {
+    vec3 norm = normalize(v_normal);
+    vec3 light = normalize(-u_light_dir);
+    float diff = max(dot(norm, light), 0.0);
+    vec3 diffuse = diff * u_light_color;
+
+    vec4 splat = texture(u_splat_map, v_uv);
+    vec2 tiled_uv = v_uv * u_tile_scale;
+
+    vec3 color_r = texture(u_texture_r, tiled_uv).rgb;
+    vec3 color_g = texture(u_texture_g, tiled_uv).rgb;
+    vec3 color_b = texture(u_texture_b, tiled_uv).rgb;
+    vec3 color_a = texture(u_texture_a, tiled_uv).rgb;
+
+    vec3 terrain_color = color_r * splat.r + color_g * splat.g +
+                         color_b * splat.b + color_a * splat.a;
+
+    vec3 result = (u_ambient + diffuse) * terrain_color;
+    frag_color = vec4(result, 1.0);
+}
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add assets/shaders/
+git commit -m "feat(renderer): add model and terrain shaders with Phong lighting"
+```
+
+---
+
+## Task 11: Camera
+
+**Files:**
+- Create: `engine/camera/CMakeLists.txt`
+- Create: `engine/camera/include/rts/camera/camera.hpp`
+- Create: `engine/camera/src/camera.cpp`
+- Create: `tests/camera/test_camera.cpp`
+
+- [ ] **Step 1: Create camera CMakeLists.txt**
+
+```cmake
+add_library(rts_camera STATIC
+    src/camera.cpp
+)
+
+target_include_directories(rts_camera PUBLIC include)
+target_link_libraries(rts_camera PUBLIC rts::core glm::glm)
+
+add_library(rts::camera ALIAS rts_camera)
+```
+
+- [ ] **Step 2: Write failing tests**
+
+```cpp
+// tests/camera/test_camera.cpp
+#include <gtest/gtest.h>
+#include <rts/camera/camera.hpp>
+#include <glm/gtc/matrix_access.hpp>
+
+TEST(CameraTest, DefaultPositionLooksDown) {
+    rts::RtsCamera camera;
+    auto view = camera.view_matrix();
+    // Camera should be above origin looking down at an angle
+    EXPECT_NE(view, rts::Mat4(1.0f));
+}
+
+TEST(CameraTest, ProjectionIsNotIdentity) {
+    rts::RtsCamera camera;
+    camera.set_aspect_ratio(16.0f / 9.0f);
+    auto proj = camera.projection_matrix();
+    EXPECT_NE(proj, rts::Mat4(1.0f));
+}
+
+TEST(CameraTest, PanChangesPosition) {
+    rts::RtsCamera camera;
+    auto view_before = camera.view_matrix();
+    camera.pan(rts::Vec2(5.0f, 0.0f));
+    auto view_after = camera.view_matrix();
+    EXPECT_NE(view_before, view_after);
+}
+
+TEST(CameraTest, ZoomChangesDistance) {
+    rts::RtsCamera camera;
+    auto view_before = camera.view_matrix();
+    camera.zoom(-2.0f);
+    auto view_after = camera.view_matrix();
+    EXPECT_NE(view_before, view_after);
+}
+
+TEST(CameraTest, ZoomClampsToMinMax) {
+    rts::RtsCamera camera;
+    // Zoom in a lot
+    camera.zoom(-1000.0f);
+    auto view_close = camera.view_matrix();
+
+    // Zoom out a lot
+    camera.zoom(2000.0f);
+    auto view_far = camera.view_matrix();
+
+    // Both should succeed without crash, distances are clamped
+    EXPECT_NE(view_close, view_far);
+}
+```
+
+- [ ] **Step 3: Add camera tests to tests CMakeLists.txt**
+
+Update `tests/CMakeLists.txt`:
+```cmake
+add_executable(rts_tests
+    core/test_logger.cpp
+    core/test_event_bus.cpp
+    camera/test_camera.cpp
+)
+
+target_link_libraries(rts_tests PRIVATE
+    rts::core
+    rts::camera
+    GTest::gtest
+    GTest::gtest_main
+)
+
+include(GoogleTest)
+gtest_discover_tests(rts_tests)
+```
+
+- [ ] **Step 4: Run tests to verify they fail**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+Expected: FAIL — `rts::RtsCamera` not defined.
+
+- [ ] **Step 5: Implement Camera**
+
+```cpp
+// engine/camera/include/rts/camera/camera.hpp
+#pragma once
+
+#include <rts/core/types.hpp>
+
+namespace rts {
+
+struct CameraConfig {
+    f32 fov = 45.0f;
+    f32 near_plane = 0.1f;
+    f32 far_plane = 500.0f;
+    f32 distance = 30.0f;
+    f32 min_distance = 10.0f;
+    f32 max_distance = 80.0f;
+    f32 pitch = -55.0f;  // degrees, top-down angle (WC3 style)
+    f32 pan_speed = 20.0f;
+    f32 zoom_speed = 5.0f;
+    f32 edge_pan_margin = 20.0f;  // pixels from screen edge to trigger pan
+};
+
+class RtsCamera {
+public:
+    explicit RtsCamera(const CameraConfig& config = {});
+
+    void update(f32 delta_time, const Vec2& mouse_pos, const Vec2& screen_size,
+                bool key_w, bool key_a, bool key_s, bool key_d, f32 scroll_delta);
+
+    void pan(const Vec2& offset);
+    void zoom(f32 delta);
+
+    void set_aspect_ratio(f32 aspect);
+
+    Mat4 view_matrix() const;
+    Mat4 projection_matrix() const;
+
+    Vec3 target() const { return m_target; }
+
+private:
+    Vec3 m_target{0.0f, 0.0f, 0.0f};
+    f32 m_distance;
+    f32 m_pitch;
+    f32 m_aspect_ratio = 16.0f / 9.0f;
+    CameraConfig m_config;
+
+    Vec3 calculate_position() const;
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/camera/src/camera.cpp
+#include <rts/camera/camera.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <algorithm>
+
+namespace rts {
+
+RtsCamera::RtsCamera(const CameraConfig& config)
+    : m_distance(config.distance)
+    , m_pitch(config.pitch)
+    , m_config(config) {}
+
+void RtsCamera::update(f32 delta_time, const Vec2& mouse_pos, const Vec2& screen_size,
+                        bool key_w, bool key_a, bool key_s, bool key_d, f32 scroll_delta) {
+    Vec2 pan_dir{0.0f, 0.0f};
+
+    // Keyboard pan
+    if (key_w) pan_dir.y -= 1.0f;
+    if (key_s) pan_dir.y += 1.0f;
+    if (key_a) pan_dir.x -= 1.0f;
+    if (key_d) pan_dir.x += 1.0f;
+
+    // Edge pan
+    if (mouse_pos.x < m_config.edge_pan_margin) pan_dir.x -= 1.0f;
+    if (mouse_pos.x > screen_size.x - m_config.edge_pan_margin) pan_dir.x += 1.0f;
+    if (mouse_pos.y < m_config.edge_pan_margin) pan_dir.y -= 1.0f;
+    if (mouse_pos.y > screen_size.y - m_config.edge_pan_margin) pan_dir.y += 1.0f;
+
+    if (glm::length(pan_dir) > 0.0f) {
+        pan_dir = glm::normalize(pan_dir);
+    }
+
+    pan(pan_dir * m_config.pan_speed * delta_time);
+    zoom(scroll_delta * m_config.zoom_speed);
+}
+
+void RtsCamera::pan(const Vec2& offset) {
+    m_target.x += offset.x;
+    m_target.z += offset.y;
+}
+
+void RtsCamera::zoom(f32 delta) {
+    m_distance = std::clamp(m_distance - delta, m_config.min_distance, m_config.max_distance);
+}
+
+void RtsCamera::set_aspect_ratio(f32 aspect) {
+    m_aspect_ratio = aspect;
+}
+
+Mat4 RtsCamera::view_matrix() const {
+    Vec3 pos = calculate_position();
+    return glm::lookAt(pos, m_target, Vec3(0.0f, 1.0f, 0.0f));
+}
+
+Mat4 RtsCamera::projection_matrix() const {
+    return glm::perspective(glm::radians(m_config.fov), m_aspect_ratio,
+                            m_config.near_plane, m_config.far_plane);
+}
+
+Vec3 RtsCamera::calculate_position() const {
+    f32 pitch_rad = glm::radians(m_pitch);
+    Vec3 offset;
+    offset.x = 0.0f;
+    offset.y = m_distance * std::cos(pitch_rad);
+    offset.z = m_distance * std::sin(pitch_rad);
+    return m_target - offset;
+}
+
+}  // namespace rts
+```
+
+- [ ] **Step 6: Run tests to verify they pass**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+Expected: All CameraTest and prior tests PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add engine/camera/ tests/
+git commit -m "feat(camera): add RTS camera with pan, zoom, and edge scrolling"
+```
+
+---
+
+## Task 12: Assets — Data Structures & StbLoader
+
+**Files:**
+- Create: `engine/assets/CMakeLists.txt`
+- Create: `engine/assets/include/rts/assets/model_data.hpp`
+- Create: `engine/assets/include/rts/assets/skeleton.hpp`
+- Create: `engine/assets/include/rts/assets/texture_loader.hpp`
+- Create: `engine/assets/include/rts/assets/stb_loader.hpp`
+- Create: `engine/assets/src/stb_loader.cpp`
+- Create: `tests/assets/test_stb_loader.cpp`
+
+- [ ] **Step 1: Create assets CMakeLists.txt**
+
+```cmake
+add_library(rts_assets STATIC
+    src/stb_loader.cpp
+    src/blp_loader.cpp
+    src/gltf_loader.cpp
+    src/mdx_loader.cpp
+    src/asset_manager.cpp
+)
+
+target_include_directories(rts_assets PUBLIC include)
+target_link_libraries(rts_assets PUBLIC rts::core rts::renderer)
+
+# stb - header only, need to find include path from Conan
+find_package(Stb REQUIRED)
+target_include_directories(rts_assets PRIVATE ${Stb_INCLUDE_DIRS})
+
+find_package(tinygltf REQUIRED)
+target_link_libraries(rts_assets PRIVATE tinygltf::tinygltf)
+
+add_library(rts::assets ALIAS rts_assets)
+```
+
+Create empty placeholders:
+```bash
+touch engine/assets/src/{blp_loader.cpp,gltf_loader.cpp,mdx_loader.cpp,asset_manager.cpp}
+```
+
+- [ ] **Step 2: Define ModelData and Skeleton**
+
+```cpp
+// engine/assets/include/rts/assets/model_data.hpp
+#pragma once
+
+#include <rts/core/types.hpp>
+#include <rts/renderer/mesh.hpp>
+#include <rts/assets/skeleton.hpp>
+#include <vector>
+#include <string>
+#include <memory>
+
+namespace rts {
+
+struct ModelData {
+    std::vector<Vertex> vertices;
+    std::vector<u32> indices;
+    Skeleton skeleton;
+    std::string texture_path;
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/assets/include/rts/assets/skeleton.hpp
+#pragma once
+
+#include <rts/core/types.hpp>
+#include <vector>
+#include <string>
+
+namespace rts {
+
+struct BoneKeyframe {
+    f32 time;
+    Vec3 translation;
+    Quat rotation;
+    Vec3 scale;
+};
+
+struct Bone {
+    std::string name;
+    i32 parent_index = -1;  // -1 = root
+    Mat4 inverse_bind_pose = Mat4(1.0f);
+    Mat4 local_bind_transform = Mat4(1.0f);
+};
+
+struct AnimationSequence {
+    std::string name;
+    f32 duration = 0.0f;
+    bool looping = true;
+    // Per-bone keyframes: keyframes[bone_index] = vector of keyframes
+    std::vector<std::vector<BoneKeyframe>> keyframes;
+};
+
+struct Skeleton {
+    std::vector<Bone> bones;
+    std::vector<AnimationSequence> animations;
+
+    bool has_bones() const { return !bones.empty(); }
+};
+
+}  // namespace rts
+```
+
+- [ ] **Step 3: Define ITextureLoader and StbLoader interface**
+
+```cpp
+// engine/assets/include/rts/assets/texture_loader.hpp
+#pragma once
+
+#include <rts/core/types.hpp>
+#include <string>
+#include <vector>
+
+namespace rts {
+
+struct TextureData {
+    std::vector<u8> pixels;
+    u32 width = 0;
+    u32 height = 0;
+    u32 channels = 0;
+};
+
+class ITextureLoader {
+public:
+    virtual ~ITextureLoader() = default;
+    virtual TextureData load(const std::string& path) = 0;
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/assets/include/rts/assets/stb_loader.hpp
+#pragma once
+
+#include <rts/assets/texture_loader.hpp>
+
+namespace rts {
+
+class StbLoader : public ITextureLoader {
+public:
+    TextureData load(const std::string& path) override;
+};
+
+}  // namespace rts
+```
+
+- [ ] **Step 4: Write failing test for StbLoader**
+
+Create a 2x2 test PNG first:
+```bash
+# We'll generate a tiny test image in the test itself using raw data
+```
+
+```cpp
+// tests/assets/test_stb_loader.cpp
+#include <gtest/gtest.h>
+#include <rts/assets/stb_loader.hpp>
+#include <fstream>
+
+class StbLoaderTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        // Write a minimal valid 1x1 white PNG (67 bytes)
+        // This is the smallest valid PNG file
+        const unsigned char png_data[] = {
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, // 1x1
+            0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, // 8bit RGB
+            0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, // IDAT chunk
+            0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00, // compressed
+            0x00, 0x00, 0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC, // data
+            0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, // IEND chunk
+            0x44, 0xAE, 0x42, 0x60, 0x82
+        };
+
+        std::ofstream file("test_image.png", std::ios::binary);
+        file.write(reinterpret_cast<const char*>(png_data), sizeof(png_data));
+    }
+
+    void TearDown() override {
+        std::remove("test_image.png");
+    }
+};
+
+TEST_F(StbLoaderTest, LoadsPngImage) {
+    rts::StbLoader loader;
+    auto data = loader.load("test_image.png");
+
+    EXPECT_EQ(data.width, 1);
+    EXPECT_EQ(data.height, 1);
+    EXPECT_GT(data.channels, 0u);
+    EXPECT_FALSE(data.pixels.empty());
+}
+
+TEST_F(StbLoaderTest, ThrowsOnMissingFile) {
+    rts::StbLoader loader;
+    EXPECT_THROW(loader.load("nonexistent.png"), std::runtime_error);
+}
+```
+
+- [ ] **Step 5: Add asset tests to tests CMakeLists.txt**
+
+Update `tests/CMakeLists.txt`:
+```cmake
+add_executable(rts_tests
+    core/test_logger.cpp
+    core/test_event_bus.cpp
+    camera/test_camera.cpp
+    assets/test_stb_loader.cpp
+)
+
+target_link_libraries(rts_tests PRIVATE
+    rts::core
+    rts::camera
+    rts::assets
+    GTest::gtest
+    GTest::gtest_main
+)
+
+include(GoogleTest)
+gtest_discover_tests(rts_tests)
+```
+
+- [ ] **Step 6: Run tests to verify they fail**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+Expected: FAIL — `StbLoader::load` not implemented.
+
+- [ ] **Step 7: Implement StbLoader**
+
+```cpp
+// engine/assets/src/stb_loader.cpp
+#define STB_IMAGE_IMPLEMENTATION
+#include <rts/assets/stb_loader.hpp>
+#include <stb_image.h>
+#include <stdexcept>
+
+namespace rts {
+
+TextureData StbLoader::load(const std::string& path) {
+    int w, h, channels;
+    stbi_set_flip_vertically_on_load(true);
+    u8* data = stbi_load(path.c_str(), &w, &h, &channels, 0);
+
+    if (!data) {
+        throw std::runtime_error("Failed to load image: " + path);
+    }
+
+    TextureData result;
+    result.width = static_cast<u32>(w);
+    result.height = static_cast<u32>(h);
+    result.channels = static_cast<u32>(channels);
+    result.pixels.assign(data, data + (w * h * channels));
+
+    stbi_image_free(data);
+    return result;
+}
+
+}  // namespace rts
+```
+
+- [ ] **Step 8: Run tests to verify they pass**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+Expected: All StbLoaderTest and prior tests PASS.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add engine/assets/ tests/
+git commit -m "feat(assets): add ModelData, Skeleton structs, and StbLoader for PNG/JPG"
+```
+
+---
+
+## Task 13: Assets — BLP Loader
+
+**Files:**
+- Create: `engine/assets/include/rts/assets/blp_loader.hpp`
+- Modify: `engine/assets/src/blp_loader.cpp` (replace placeholder)
+- Create: `tests/assets/test_blp_loader.cpp`
+
+- [ ] **Step 1: Write failing tests for BlpLoader**
+
+```cpp
+// tests/assets/test_blp_loader.cpp
+#include <gtest/gtest.h>
+#include <rts/assets/blp_loader.hpp>
+#include <fstream>
+#include <cstring>
+
+class BlpLoaderTest : public ::testing::Test {
+protected:
+    void create_blp1_paletted(const std::string& filename) {
+        // Minimal BLP1 paletted file: 1x1 pixel
+        std::ofstream file(filename, std::ios::binary);
+
+        // BLP1 header
+        char magic[4] = {'B', 'L', 'P', '1'};
+        file.write(magic, 4);
+
+        u32 compression = 1;  // 1 = paletted
+        file.write(reinterpret_cast<char*>(&compression), 4);
+
+        u32 alpha_bits = 0;
+        file.write(reinterpret_cast<char*>(&alpha_bits), 4);
+
+        u32 width = 1, height = 1;
+        file.write(reinterpret_cast<char*>(&width), 4);
+        file.write(reinterpret_cast<char*>(&height), 4);
+
+        u32 extra = 4;  // type
+        file.write(reinterpret_cast<char*>(&extra), 4);
+
+        u32 has_mipmaps = 0;
+        file.write(reinterpret_cast<char*>(&has_mipmaps), 4);
+
+        // Mipmap offsets (16 entries) — first points after palette
+        u32 palette_size = 256 * 4;
+        u32 header_size = 4 + 4 + 4 + 4 + 4 + 4 + 4 + 16 * 4 + 16 * 4;
+        u32 data_offset = header_size + palette_size;
+
+        u32 offsets[16] = {};
+        offsets[0] = data_offset;
+        file.write(reinterpret_cast<char*>(offsets), 16 * 4);
+
+        // Mipmap sizes (16 entries)
+        u32 sizes[16] = {};
+        sizes[0] = 1;  // 1 pixel index
+        file.write(reinterpret_cast<char*>(sizes), 16 * 4);
+
+        // Palette: 256 BGRA entries (set first entry to red)
+        u8 palette[256 * 4] = {};
+        palette[0] = 0x00;  // B
+        palette[1] = 0x00;  // G
+        palette[2] = 0xFF;  // R
+        palette[3] = 0xFF;  // A
+        file.write(reinterpret_cast<char*>(palette), palette_size);
+
+        // Pixel data: 1 byte index = 0 (pointing to red)
+        u8 pixel_index = 0;
+        file.write(reinterpret_cast<char*>(&pixel_index), 1);
+    }
+
+    void TearDown() override {
+        std::remove("test.blp");
+    }
+};
+
+TEST_F(BlpLoaderTest, LoadsPalettedBlp1) {
+    create_blp1_paletted("test.blp");
+
+    rts::BlpLoader loader;
+    auto data = loader.load("test.blp");
+
+    EXPECT_EQ(data.width, 1);
+    EXPECT_EQ(data.height, 1);
+    EXPECT_EQ(data.channels, 4);
+    ASSERT_EQ(data.pixels.size(), 4u);
+
+    // Should be red (RGBA)
+    EXPECT_EQ(data.pixels[0], 0xFF);  // R
+    EXPECT_EQ(data.pixels[1], 0x00);  // G
+    EXPECT_EQ(data.pixels[2], 0x00);  // B
+    EXPECT_EQ(data.pixels[3], 0xFF);  // A
+}
+
+TEST_F(BlpLoaderTest, ThrowsOnInvalidMagic) {
+    std::ofstream file("test.blp", std::ios::binary);
+    file.write("NOPE", 4);
+    file.close();
+
+    rts::BlpLoader loader;
+    EXPECT_THROW(loader.load("test.blp"), std::runtime_error);
+}
+
+TEST_F(BlpLoaderTest, ThrowsOnMissingFile) {
+    rts::BlpLoader loader;
+    EXPECT_THROW(loader.load("nonexistent.blp"), std::runtime_error);
+}
+```
+
+- [ ] **Step 2: Add to tests CMakeLists.txt**
+
+Add `assets/test_blp_loader.cpp` to the `rts_tests` sources.
+
+- [ ] **Step 3: Run tests to verify they fail**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+Expected: FAIL — `BlpLoader` not implemented.
+
+- [ ] **Step 4: Implement BlpLoader**
+
+```cpp
+// engine/assets/include/rts/assets/blp_loader.hpp
+#pragma once
+
+#include <rts/assets/texture_loader.hpp>
+
+namespace rts {
+
+class BlpLoader : public ITextureLoader {
+public:
+    TextureData load(const std::string& path) override;
+
+private:
+    TextureData load_blp1_paletted(const std::vector<u8>& file_data, u32 width, u32 height,
+                                    u32 mipmap_offset, u32 mipmap_size);
+    TextureData load_blp1_jpeg(const std::vector<u8>& file_data, u32 width, u32 height,
+                                u32 mipmap_offset, u32 mipmap_size);
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/assets/src/blp_loader.cpp
+#include <rts/assets/blp_loader.hpp>
+#include <rts/core/logger.hpp>
+#include <fstream>
+#include <cstring>
+#include <stdexcept>
+
+namespace rts {
+
+struct BlpHeader {
+    char magic[4];
+    u32 compression;
+    u32 alpha_bits;
+    u32 width;
+    u32 height;
+    u32 type;
+    u32 has_mipmaps;
+    u32 mipmap_offsets[16];
+    u32 mipmap_sizes[16];
+};
+
+TextureData BlpLoader::load(const std::string& path) {
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open BLP file: " + path);
+    }
+
+    auto file_size = file.tellg();
+    file.seekg(0);
+    std::vector<u8> file_data(static_cast<size_t>(file_size));
+    file.read(reinterpret_cast<char*>(file_data.data()), file_size);
+
+    if (file_data.size() < sizeof(BlpHeader)) {
+        throw std::runtime_error("BLP file too small: " + path);
+    }
+
+    BlpHeader header;
+    std::memcpy(&header, file_data.data(), sizeof(BlpHeader));
+
+    bool is_blp1 = std::memcmp(header.magic, "BLP1", 4) == 0;
+    bool is_blp2 = std::memcmp(header.magic, "BLP2", 4) == 0;
+
+    if (!is_blp1 && !is_blp2) {
+        throw std::runtime_error("Invalid BLP magic in file: " + path);
+    }
+
+    u32 mipmap_offset = header.mipmap_offsets[0];
+    u32 mipmap_size = header.mipmap_sizes[0];
+
+    if (header.compression == 1) {
+        // Paletted
+        return load_blp1_paletted(file_data, header.width, header.height,
+                                   mipmap_offset, mipmap_size);
+    } else if (header.compression == 0) {
+        // JPEG compressed
+        return load_blp1_jpeg(file_data, header.width, header.height,
+                               mipmap_offset, mipmap_size);
+    }
+
+    throw std::runtime_error("Unsupported BLP compression type: " + std::to_string(header.compression));
+}
+
+TextureData BlpLoader::load_blp1_paletted(const std::vector<u8>& file_data, u32 width, u32 height,
+                                           u32 mipmap_offset, u32 mipmap_size) {
+    // Palette is right after the header (256 BGRA entries)
+    const u32 palette_offset = sizeof(BlpHeader);
+    const u8* palette = file_data.data() + palette_offset;
+    const u8* indices = file_data.data() + mipmap_offset;
+
+    TextureData result;
+    result.width = width;
+    result.height = height;
+    result.channels = 4;
+    result.pixels.resize(width * height * 4);
+
+    for (u32 i = 0; i < mipmap_size && i < width * height; ++i) {
+        u8 idx = indices[i];
+        u32 pal_offset = idx * 4;
+        // BLP palette is BGRA, convert to RGBA
+        result.pixels[i * 4 + 0] = palette[pal_offset + 2];  // R
+        result.pixels[i * 4 + 1] = palette[pal_offset + 1];  // G
+        result.pixels[i * 4 + 2] = palette[pal_offset + 0];  // B
+        result.pixels[i * 4 + 3] = palette[pal_offset + 3];  // A
+    }
+
+    return result;
+}
+
+TextureData BlpLoader::load_blp1_jpeg(const std::vector<u8>& file_data, u32 width, u32 height,
+                                       u32 mipmap_offset, u32 mipmap_size) {
+    // BLP1 JPEG: header contains a JPEG header shared across mipmaps
+    // u32 jpeg_header_size at offset sizeof(BlpHeader)
+    u32 jpeg_header_size;
+    std::memcpy(&jpeg_header_size, file_data.data() + sizeof(BlpHeader), 4);
+
+    const u8* jpeg_header = file_data.data() + sizeof(BlpHeader) + 4;
+    const u8* jpeg_data = file_data.data() + mipmap_offset;
+
+    // Combine JPEG header + mipmap data into a complete JPEG
+    std::vector<u8> full_jpeg(jpeg_header_size + mipmap_size);
+    std::memcpy(full_jpeg.data(), jpeg_header, jpeg_header_size);
+    std::memcpy(full_jpeg.data() + jpeg_header_size, jpeg_data, mipmap_size);
+
+    // Decode JPEG using stb_image from memory
+    // Note: stb_image is already compiled in stb_loader.cpp, here we use it from memory
+    // We need the stb header but not the implementation
+    #include <stb_image.h>
+
+    int w, h, channels;
+    u8* decoded = stbi_load_from_memory(full_jpeg.data(),
+                                         static_cast<int>(full_jpeg.size()),
+                                         &w, &h, &channels, 4);
+    if (!decoded) {
+        throw std::runtime_error("Failed to decode BLP JPEG data");
+    }
+
+    TextureData result;
+    result.width = static_cast<u32>(w);
+    result.height = static_cast<u32>(h);
+    result.channels = 4;
+    result.pixels.assign(decoded, decoded + (w * h * 4));
+
+    stbi_image_free(decoded);
+    return result;
+}
+
+}  // namespace rts
+```
+
+**Note:** The `#include <stb_image.h>` inside the function body is not ideal. Instead, include it at the top of the file without `STB_IMAGE_IMPLEMENTATION` (that's only in `stb_loader.cpp`):
+
+```cpp
+// At the top of blp_loader.cpp, after other includes:
+#include <stb_image.h>
+```
+
+Remove the `#include` from inside `load_blp1_jpeg`.
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+Expected: All BlpLoaderTest tests PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add engine/assets/ tests/
+git commit -m "feat(assets): add BLP1/BLP2 texture loader (paletted and JPEG)"
+```
+
+---
+
+## Task 14: Assets — glTF Loader
+
+**Files:**
+- Create: `engine/assets/include/rts/assets/model_loader.hpp`
+- Create: `engine/assets/include/rts/assets/gltf_loader.hpp`
+- Modify: `engine/assets/src/gltf_loader.cpp` (replace placeholder)
+- Create: `tests/assets/test_gltf_loader.cpp`
+
+- [ ] **Step 1: Define IModelLoader interface**
+
+```cpp
+// engine/assets/include/rts/assets/model_loader.hpp
+#pragma once
+
+#include <rts/assets/model_data.hpp>
+#include <string>
+#include <vector>
+
+namespace rts {
+
+class IModelLoader {
+public:
+    virtual ~IModelLoader() = default;
+    virtual std::vector<ModelData> load(const std::string& path) = 0;
+};
+
+}  // namespace rts
+```
+
+- [ ] **Step 2: Write failing tests**
+
+```cpp
+// tests/assets/test_gltf_loader.cpp
+#include <gtest/gtest.h>
+#include <rts/assets/gltf_loader.hpp>
+#include <fstream>
+
+class GltfLoaderTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        // Write a minimal valid glTF 2.0 JSON file with an embedded triangle
+        const char* gltf_json = R"({
+            "asset": { "version": "2.0" },
+            "scene": 0,
+            "scenes": [{ "nodes": [0] }],
+            "nodes": [{ "mesh": 0 }],
+            "meshes": [{
+                "primitives": [{
+                    "attributes": { "POSITION": 0 },
+                    "indices": 1
+                }]
+            }],
+            "accessors": [
+                {
+                    "bufferView": 0, "componentType": 5126,
+                    "count": 3, "type": "VEC3",
+                    "max": [1.0, 1.0, 0.0], "min": [0.0, 0.0, 0.0]
+                },
+                {
+                    "bufferView": 1, "componentType": 5123,
+                    "count": 3, "type": "SCALAR"
+                }
+            ],
+            "bufferViews": [
+                { "buffer": 0, "byteOffset": 0, "byteLength": 36 },
+                { "buffer": 0, "byteOffset": 36, "byteLength": 6 }
+            ],
+            "buffers": [{
+                "uri": "triangle.bin",
+                "byteLength": 42
+            }]
+        })";
+
+        std::ofstream gltf_file("test_model.gltf");
+        gltf_file << gltf_json;
+        gltf_file.close();
+
+        // Write binary buffer: 3 vec3 positions + 3 u16 indices
+        std::ofstream bin_file("triangle.bin", std::ios::binary);
+        // Positions: (0,0,0), (1,0,0), (0,1,0)
+        float positions[] = {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
+        bin_file.write(reinterpret_cast<char*>(positions), sizeof(positions));
+        // Indices: 0, 1, 2
+        uint16_t indices[] = {0, 1, 2};
+        bin_file.write(reinterpret_cast<char*>(indices), sizeof(indices));
+    }
+
+    void TearDown() override {
+        std::remove("test_model.gltf");
+        std::remove("triangle.bin");
+    }
+};
+
+TEST_F(GltfLoaderTest, LoadsTriangle) {
+    rts::GltfLoader loader;
+    auto models = loader.load("test_model.gltf");
+
+    ASSERT_EQ(models.size(), 1u);
+    EXPECT_EQ(models[0].vertices.size(), 3u);
+    EXPECT_EQ(models[0].indices.size(), 3u);
+}
+
+TEST_F(GltfLoaderTest, VertexPositionsAreCorrect) {
+    rts::GltfLoader loader;
+    auto models = loader.load("test_model.gltf");
+
+    ASSERT_GE(models[0].vertices.size(), 3u);
+    auto& v0 = models[0].vertices[0];
+    EXPECT_FLOAT_EQ(v0.position.x, 0.0f);
+    EXPECT_FLOAT_EQ(v0.position.y, 0.0f);
+    EXPECT_FLOAT_EQ(v0.position.z, 0.0f);
+}
+
+TEST_F(GltfLoaderTest, ThrowsOnMissingFile) {
+    rts::GltfLoader loader;
+    EXPECT_THROW(loader.load("nonexistent.gltf"), std::runtime_error);
+}
+```
+
+- [ ] **Step 3: Add to tests CMakeLists.txt**
+
+Add `assets/test_gltf_loader.cpp` to the `rts_tests` sources and add `tinygltf::tinygltf` to link libraries.
+
+- [ ] **Step 4: Run tests to verify they fail**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+- [ ] **Step 5: Implement GltfLoader**
+
+```cpp
+// engine/assets/include/rts/assets/gltf_loader.hpp
+#pragma once
+
+#include <rts/assets/model_loader.hpp>
+
+namespace rts {
+
+class GltfLoader : public IModelLoader {
+public:
+    std::vector<ModelData> load(const std::string& path) override;
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/assets/src/gltf_loader.cpp
+#include <rts/assets/gltf_loader.hpp>
+#include <rts/core/logger.hpp>
+#include <tiny_gltf.h>
+#include <stdexcept>
+#include <glm/gtc/type_ptr.hpp>
+
+namespace rts {
+
+namespace {
+
+void process_mesh(const tinygltf::Model& gltf_model, const tinygltf::Mesh& gltf_mesh,
+                  std::vector<ModelData>& out) {
+    for (const auto& primitive : gltf_mesh.primitives) {
+        ModelData model;
+
+        // Positions (required)
+        {
+            auto it = primitive.attributes.find("POSITION");
+            if (it == primitive.attributes.end()) continue;
+
+            const auto& accessor = gltf_model.accessors[it->second];
+            const auto& view = gltf_model.bufferViews[accessor.bufferView];
+            const auto& buffer = gltf_model.buffers[view.buffer];
+            const float* positions = reinterpret_cast<const float*>(
+                buffer.data.data() + view.byteOffset + accessor.byteOffset);
+
+            model.vertices.resize(accessor.count);
+            for (size_t i = 0; i < accessor.count; ++i) {
+                model.vertices[i].position = {positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]};
+            }
+        }
+
+        // Normals (optional)
+        {
+            auto it = primitive.attributes.find("NORMAL");
+            if (it != primitive.attributes.end()) {
+                const auto& accessor = gltf_model.accessors[it->second];
+                const auto& view = gltf_model.bufferViews[accessor.bufferView];
+                const auto& buffer = gltf_model.buffers[view.buffer];
+                const float* normals = reinterpret_cast<const float*>(
+                    buffer.data.data() + view.byteOffset + accessor.byteOffset);
+
+                for (size_t i = 0; i < accessor.count; ++i) {
+                    model.vertices[i].normal = {normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]};
+                }
+            }
+        }
+
+        // UVs (optional)
+        {
+            auto it = primitive.attributes.find("TEXCOORD_0");
+            if (it != primitive.attributes.end()) {
+                const auto& accessor = gltf_model.accessors[it->second];
+                const auto& view = gltf_model.bufferViews[accessor.bufferView];
+                const auto& buffer = gltf_model.buffers[view.buffer];
+                const float* uvs = reinterpret_cast<const float*>(
+                    buffer.data.data() + view.byteOffset + accessor.byteOffset);
+
+                for (size_t i = 0; i < accessor.count; ++i) {
+                    model.vertices[i].uv = {uvs[i * 2], uvs[i * 2 + 1]};
+                }
+            }
+        }
+
+        // Bone indices (optional: JOINTS_0)
+        {
+            auto it = primitive.attributes.find("JOINTS_0");
+            if (it != primitive.attributes.end()) {
+                const auto& accessor = gltf_model.accessors[it->second];
+                const auto& view = gltf_model.bufferViews[accessor.bufferView];
+                const auto& buffer = gltf_model.buffers[view.buffer];
+
+                if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
+                    const uint16_t* joints = reinterpret_cast<const uint16_t*>(
+                        buffer.data.data() + view.byteOffset + accessor.byteOffset);
+                    for (size_t i = 0; i < accessor.count; ++i) {
+                        for (int j = 0; j < 4; ++j) {
+                            model.vertices[i].bone_ids[j] = joints[i * 4 + j];
+                        }
+                    }
+                } else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) {
+                    const uint8_t* joints = buffer.data.data() + view.byteOffset + accessor.byteOffset;
+                    for (size_t i = 0; i < accessor.count; ++i) {
+                        for (int j = 0; j < 4; ++j) {
+                            model.vertices[i].bone_ids[j] = joints[i * 4 + j];
+                        }
+                    }
+                }
+            }
+        }
+
+        // Bone weights (optional: WEIGHTS_0)
+        {
+            auto it = primitive.attributes.find("WEIGHTS_0");
+            if (it != primitive.attributes.end()) {
+                const auto& accessor = gltf_model.accessors[it->second];
+                const auto& view = gltf_model.bufferViews[accessor.bufferView];
+                const auto& buffer = gltf_model.buffers[view.buffer];
+                const float* weights = reinterpret_cast<const float*>(
+                    buffer.data.data() + view.byteOffset + accessor.byteOffset);
+
+                for (size_t i = 0; i < accessor.count; ++i) {
+                    for (int j = 0; j < 4; ++j) {
+                        model.vertices[i].bone_weights[j] = weights[i * 4 + j];
+                    }
+                }
+            }
+        }
+
+        // Indices
+        if (primitive.indices >= 0) {
+            const auto& accessor = gltf_model.accessors[primitive.indices];
+            const auto& view = gltf_model.bufferViews[accessor.bufferView];
+            const auto& buffer = gltf_model.buffers[view.buffer];
+
+            model.indices.resize(accessor.count);
+
+            if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
+                const uint16_t* idx = reinterpret_cast<const uint16_t*>(
+                    buffer.data.data() + view.byteOffset + accessor.byteOffset);
+                for (size_t i = 0; i < accessor.count; ++i) {
+                    model.indices[i] = idx[i];
+                }
+            } else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
+                const uint32_t* idx = reinterpret_cast<const uint32_t*>(
+                    buffer.data.data() + view.byteOffset + accessor.byteOffset);
+                for (size_t i = 0; i < accessor.count; ++i) {
+                    model.indices[i] = idx[i];
+                }
+            }
+        }
+
+        out.push_back(std::move(model));
+    }
+}
+
+void process_skeleton(const tinygltf::Model& gltf_model, const tinygltf::Skin& skin, Skeleton& skeleton) {
+    skeleton.bones.resize(skin.joints.size());
+
+    // Inverse bind matrices
+    if (skin.inverseBindMatrices >= 0) {
+        const auto& accessor = gltf_model.accessors[skin.inverseBindMatrices];
+        const auto& view = gltf_model.bufferViews[accessor.bufferView];
+        const auto& buffer = gltf_model.buffers[view.buffer];
+        const float* matrices = reinterpret_cast<const float*>(
+            buffer.data.data() + view.byteOffset + accessor.byteOffset);
+
+        for (size_t i = 0; i < skin.joints.size(); ++i) {
+            skeleton.bones[i].inverse_bind_pose = glm::make_mat4(matrices + i * 16);
+            skeleton.bones[i].name = gltf_model.nodes[skin.joints[i]].name;
+        }
+    }
+
+    // Parent indices
+    for (size_t i = 0; i < skin.joints.size(); ++i) {
+        int joint_node = skin.joints[i];
+        const auto& node = gltf_model.nodes[joint_node];
+
+        // Find parent in joints list
+        skeleton.bones[i].parent_index = -1;
+        for (size_t j = 0; j < skin.joints.size(); ++j) {
+            const auto& parent_node = gltf_model.nodes[skin.joints[j]];
+            for (int child : parent_node.children) {
+                if (child == joint_node && j != i) {
+                    skeleton.bones[i].parent_index = static_cast<i32>(j);
+                }
+            }
+        }
+    }
+
+    // Animations
+    for (const auto& anim : gltf_model.animations) {
+        AnimationSequence seq;
+        seq.name = anim.name;
+        seq.keyframes.resize(skin.joints.size());
+
+        for (const auto& channel : anim.channels) {
+            // Find which bone index this channel targets
+            int target_node = channel.target_node;
+            i32 bone_idx = -1;
+            for (size_t i = 0; i < skin.joints.size(); ++i) {
+                if (skin.joints[i] == target_node) {
+                    bone_idx = static_cast<i32>(i);
+                    break;
+                }
+            }
+            if (bone_idx < 0) continue;
+
+            const auto& sampler = anim.samplers[channel.sampler];
+
+            // Read timestamps
+            const auto& time_accessor = gltf_model.accessors[sampler.input];
+            const auto& time_view = gltf_model.bufferViews[time_accessor.bufferView];
+            const auto& time_buffer = gltf_model.buffers[time_view.buffer];
+            const float* times = reinterpret_cast<const float*>(
+                time_buffer.data.data() + time_view.byteOffset + time_accessor.byteOffset);
+
+            // Read values
+            const auto& val_accessor = gltf_model.accessors[sampler.output];
+            const auto& val_view = gltf_model.bufferViews[val_accessor.bufferView];
+            const auto& val_buffer = gltf_model.buffers[val_view.buffer];
+            const float* values = reinterpret_cast<const float*>(
+                val_buffer.data.data() + val_view.byteOffset + val_accessor.byteOffset);
+
+            auto& bone_kf = seq.keyframes[bone_idx];
+
+            // Ensure enough keyframes exist
+            for (size_t i = 0; i < time_accessor.count; ++i) {
+                // Find or create keyframe at this time
+                BoneKeyframe* kf = nullptr;
+                for (auto& existing : bone_kf) {
+                    if (std::abs(existing.time - times[i]) < 0.0001f) {
+                        kf = &existing;
+                        break;
+                    }
+                }
+                if (!kf) {
+                    bone_kf.push_back({times[i], Vec3(0.0f), Quat(1.0f, 0.0f, 0.0f, 0.0f), Vec3(1.0f)});
+                    kf = &bone_kf.back();
+                }
+
+                if (channel.target_path == "translation") {
+                    kf->translation = {values[i * 3], values[i * 3 + 1], values[i * 3 + 2]};
+                } else if (channel.target_path == "rotation") {
+                    kf->rotation = Quat(values[i * 4 + 3], values[i * 4], values[i * 4 + 1], values[i * 4 + 2]);
+                } else if (channel.target_path == "scale") {
+                    kf->scale = {values[i * 3], values[i * 3 + 1], values[i * 3 + 2]};
+                }
+
+                if (times[i] > seq.duration) {
+                    seq.duration = times[i];
+                }
+            }
+        }
+
+        skeleton.animations.push_back(std::move(seq));
+    }
+}
+
+}  // anonymous namespace
+
+std::vector<ModelData> GltfLoader::load(const std::string& path) {
+    tinygltf::Model gltf_model;
+    tinygltf::TinyGLTF loader;
+    std::string err, warn;
+
+    bool ret;
+    if (path.ends_with(".glb")) {
+        ret = loader.LoadBinaryFromFile(&gltf_model, &err, &warn, path);
+    } else {
+        ret = loader.LoadASCIIFromFile(&gltf_model, &err, &warn, path);
+    }
+
+    if (!warn.empty()) RTS_LOG_WARN("glTF warning: {}", warn);
+    if (!ret) throw std::runtime_error("Failed to load glTF: " + err);
+
+    std::vector<ModelData> models;
+
+    for (const auto& mesh : gltf_model.meshes) {
+        process_mesh(gltf_model, mesh, models);
+    }
+
+    // Apply skeleton to all models if skins exist
+    if (!gltf_model.skins.empty()) {
+        Skeleton skeleton;
+        process_skeleton(gltf_model, gltf_model.skins[0], skeleton);
+        for (auto& model : models) {
+            model.skeleton = skeleton;
+        }
+    }
+
+    return models;
+}
+
+}  // namespace rts
+```
+
+- [ ] **Step 6: Run tests to verify they pass**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+Expected: All GltfLoaderTest tests PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add engine/assets/ tests/
+git commit -m "feat(assets): add glTF 2.0 loader with skeletal animation support"
+```
+
+---
+
+## Task 15: Assets — MDX Loader
+
+**Files:**
+- Create: `engine/assets/include/rts/assets/mdx_loader.hpp`
+- Modify: `engine/assets/src/mdx_loader.cpp` (replace placeholder)
+- Create: `tests/assets/test_mdx_loader.cpp`
+
+- [ ] **Step 1: Write failing tests**
+
+```cpp
+// tests/assets/test_mdx_loader.cpp
+#include <gtest/gtest.h>
+#include <rts/assets/mdx_loader.hpp>
+#include <fstream>
+#include <cstring>
+
+// Helper to write a u32 to a buffer
+static void write_u32(std::vector<uint8_t>& buf, uint32_t val) {
+    buf.push_back(val & 0xFF);
+    buf.push_back((val >> 8) & 0xFF);
+    buf.push_back((val >> 16) & 0xFF);
+    buf.push_back((val >> 24) & 0xFF);
+}
+
+static void write_f32(std::vector<uint8_t>& buf, float val) {
+    uint32_t bits;
+    std::memcpy(&bits, &val, 4);
+    write_u32(buf, bits);
+}
+
+static void write_tag(std::vector<uint8_t>& buf, const char* tag) {
+    for (int i = 0; i < 4; ++i) buf.push_back(static_cast<uint8_t>(tag[i]));
+}
+
+class MdxLoaderTest : public ::testing::Test {
+protected:
+    // Creates a minimal MDX v800 with one triangle (no bones, no animations)
+    void create_minimal_mdx(const std::string& filename) {
+        std::vector<uint8_t> data;
+
+        // MDLX magic
+        write_tag(data, "MDLX");
+
+        // VERS chunk
+        write_tag(data, "VERS");
+        write_u32(data, 4);  // chunk size
+        write_u32(data, 800); // version
+
+        // GEOS chunk (Geosets) — minimal single triangle
+        std::vector<uint8_t> geos;
+
+        // Single geoset
+        std::vector<uint8_t> geo;
+
+        // VRTX (vertices) sub-chunk: 3 vertices
+        write_tag(geo, "VRTX");
+        write_u32(geo, 3);  // count
+        // vertex 0: (0, 0, 0)
+        write_f32(geo, 0.0f); write_f32(geo, 0.0f); write_f32(geo, 0.0f);
+        // vertex 1: (1, 0, 0)
+        write_f32(geo, 1.0f); write_f32(geo, 0.0f); write_f32(geo, 0.0f);
+        // vertex 2: (0, 1, 0)
+        write_f32(geo, 0.0f); write_f32(geo, 1.0f); write_f32(geo, 0.0f);
+
+        // NRMS (normals) sub-chunk
+        write_tag(geo, "NRMS");
+        write_u32(geo, 3);
+        for (int i = 0; i < 3; ++i) {
+            write_f32(geo, 0.0f); write_f32(geo, 0.0f); write_f32(geo, 1.0f);
+        }
+
+        // PTYP (primitive types) — triangles
+        write_tag(geo, "PTYP");
+        write_u32(geo, 1);  // 1 group
+        write_u32(geo, 4);  // type 4 = triangles
+
+        // PCNT (primitive counts)
+        write_tag(geo, "PCNT");
+        write_u32(geo, 1);
+        write_u32(geo, 3);  // 3 indices in this group
+
+        // PVTX (primitive vertices / indices)
+        write_tag(geo, "PVTX");
+        write_u32(geo, 3);  // count
+        // u16 indices
+        geo.push_back(0); geo.push_back(0);
+        geo.push_back(1); geo.push_back(0);
+        geo.push_back(2); geo.push_back(0);
+
+        // UVBS (UV coordinates)
+        write_tag(geo, "UVBS");
+        write_u32(geo, 3);
+        write_f32(geo, 0.0f); write_f32(geo, 0.0f);
+        write_f32(geo, 1.0f); write_f32(geo, 0.0f);
+        write_f32(geo, 0.0f); write_f32(geo, 1.0f);
+
+        // Geoset total size = 4 (inclusive size u32) + geo content
+        // MDX geoset starts with inclusive size
+        write_tag(geos, "");  // placeholder — we write geoset size below
+
+        // Actually, MDX geosets: each geoset starts with u32 inclusive_size
+        // Let's restructure:
+        std::vector<uint8_t> geos_content;
+        uint32_t geo_inclusive_size = static_cast<uint32_t>(4 + geo.size());
+        write_u32(geos_content, geo_inclusive_size);
+        geos_content.insert(geos_content.end(), geo.begin(), geo.end());
+
+        // GEOS chunk header
+        write_tag(data, "GEOS");
+        write_u32(data, static_cast<uint32_t>(geos_content.size()));
+        data.insert(data.end(), geos_content.begin(), geos_content.end());
+
+        std::ofstream file(filename, std::ios::binary);
+        file.write(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(data.size()));
+    }
+
+    void TearDown() override {
+        std::remove("test.mdx");
+    }
+};
+
+TEST_F(MdxLoaderTest, LoadsMinimalMdx) {
+    create_minimal_mdx("test.mdx");
+
+    rts::MdxLoader loader;
+    auto models = loader.load("test.mdx");
+
+    ASSERT_EQ(models.size(), 1u);
+    EXPECT_EQ(models[0].vertices.size(), 3u);
+    EXPECT_EQ(models[0].indices.size(), 3u);
+}
+
+TEST_F(MdxLoaderTest, VertexPositionsCorrect) {
+    create_minimal_mdx("test.mdx");
+
+    rts::MdxLoader loader;
+    auto models = loader.load("test.mdx");
+
+    ASSERT_GE(models[0].vertices.size(), 3u);
+    EXPECT_FLOAT_EQ(models[0].vertices[1].position.x, 1.0f);
+    EXPECT_FLOAT_EQ(models[0].vertices[2].position.y, 1.0f);
+}
+
+TEST_F(MdxLoaderTest, ThrowsOnInvalidMagic) {
+    std::ofstream file("test.mdx", std::ios::binary);
+    file.write("NOPE", 4);
+    file.close();
+
+    rts::MdxLoader loader;
+    EXPECT_THROW(loader.load("test.mdx"), std::runtime_error);
+}
+
+TEST_F(MdxLoaderTest, ThrowsOnMissingFile) {
+    rts::MdxLoader loader;
+    EXPECT_THROW(loader.load("nonexistent.mdx"), std::runtime_error);
+}
+```
+
+- [ ] **Step 2: Add to tests CMakeLists.txt**
+
+Add `assets/test_mdx_loader.cpp` to the `rts_tests` sources.
+
+- [ ] **Step 3: Run tests to verify they fail**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+- [ ] **Step 4: Implement MdxLoader**
+
+```cpp
+// engine/assets/include/rts/assets/mdx_loader.hpp
+#pragma once
+
+#include <rts/assets/model_loader.hpp>
+
+namespace rts {
+
+class MdxLoader : public IModelLoader {
+public:
+    std::vector<ModelData> load(const std::string& path) override;
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/assets/src/mdx_loader.cpp
+#include <rts/assets/mdx_loader.hpp>
+#include <rts/core/logger.hpp>
+#include <fstream>
+#include <cstring>
+#include <stdexcept>
+
+namespace rts {
+
+namespace {
+
+class BinaryReader {
+public:
+    BinaryReader(const std::vector<u8>& data) : m_data(data) {}
+
+    template <typename T>
+    T read() {
+        if (m_pos + sizeof(T) > m_data.size()) {
+            throw std::runtime_error("MDX: unexpected end of file");
+        }
+        T val;
+        std::memcpy(&val, m_data.data() + m_pos, sizeof(T));
+        m_pos += sizeof(T);
+        return val;
+    }
+
+    std::string read_tag() {
+        char tag[5] = {};
+        std::memcpy(tag, m_data.data() + m_pos, 4);
+        m_pos += 4;
+        return std::string(tag, 4);
+    }
+
+    void skip(size_t bytes) { m_pos += bytes; }
+    size_t pos() const { return m_pos; }
+    size_t size() const { return m_data.size(); }
+    bool has_data() const { return m_pos < m_data.size(); }
+    void seek(size_t pos) { m_pos = pos; }
+
+private:
+    const std::vector<u8>& m_data;
+    size_t m_pos = 0;
+};
+
+ModelData parse_geoset(BinaryReader& reader, size_t end_pos) {
+    ModelData model;
+
+    while (reader.pos() < end_pos) {
+        std::string sub_tag = reader.read_tag();
+        u32 count = reader.read<u32>();
+
+        if (sub_tag == "VRTX") {
+            model.vertices.resize(count);
+            for (u32 i = 0; i < count; ++i) {
+                model.vertices[i].position.x = reader.read<f32>();
+                model.vertices[i].position.y = reader.read<f32>();
+                model.vertices[i].position.z = reader.read<f32>();
+            }
+        } else if (sub_tag == "NRMS") {
+            for (u32 i = 0; i < count && i < static_cast<u32>(model.vertices.size()); ++i) {
+                model.vertices[i].normal.x = reader.read<f32>();
+                model.vertices[i].normal.y = reader.read<f32>();
+                model.vertices[i].normal.z = reader.read<f32>();
+            }
+        } else if (sub_tag == "UVBS") {
+            for (u32 i = 0; i < count && i < static_cast<u32>(model.vertices.size()); ++i) {
+                model.vertices[i].uv.x = reader.read<f32>();
+                model.vertices[i].uv.y = reader.read<f32>();
+            }
+        } else if (sub_tag == "PVTX") {
+            model.indices.resize(count);
+            for (u32 i = 0; i < count; ++i) {
+                model.indices[i] = reader.read<u16>();
+            }
+        } else if (sub_tag == "PTYP" || sub_tag == "PCNT") {
+            // Skip primitive type/count data (u32 per group)
+            reader.skip(count * 4);
+        } else {
+            // Unknown sub-chunk, skip based on count heuristic
+            // This is tricky in MDX — for safety, break
+            RTS_LOG_WARN("MDX: unknown geoset sub-chunk '{}', stopping geoset parse", sub_tag);
+            break;
+        }
+    }
+
+    return model;
+}
+
+void parse_bones(BinaryReader& reader, u32 chunk_size, Skeleton& skeleton) {
+    size_t end = reader.pos() + chunk_size;
+
+    while (reader.pos() < end) {
+        Bone bone;
+
+        // Bone inherits from Node: read node data
+        u32 node_inclusive_size = reader.read<u32>();
+        size_t node_end = reader.pos() - 4 + node_inclusive_size;
+
+        // Node name (80 bytes fixed)
+        char name[81] = {};
+        for (int i = 0; i < 80; ++i) {
+            name[i] = static_cast<char>(reader.read<u8>());
+        }
+        bone.name = std::string(name);
+
+        // objectId, parentId
+        reader.read<u32>();  // objectId
+        bone.parent_index = reader.read<i32>();
+
+        // Skip rest of node (flags + tracks)
+        if (reader.pos() < node_end) {
+            reader.seek(node_end);
+        }
+
+        // After node: geoset ID and geoset anim ID
+        reader.read<u32>();  // geosetId
+        reader.read<u32>();  // geosetAnimId
+
+        skeleton.bones.push_back(std::move(bone));
+    }
+}
+
+void parse_sequences(BinaryReader& reader, u32 chunk_size, Skeleton& skeleton) {
+    size_t end = reader.pos() + chunk_size;
+
+    while (reader.pos() < end) {
+        AnimationSequence seq;
+
+        // Name (80 bytes fixed)
+        char name[81] = {};
+        for (int i = 0; i < 80; ++i) {
+            name[i] = static_cast<char>(reader.read<u8>());
+        }
+        seq.name = std::string(name);
+
+        u32 interval_start = reader.read<u32>();
+        u32 interval_end = reader.read<u32>();
+        seq.duration = static_cast<f32>(interval_end - interval_start);
+
+        // moveSpeed, nonLooping, rarity, syncPoint, bounds
+        reader.read<f32>();  // moveSpeed
+        u32 non_looping = reader.read<u32>();
+        seq.looping = (non_looping == 0);
+        reader.read<f32>();  // rarity
+        reader.read<u32>();  // syncPoint
+
+        // BoundsRadius + min + max
+        reader.read<f32>();  // boundsRadius
+        reader.skip(6 * 4);  // min vec3 + max vec3
+
+        skeleton.animations.push_back(std::move(seq));
+    }
+}
+
+}  // anonymous namespace
+
+std::vector<ModelData> MdxLoader::load(const std::string& path) {
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open MDX file: " + path);
+    }
+
+    auto file_size = file.tellg();
+    file.seekg(0);
+    std::vector<u8> file_data(static_cast<size_t>(file_size));
+    file.read(reinterpret_cast<char*>(file_data.data()), file_size);
+
+    BinaryReader reader(file_data);
+
+    // Verify magic
+    std::string magic = reader.read_tag();
+    if (magic != "MDLX") {
+        throw std::runtime_error("Invalid MDX magic: " + magic);
+    }
+
+    std::vector<ModelData> models;
+    Skeleton skeleton;
+
+    while (reader.has_data() && reader.pos() + 8 <= reader.size()) {
+        std::string tag = reader.read_tag();
+        u32 chunk_size = reader.read<u32>();
+        size_t chunk_end = reader.pos() + chunk_size;
+
+        if (tag == "VERS") {
+            u32 version = reader.read<u32>();
+            RTS_LOG_INFO("MDX version: {}", version);
+        } else if (tag == "GEOS") {
+            // Parse geosets
+            while (reader.pos() < chunk_end) {
+                u32 geoset_inclusive_size = reader.read<u32>();
+                size_t geoset_end = reader.pos() - 4 + geoset_inclusive_size;
+                auto model = parse_geoset(reader, geoset_end);
+                models.push_back(std::move(model));
+                reader.seek(geoset_end);
+            }
+        } else if (tag == "BONE") {
+            parse_bones(reader, chunk_size, skeleton);
+        } else if (tag == "SEQS") {
+            parse_sequences(reader, chunk_size, skeleton);
+        } else {
+            // Skip unknown chunks
+            reader.skip(chunk_size);
+        }
+    }
+
+    // Apply skeleton to all models
+    if (skeleton.has_bones()) {
+        for (auto& model : models) {
+            model.skeleton = skeleton;
+        }
+    }
+
+    RTS_LOG_INFO("MDX loaded: {} geosets, {} bones, {} animations",
+                 models.size(), skeleton.bones.size(), skeleton.animations.size());
+
+    return models;
+}
+
+}  // namespace rts
+```
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+Expected: All MdxLoaderTest tests PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add engine/assets/ tests/
+git commit -m "feat(assets): add MDX v800 loader with geometry, bones, and sequences"
+```
+
+---
+
+## Task 16: Assets — AssetManager
+
+**Files:**
+- Create: `engine/assets/include/rts/assets/asset_manager.hpp`
+- Modify: `engine/assets/src/asset_manager.cpp` (replace placeholder)
+- Create: `tests/assets/test_asset_manager.cpp`
+
+- [ ] **Step 1: Write failing tests**
+
+```cpp
+// tests/assets/test_asset_manager.cpp
+#include <gtest/gtest.h>
+#include <rts/assets/asset_manager.hpp>
+#include <rts/assets/stb_loader.hpp>
+#include <fstream>
+
+class AssetManagerTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        // Create a minimal PNG for testing
+        const unsigned char png_data[] = {
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+            0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+            0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41,
+            0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+            0x00, 0x00, 0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC,
+            0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,
+            0x44, 0xAE, 0x42, 0x60, 0x82
+        };
+        std::ofstream file("test_asset.png", std::ios::binary);
+        file.write(reinterpret_cast<const char*>(png_data), sizeof(png_data));
+    }
+
+    void TearDown() override {
+        std::remove("test_asset.png");
+    }
+};
+
+TEST_F(AssetManagerTest, RegisterAndUseTextureLoader) {
+    rts::AssetManager manager;
+    manager.register_texture_loader(".png", std::make_unique<rts::StbLoader>());
+    manager.register_texture_loader(".jpg", std::make_unique<rts::StbLoader>());
+
+    auto data = manager.load_texture("test_asset.png");
+    EXPECT_EQ(data.width, 1);
+    EXPECT_EQ(data.height, 1);
+}
+
+TEST_F(AssetManagerTest, CachesLoadedTextures) {
+    rts::AssetManager manager;
+    manager.register_texture_loader(".png", std::make_unique<rts::StbLoader>());
+
+    auto data1 = manager.load_texture("test_asset.png");
+    auto data2 = manager.load_texture("test_asset.png");
+
+    // Both should return the same data (cached)
+    EXPECT_EQ(data1.width, data2.width);
+    EXPECT_EQ(data1.pixels.size(), data2.pixels.size());
+}
+
+TEST_F(AssetManagerTest, ThrowsOnUnknownExtension) {
+    rts::AssetManager manager;
+    EXPECT_THROW(manager.load_texture("file.xyz"), std::runtime_error);
+}
+```
+
+- [ ] **Step 2: Add to tests CMakeLists.txt**
+
+Add `assets/test_asset_manager.cpp` to the `rts_tests` sources.
+
+- [ ] **Step 3: Run tests to verify they fail**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+- [ ] **Step 4: Implement AssetManager**
+
+```cpp
+// engine/assets/include/rts/assets/asset_manager.hpp
+#pragma once
+
+#include <rts/assets/texture_loader.hpp>
+#include <rts/assets/model_loader.hpp>
+#include <memory>
+#include <string>
+#include <unordered_map>
+
+namespace rts {
+
+class AssetManager {
+public:
+    void register_texture_loader(const std::string& extension, std::unique_ptr<ITextureLoader> loader);
+    void register_model_loader(const std::string& extension, std::unique_ptr<IModelLoader> loader);
+
+    TextureData load_texture(const std::string& path);
+    std::vector<ModelData> load_model(const std::string& path);
+
+    void clear_cache();
+
+private:
+    std::string get_extension(const std::string& path) const;
+
+    std::unordered_map<std::string, std::unique_ptr<ITextureLoader>> m_texture_loaders;
+    std::unordered_map<std::string, std::unique_ptr<IModelLoader>> m_model_loaders;
+    std::unordered_map<std::string, TextureData> m_texture_cache;
+    std::unordered_map<std::string, std::vector<ModelData>> m_model_cache;
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/assets/src/asset_manager.cpp
+#include <rts/assets/asset_manager.hpp>
+#include <rts/core/logger.hpp>
+#include <stdexcept>
+#include <algorithm>
+
+namespace rts {
+
+void AssetManager::register_texture_loader(const std::string& extension, std::unique_ptr<ITextureLoader> loader) {
+    m_texture_loaders[extension] = std::move(loader);
+}
+
+void AssetManager::register_model_loader(const std::string& extension, std::unique_ptr<IModelLoader> loader) {
+    m_model_loaders[extension] = std::move(loader);
+}
+
+TextureData AssetManager::load_texture(const std::string& path) {
+    auto cache_it = m_texture_cache.find(path);
+    if (cache_it != m_texture_cache.end()) {
+        return cache_it->second;
+    }
+
+    auto ext = get_extension(path);
+    auto loader_it = m_texture_loaders.find(ext);
+    if (loader_it == m_texture_loaders.end()) {
+        throw std::runtime_error("No texture loader registered for extension: " + ext);
+    }
+
+    auto data = loader_it->second->load(path);
+    m_texture_cache[path] = data;
+    RTS_LOG_INFO("Texture loaded: {} ({}x{})", path, data.width, data.height);
+    return data;
+}
+
+std::vector<ModelData> AssetManager::load_model(const std::string& path) {
+    auto cache_it = m_model_cache.find(path);
+    if (cache_it != m_model_cache.end()) {
+        return cache_it->second;
+    }
+
+    auto ext = get_extension(path);
+    auto loader_it = m_model_loaders.find(ext);
+    if (loader_it == m_model_loaders.end()) {
+        throw std::runtime_error("No model loader registered for extension: " + ext);
+    }
+
+    auto models = loader_it->second->load(path);
+    m_model_cache[path] = models;
+    RTS_LOG_INFO("Model loaded: {} ({} meshes)", path, models.size());
+    return models;
+}
+
+void AssetManager::clear_cache() {
+    m_texture_cache.clear();
+    m_model_cache.clear();
+}
+
+std::string AssetManager::get_extension(const std::string& path) const {
+    auto dot = path.rfind('.');
+    if (dot == std::string::npos) {
+        throw std::runtime_error("File has no extension: " + path);
+    }
+    std::string ext = path.substr(dot);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    return ext;
+}
+
+}  // namespace rts
+```
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+Expected: All AssetManagerTest tests PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add engine/assets/ tests/
+git commit -m "feat(assets): add AssetManager with loader registry and caching"
+```
+
+---
+
+## Task 17: Terrain
+
+**Files:**
+- Create: `engine/terrain/CMakeLists.txt`
+- Create: `engine/terrain/include/rts/terrain/terrain.hpp`
+- Create: `engine/terrain/src/terrain.cpp`
+- Create: `tests/terrain/test_terrain.cpp`
+
+- [ ] **Step 1: Create terrain CMakeLists.txt**
+
+```cmake
+add_library(rts_terrain STATIC
+    src/terrain.cpp
+)
+
+target_include_directories(rts_terrain PUBLIC include)
+target_link_libraries(rts_terrain PUBLIC rts::core rts::renderer rts::assets)
+
+add_library(rts::terrain ALIAS rts_terrain)
+```
+
+- [ ] **Step 2: Write failing tests**
+
+```cpp
+// tests/terrain/test_terrain.cpp
+#include <gtest/gtest.h>
+#include <rts/terrain/terrain.hpp>
+
+TEST(TerrainTest, GeneratesFlatTerrain) {
+    // 4x4 grid, all heights = 0
+    std::vector<float> heights(16, 0.0f);
+    rts::TerrainData data = rts::Terrain::generate(heights, 4, 4, 1.0f);
+
+    // 4x4 grid = 4*4 = 16 vertices
+    EXPECT_EQ(data.vertices.size(), 16u);
+
+    // (4-1) * (4-1) * 2 triangles * 3 indices = 54
+    EXPECT_EQ(data.indices.size(), 54u);
+}
+
+TEST(TerrainTest, HeightQueryReturnsCorrectValue) {
+    // 3x3 grid with center elevated
+    std::vector<float> heights = {
+        0, 0, 0,
+        0, 5, 0,
+        0, 0, 0
+    };
+    rts::TerrainData data = rts::Terrain::generate(heights, 3, 3, 1.0f);
+
+    // Center vertex should be at height 5
+    // Vertex at (1,1) in the grid = index 4
+    EXPECT_FLOAT_EQ(data.vertices[4].position.y, 5.0f);
+}
+
+TEST(TerrainTest, NormalsAreNormalized) {
+    std::vector<float> heights(9, 0.0f);
+    rts::TerrainData data = rts::Terrain::generate(heights, 3, 3, 1.0f);
+
+    for (const auto& v : data.vertices) {
+        float len = glm::length(v.normal);
+        EXPECT_NEAR(len, 1.0f, 0.01f);
+    }
+}
+
+TEST(TerrainTest, UVsSpanZeroToOne) {
+    std::vector<float> heights(16, 0.0f);
+    rts::TerrainData data = rts::Terrain::generate(heights, 4, 4, 1.0f);
+
+    // First vertex UV = (0,0), last = (1,1)
+    EXPECT_FLOAT_EQ(data.vertices[0].uv.x, 0.0f);
+    EXPECT_FLOAT_EQ(data.vertices[0].uv.y, 0.0f);
+    EXPECT_FLOAT_EQ(data.vertices[15].uv.x, 1.0f);
+    EXPECT_FLOAT_EQ(data.vertices[15].uv.y, 1.0f);
+}
+
+TEST(TerrainTest, HeightAtPosition) {
+    std::vector<float> heights = {
+        0, 0, 0,
+        0, 10, 0,
+        0, 0, 0
+    };
+    rts::TerrainData data = rts::Terrain::generate(heights, 3, 3, 1.0f);
+
+    // At the center of the grid
+    float h = rts::Terrain::height_at(data, 1.0f, 1.0f);
+    EXPECT_FLOAT_EQ(h, 10.0f);
+
+    // At corner
+    float h0 = rts::Terrain::height_at(data, 0.0f, 0.0f);
+    EXPECT_FLOAT_EQ(h0, 0.0f);
+}
+```
+
+- [ ] **Step 3: Add terrain tests to tests CMakeLists.txt**
+
+Add `terrain/test_terrain.cpp` to sources and `rts::terrain` to link libraries.
+
+- [ ] **Step 4: Run tests to verify they fail**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+- [ ] **Step 5: Implement Terrain**
+
+```cpp
+// engine/terrain/include/rts/terrain/terrain.hpp
+#pragma once
+
+#include <rts/core/types.hpp>
+#include <rts/renderer/mesh.hpp>
+#include <vector>
+
+namespace rts {
+
+struct TerrainData {
+    std::vector<Vertex> vertices;
+    std::vector<u32> indices;
+    u32 grid_width = 0;
+    u32 grid_height = 0;
+    f32 cell_size = 1.0f;
+};
+
+class Terrain {
+public:
+    static TerrainData generate(const std::vector<f32>& heights,
+                                 u32 grid_width, u32 grid_height, f32 cell_size);
+
+    static f32 height_at(const TerrainData& data, f32 world_x, f32 world_z);
+
+    static std::vector<f32> load_heightmap(const std::string& path,
+                                            u32& out_width, u32& out_height);
+};
+
+}  // namespace rts
+```
+
+```cpp
+// engine/terrain/src/terrain.cpp
+#include <rts/terrain/terrain.hpp>
+#include <rts/core/logger.hpp>
+#include <algorithm>
+#include <cmath>
+
+namespace rts {
+
+TerrainData Terrain::generate(const std::vector<f32>& heights,
+                               u32 grid_width, u32 grid_height, f32 cell_size) {
+    TerrainData data;
+    data.grid_width = grid_width;
+    data.grid_height = grid_height;
+    data.cell_size = cell_size;
+
+    // Generate vertices
+    data.vertices.resize(grid_width * grid_height);
+    for (u32 z = 0; z < grid_height; ++z) {
+        for (u32 x = 0; x < grid_width; ++x) {
+            u32 idx = z * grid_width + x;
+            auto& v = data.vertices[idx];
+            v.position = Vec3(
+                static_cast<f32>(x) * cell_size,
+                heights[idx],
+                static_cast<f32>(z) * cell_size
+            );
+            v.uv = Vec2(
+                static_cast<f32>(x) / static_cast<f32>(grid_width - 1),
+                static_cast<f32>(z) / static_cast<f32>(grid_height - 1)
+            );
+        }
+    }
+
+    // Generate indices (two triangles per quad)
+    for (u32 z = 0; z < grid_height - 1; ++z) {
+        for (u32 x = 0; x < grid_width - 1; ++x) {
+            u32 tl = z * grid_width + x;
+            u32 tr = tl + 1;
+            u32 bl = (z + 1) * grid_width + x;
+            u32 br = bl + 1;
+
+            data.indices.push_back(tl);
+            data.indices.push_back(bl);
+            data.indices.push_back(tr);
+
+            data.indices.push_back(tr);
+            data.indices.push_back(bl);
+            data.indices.push_back(br);
+        }
+    }
+
+    // Calculate normals
+    // Initialize to zero
+    for (auto& v : data.vertices) {
+        v.normal = Vec3(0.0f);
+    }
+
+    // Accumulate face normals
+    for (size_t i = 0; i < data.indices.size(); i += 3) {
+        auto& v0 = data.vertices[data.indices[i]];
+        auto& v1 = data.vertices[data.indices[i + 1]];
+        auto& v2 = data.vertices[data.indices[i + 2]];
+
+        Vec3 edge1 = v1.position - v0.position;
+        Vec3 edge2 = v2.position - v0.position;
+        Vec3 face_normal = glm::cross(edge1, edge2);
+
+        v0.normal += face_normal;
+        v1.normal += face_normal;
+        v2.normal += face_normal;
+    }
+
+    // Normalize
+    for (auto& v : data.vertices) {
+        if (glm::length(v.normal) > 0.0f) {
+            v.normal = glm::normalize(v.normal);
+        } else {
+            v.normal = Vec3(0.0f, 1.0f, 0.0f);
+        }
+    }
+
+    return data;
+}
+
+f32 Terrain::height_at(const TerrainData& data, f32 world_x, f32 world_z) {
+    f32 grid_x = world_x / data.cell_size;
+    f32 grid_z = world_z / data.cell_size;
+
+    u32 x0 = static_cast<u32>(std::floor(grid_x));
+    u32 z0 = static_cast<u32>(std::floor(grid_z));
+
+    x0 = std::min(x0, data.grid_width - 1);
+    z0 = std::min(z0, data.grid_height - 1);
+    u32 x1 = std::min(x0 + 1, data.grid_width - 1);
+    u32 z1 = std::min(z0 + 1, data.grid_height - 1);
+
+    f32 fx = grid_x - static_cast<f32>(x0);
+    f32 fz = grid_z - static_cast<f32>(z0);
+    fx = std::clamp(fx, 0.0f, 1.0f);
+    fz = std::clamp(fz, 0.0f, 1.0f);
+
+    f32 h00 = data.vertices[z0 * data.grid_width + x0].position.y;
+    f32 h10 = data.vertices[z0 * data.grid_width + x1].position.y;
+    f32 h01 = data.vertices[z1 * data.grid_width + x0].position.y;
+    f32 h11 = data.vertices[z1 * data.grid_width + x1].position.y;
+
+    // Bilinear interpolation
+    f32 h_top = h00 + (h10 - h00) * fx;
+    f32 h_bottom = h01 + (h11 - h01) * fx;
+    return h_top + (h_bottom - h_top) * fz;
+}
+
+std::vector<f32> Terrain::load_heightmap(const std::string& path,
+                                          u32& out_width, u32& out_height) {
+    // Uses stb_image to load a grayscale heightmap
+    // The caller should use StbLoader for the raw load, this converts to heights
+    // For now, this is a helper that loads raw pixel data as height values
+    // Normalized to [0, 1] range from u8 [0, 255]
+    // Full implementation deferred to editor integration
+    RTS_LOG_WARN("Terrain::load_heightmap not yet integrated with StbLoader");
+    out_width = 0;
+    out_height = 0;
+    return {};
+}
+
+}  // namespace rts
+```
+
+- [ ] **Step 6: Run tests to verify they pass**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+Expected: All TerrainTest tests PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add engine/terrain/ tests/
+git commit -m "feat(terrain): add heightmap terrain generation with normals and height queries"
+```
+
+---
+
+## Task 18: Editor — Main Loop with ImGui
+
+**Files:**
+- Modify: `editor/CMakeLists.txt`
+- Modify: `editor/src/main.cpp`
+
+- [ ] **Step 1: Update editor CMakeLists.txt**
+
+```cmake
+add_executable(editor
+    src/main.cpp
+)
+
+target_link_libraries(editor PRIVATE
+    rts::core
+    rts::platform
+    rts::renderer
+    rts::assets
+    rts::terrain
+    rts::camera
+    imgui::imgui
+    glad
+)
+```
+
+- [ ] **Step 2: Implement main loop**
+
+```cpp
+// editor/src/main.cpp
+#include <rts/core/logger.hpp>
+#include <rts/core/event_bus.hpp>
+#include <rts/platform/window.hpp>
+#include <rts/platform/input.hpp>
+#include <rts/platform/time.hpp>
+#include <rts/renderer/renderer.hpp>
+#include <rts/renderer/shader.hpp>
+#include <rts/renderer/mesh.hpp>
+#include <rts/renderer/texture.hpp>
+#include <rts/assets/asset_manager.hpp>
+#include <rts/assets/stb_loader.hpp>
+#include <rts/assets/blp_loader.hpp>
+#include <rts/assets/gltf_loader.hpp>
+#include <rts/assets/mdx_loader.hpp>
+#include <rts/terrain/terrain.hpp>
+#include <rts/camera/camera.hpp>
+
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+#include <GLFW/glfw3.h>
+
+int main() {
+    // Init core
+    rts::Logger::init();
+    RTS_LOG_INFO("RTS Engine Editor starting...");
+
+    // Create window
+    rts::GlfwWindow window({.title = "RTS Engine Editor", .width = 1600, .height = 900});
+    rts::Input input(window.native_handle());
+    rts::Time time;
+
+    // Init renderer
+    rts::Renderer renderer;
+    renderer.init();
+
+    // Init camera
+    rts::RtsCamera camera;
+    camera.set_aspect_ratio(static_cast<float>(window.width()) / static_cast<float>(window.height()));
+
+    // Init asset manager
+    rts::AssetManager asset_manager;
+    asset_manager.register_texture_loader(".png", std::make_unique<rts::StbLoader>());
+    asset_manager.register_texture_loader(".jpg", std::make_unique<rts::StbLoader>());
+    asset_manager.register_texture_loader(".jpeg", std::make_unique<rts::StbLoader>());
+    asset_manager.register_texture_loader(".blp", std::make_unique<rts::BlpLoader>());
+    asset_manager.register_model_loader(".gltf", std::make_unique<rts::GltfLoader>());
+    asset_manager.register_model_loader(".glb", std::make_unique<rts::GltfLoader>());
+    asset_manager.register_model_loader(".mdx", std::make_unique<rts::MdxLoader>());
+
+    // Generate a flat test terrain
+    std::vector<float> heights(64 * 64, 0.0f);
+    auto terrain_data = rts::Terrain::generate(heights, 64, 64, 1.0f);
+    rts::Mesh terrain_mesh(terrain_data.vertices, terrain_data.indices);
+
+    // Load shaders
+    auto terrain_shader = rts::ShaderProgram::from_files("assets/shaders/terrain.vert",
+                                                          "assets/shaders/terrain.frag");
+    auto model_shader = rts::ShaderProgram::from_files("assets/shaders/model.vert",
+                                                        "assets/shaders/model.frag");
+
+    // Setup ImGui
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    ImGui::StyleColorsDark();
+    ImGui_ImplGlfw_InitForOpenGL(window.native_handle(), true);
+    ImGui_ImplOpenGL3_Init("#version 330");
+
+    // Light settings
+    rts::Vec3 light_dir = glm::normalize(rts::Vec3(-0.5f, -1.0f, -0.3f));
+    rts::Vec3 light_color(1.0f, 0.95f, 0.9f);
+    rts::Vec3 ambient(0.2f, 0.2f, 0.25f);
+
+    RTS_LOG_INFO("Editor initialized successfully");
+
+    // Main loop
+    while (!window.should_close()) {
+        window.poll_events();
+        input.update();
+        time.update();
+
+        float dt = time.delta_time();
+
+        // Update camera
+        rts::Vec2 mouse_pos = input.mouse_position();
+        rts::Vec2 screen_size(static_cast<float>(window.width()),
+                               static_cast<float>(window.height()));
+
+        if (!io.WantCaptureKeyboard && !io.WantCaptureMouse) {
+            camera.update(dt, mouse_pos, screen_size,
+                          input.is_key_pressed(GLFW_KEY_W),
+                          input.is_key_pressed(GLFW_KEY_A),
+                          input.is_key_pressed(GLFW_KEY_S),
+                          input.is_key_pressed(GLFW_KEY_D),
+                          input.scroll_delta());
+        }
+
+        camera.set_aspect_ratio(static_cast<float>(window.width()) /
+                                 static_cast<float>(std::max(window.height(), 1u)));
+
+        // Render
+        renderer.begin_frame();
+
+        // Render terrain
+        terrain_shader.bind();
+        terrain_shader.set_mat4("u_view", camera.view_matrix());
+        terrain_shader.set_mat4("u_projection", camera.projection_matrix());
+        terrain_shader.set_vec3("u_light_dir", light_dir);
+        terrain_shader.set_vec3("u_light_color", light_color);
+        terrain_shader.set_vec3("u_ambient", ambient);
+
+        rts::RenderCommand terrain_cmd;
+        terrain_cmd.mesh = &terrain_mesh;
+        terrain_cmd.shader = &terrain_shader;
+        terrain_cmd.transform = rts::Mat4(1.0f);
+        renderer.submit(terrain_cmd);
+
+        renderer.flush();
+
+        // ImGui
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::Begin("Debug");
+        ImGui::Text("FPS: %.1f", 1.0f / dt);
+        ImGui::Text("Camera target: (%.1f, %.1f, %.1f)",
+                     camera.target().x, camera.target().y, camera.target().z);
+        ImGui::Separator();
+        ImGui::Text("WASD / Screen edges: Pan");
+        ImGui::Text("Scroll: Zoom");
+        ImGui::Text("ESC: Quit");
+        ImGui::End();
+
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        window.swap_buffers();
+
+        if (input.is_key_pressed(GLFW_KEY_ESCAPE)) {
+            break;
+        }
+    }
+
+    // Cleanup ImGui
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
+    RTS_LOG_INFO("Editor shutdown");
+    return 0;
+}
+```
+
+- [ ] **Step 3: Build and run**
+
+```bash
+cd build && cmake --build . && ./editor
+```
+
+Expected: Window opens with flat terrain visible, ImGui debug panel showing FPS and camera position. WASD pans, scroll zooms, ESC quits.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add editor/
+git commit -m "feat(editor): add main loop with terrain rendering, camera, and ImGui debug panel"
+```
+
+---
+
+## Task 19: Documentation Setup
+
+**Files:**
+- Create: `docs/Doxyfile`
+- Create: `docs/conf.py`
+- Create: `docs/index.rst`
+
+- [ ] **Step 1: Create Doxyfile**
+
+```bash
+cd /path/to/rts-engine && doxygen -g docs/Doxyfile
+```
+
+Then edit key settings:
+```
+PROJECT_NAME           = "RTS Engine"
+INPUT                  = ../engine
+RECURSIVE              = YES
+GENERATE_XML           = YES
+XML_OUTPUT             = xml
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+EXTRACT_ALL            = YES
+FILE_PATTERNS          = *.hpp *.cpp
+```
+
+- [ ] **Step 2: Create Sphinx conf.py**
+
+```python
+# docs/conf.py
+project = 'RTS Engine'
+extensions = ['breathe']
+breathe_projects = {'rts-engine': './xml'}
+breathe_default_project = 'rts-engine'
+html_theme = 'sphinx_rtd_theme'
+```
+
+- [ ] **Step 3: Create index.rst**
+
+```rst
+RTS Engine Documentation
+========================
+
+.. toctree::
+   :maxdepth: 2
+
+API Reference
+-------------
+
+.. doxygenindex::
+```
+
+- [ ] **Step 4: Verify docs build**
+
+```bash
+cd docs && doxygen Doxyfile && sphinx-build -b html . _build/html
+```
+
+Expected: HTML docs generated in `docs/_build/html/`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add docs/
+git commit -m "docs: add Doxygen + Sphinx/Breathe documentation setup"
+```
+
+---
+
+## Task 20: Final Integration Test
+
+- [ ] **Step 1: Run all unit tests**
+
+```bash
+cd build && cmake --build . && ctest --output-on-failure
+```
+
+Expected: ALL tests pass.
+
+- [ ] **Step 2: Run editor and verify visually**
+
+```bash
+./editor
+```
+
+Expected:
+- Window opens at 1600x900
+- Flat terrain grid is visible
+- Camera pans with WASD and screen edges
+- Camera zooms with scroll wheel
+- ImGui debug panel shows FPS and camera target
+- ESC closes the editor
+
+- [ ] **Step 3: Commit any final fixes**
+
+```bash
+git add -A && git commit -m "chore: final integration fixes"
+```

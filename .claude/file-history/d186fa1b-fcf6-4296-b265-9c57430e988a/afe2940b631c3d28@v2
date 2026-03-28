@@ -1,0 +1,46 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Commands
+
+```bash
+npm run dev      # Start dev server on port 3000
+npm run build    # Production build
+npm run preview  # Preview production build
+```
+
+No lint or test scripts are configured.
+
+## Architecture
+
+This is a **Warcraft III UI Component Library** — an interactive showcase of WC3-themed UI components built with React + TypeScript + Vite.
+
+### Rendering
+
+The app uses a **custom WebGL renderer** (`src/renderer/`) alongside React. Components that render game assets use this renderer rather than standard DOM/Canvas APIs:
+
+- `Renderer.ts` — main WebGL renderer with an element registry system
+- `GLContext.ts` — WebGL context management
+- `TextureManager.ts` / `textures.ts` — BLP texture loading (Warcraft III format)
+- `QuadBatcher.ts` — batches quad draw calls
+- `NineSlice.ts` — 9-slice scaling for UI borders
+- `shaders.ts` — WebGL shader sources
+
+### State Management
+
+Custom lightweight store pattern using `React.useSyncExternalStore` (see `src/state/createStore.ts`). Three stores:
+
+- `src/state/race.ts` — active faction (`'Human' | 'Orc' | 'NightElf' | 'Undead'`)
+- `src/state/resources.ts` — gold, lumber, supply values
+- `src/state/ui.ts` — general UI state
+
+### Component Structure
+
+- `src/components/` — reusable WC3-styled UI components (buttons, sliders, checkboxes, HUD elements, 3D model viewers)
+- `src/components/sections/` — full-page showcase sections rendered by `App.tsx`
+- `src/App.tsx` — root component that composes all sections; this file is very large
+
+### Styling
+
+`src/global.css` (~45KB) contains all WC3 theming. Race-specific styles are applied via CSS classes based on the active race from the race store.

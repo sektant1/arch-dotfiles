@@ -1,0 +1,70 @@
+import { createSignal, onMount, onCleanup } from 'solid-js';
+import type { Renderer } from '../renderer/Renderer';
+
+interface Props {
+  label: string;
+  initialValue?: number;
+  renderer: Renderer;
+}
+
+export default function Slider(props: Props) {
+  let ref!: HTMLDivElement;
+  const [value, setValue] = createSignal(props.initialValue ?? 0.5);
+  let dragging = false;
+
+  onMount(() => {
+    props.renderer.sliders.push({
+      ref: () => ref,
+      value,
+    });
+  });
+
+  const updateFromEvent = (e: MouseEvent | TouchEvent) => {
+    if (!ref) return;
+    const rect = ref.getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    setValue(pct);
+  };
+
+  const onMove = (e: MouseEvent | TouchEvent) => {
+    if (!dragging) return;
+    e.preventDefault();
+    updateFromEvent(e);
+  };
+  const onUp = () => {
+    dragging = false;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onUp);
+  };
+
+  const onDown = (e: MouseEvent | TouchEvent) => {
+    e.preventDefault();
+    dragging = true;
+    updateFromEvent(e);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+  };
+
+  onCleanup(onUp);
+
+  return (
+    <div class="bar-row">
+      <span class="bar-label">{props.label}</span>
+      <div
+        ref={ref}
+        class="wc3-slider"
+        onMouseDown={onDown}
+        onTouchStart={onDown}
+      >
+        <img class="slider-bg" src="" alt="" />
+        <img class="slider-border" src="" alt="" />
+        <img class="slider-knob" src="" alt="" style={{ left: (value() * 100) + '%' }} />
+      </div>
+    </div>
+  );
+}

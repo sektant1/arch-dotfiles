@@ -1,0 +1,11 @@
+add_library(rts_renderer STATIC
+    src/shader.cpp
+    src/mesh.cpp
+    src/texture.cpp
+    src/renderer.cpp
+)
+
+target_include_directories(rts_renderer PUBLIC include)
+target_link_libraries(rts_renderer PUBLIC rts::core glm::glm glad)
+
+add_library(rts::renderer ALIAS rts_renderer)

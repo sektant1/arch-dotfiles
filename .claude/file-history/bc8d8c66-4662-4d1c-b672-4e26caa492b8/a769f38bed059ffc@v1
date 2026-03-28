@@ -1,0 +1,34 @@
+import { onMount, onCleanup } from 'solid-js';
+import { currentRace } from '../state/race';
+
+export default function CursorOverlay() {
+  let ref!: HTMLDivElement;
+
+  const onMove = (e: MouseEvent) => {
+    ref.style.left = e.clientX + 'px';
+    ref.style.top = e.clientY + 'px';
+  };
+  const onLeave = () => { ref.style.display = 'none'; };
+  const onEnter = () => { ref.style.display = 'block'; };
+
+  onMount(() => {
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseleave', onLeave);
+    document.addEventListener('mouseenter', onEnter);
+  });
+  onCleanup(() => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseleave', onLeave);
+    document.removeEventListener('mouseenter', onEnter);
+  });
+
+  const bgImage = () => `url('war3/Cursor/${currentRace()}Cursor.png')`;
+
+  return (
+    <div
+      ref={ref}
+      id="cursorOverlay"
+      style={{ 'background-image': bgImage() }}
+    />
+  );
+}

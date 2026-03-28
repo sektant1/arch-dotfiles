@@ -1,0 +1,123 @@
+#include <rts/assets/blp_loader.hpp>
+#include <rts/core/logger.hpp>
+#include <stb_image.h>
+#include <fstream>
+#include <cstring>
+#include <stdexcept>
+
+namespace rts {
+
+struct BlpHeader {
+    char magic[4];
+    u32  compression;
+    u32  alpha_bits;
+    u32  width;
+    u32  height;
+    u32  type;
+    u32  has_mipmaps;
+    u32  mipmap_offsets[16];
+    u32  mipmap_sizes[16];
+};
+
+TextureData BlpLoader::load(const std::string& path) {
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open BLP file: " + path);
+    }
+
+    auto file_size = file.tellg();
+    file.seekg(0);
+    std::vector<u8> file_data(static_cast<size_t>(file_size));
+    file.read(reinterpret_cast<char*>(file_data.data()), file_size);
+
+    if (file_data.size() < sizeof(BlpHeader)) {
+        throw std::runtime_error("BLP file too small: " + path);
+    }
+
+    BlpHeader header;
+    std::memcpy(&header, file_data.data(), sizeof(BlpHeader));
+
+    bool is_blp1 = std::memcmp(header.magic, "BLP1", 4) == 0;
+    bool is_blp2 = std::memcmp(header.magic, "BLP2", 4) == 0;
+
+    if (!is_blp1 && !is_blp2) {
+        throw std::runtime_error("Invalid BLP magic in file: " + path);
+    }
+
+    u32 mip_offset = header.mipmap_offsets[0];
+    u32 mip_size   = header.mipmap_sizes[0];
+
+    if (header.compression == 1) {
+        return load_paletted(file_data, header.width, header.height, mip_offset, mip_size);
+    } else if (header.compression == 0) {
+        // JPEG: u32 jpeg_header_size logo após o BlpHeader
+        u32 jpeg_hdr_size;
+        std::memcpy(&jpeg_hdr_size, file_data.data() + sizeof(BlpHeader), 4);
+        u32 jpeg_hdr_offset = static_cast<u32>(sizeof(BlpHeader)) + 4;
+        return load_jpeg(file_data, header.width, header.height,
+                         mip_offset, mip_size, jpeg_hdr_offset, jpeg_hdr_size);
+    }
+
+    throw std::runtime_error("Unsupported BLP compression type: "
+                              + std::to_string(header.compression));
+}
+
+TextureData BlpLoader::load_paletted(const std::vector<u8>& file_data,
+                                      u32 width, u32 height,
+                                      u32 mipmap_offset, u32 mipmap_size) {
+    // Paleta BGRA de 256 entradas logo após o header
+    const u32 palette_offset = sizeof(BlpHeader);
+    const u8* palette        = file_data.data() + palette_offset;
+    const u8* indices        = file_data.data() + mipmap_offset;
+
+    TextureData result;
+    result.width    = width;
+    result.height   = height;
+    result.channels = 4;
+    result.pixels.resize(width * height * 4);
+
+    for (u32 i = 0; i < mipmap_size && i < width * height; ++i) {
+        u8  idx        = indices[i];
+        u32 pal_offset = idx * 4;
+        // BLP palette is BGRA → convert to RGBA
+        result.pixels[i * 4 + 0] = palette[pal_offset + 2];  // R
+        result.pixels[i * 4 + 1] = palette[pal_offset + 1];  // G
+        result.pixels[i * 4 + 2] = palette[pal_offset + 0];  // B
+        result.pixels[i * 4 + 3] = palette[pal_offset + 3];  // A
+    }
+
+    return result;
+}
+
+TextureData BlpLoader::load_jpeg(const std::vector<u8>& file_data,
+                                  u32 /*width*/, u32 /*height*/,
+                                  u32 mipmap_offset, u32 mipmap_size,
+                                  u32 jpeg_header_offset, u32 jpeg_header_size) {
+    // Monta JPEG completo = header compartilhado + dados do mipmap
+    std::vector<u8> full_jpeg(jpeg_header_size + mipmap_size);
+    std::memcpy(full_jpeg.data(),
+                file_data.data() + jpeg_header_offset,
+                jpeg_header_size);
+    std::memcpy(full_jpeg.data() + jpeg_header_size,
+                file_data.data() + mipmap_offset,
+                mipmap_size);
+
+    int w, h, channels;
+    u8* decoded = stbi_load_from_memory(full_jpeg.data(),
+                                         static_cast<int>(full_jpeg.size()),
+                                         &w, &h, &channels, 4);
+    if (!decoded) {
+        throw std::runtime_error("Failed to decode BLP JPEG data");
+    }
+
+    TextureData result;
+    result.width    = static_cast<u32>(w);
+    result.height   = static_cast<u32>(h);
+    result.channels = 4;
+    result.pixels.assign(decoded, decoded + (w * h * 4));
+
+    stbi_image_free(decoded);
+    return result;
+}
+
+}  // namespace rts

@@ -1,0 +1,272 @@
+interface BuildStep {
+  order: number;
+  time: string;
+  instruction: string;
+  food: string;
+}
+
+export interface SkillPick {
+  level: number;
+  skill: string;
+  icon?: string;
+}
+
+type Hero =
+  | "Blademaster"
+  | "Far Seer"
+  | "Shadow Hunter"
+  | "Tauren Chieftain"
+  | "Archmage"
+  | "Paladin"
+  | "Mountain King"
+  | "Blood Mage"
+  | "Demon Hunter"
+  | "Warden"
+  | "Keeper of the Grove"
+  | "Priestess of the Moon"
+  | "Death Knight"
+  | "Lich"
+  | "Crypt Lord";
+
+export interface BuildOrder {
+  name: string;
+  race: string;
+  vs?: string;
+  description: string;
+  difficulty?: "Beginner" | "Intermediate" | "Advanced";
+  keyTiming?: { minute: number; note: string };
+  steps: BuildStep[];
+  note?: string;
+
+  heroes: Hero[];
+
+  skillOrder?: SkillPick[];
+}
+
+export const BUILD_ORDERS_2026: BuildOrder[] = [
+  {
+    name: "Standard FS → Grunt / Shaman Push",
+    race: "Orc",
+    heroes: ["Far Seer"],
+    vs: "most matchups",
+    difficulty: "Beginner",
+    description:
+      "The bread-and-butter Orc opener. Far Seer scouts with wolves while you tech to tier 2 for grunts and shaman support.",
+    keyTiming: { minute: 3, note: "Tier 2 should complete around 3:00–3:10" },
+    steps: [],
+  },
+  {
+    name: "Shadow Hunter Rush → Headhunter / Raider",
+    race: "Orc",
+    heroes: ["Shadow Hunter"],
+    vs: "Night Elf / Human",
+    difficulty: "Intermediate",
+    description: "Aggressive SH opener into raiders.",
+    steps: [],
+  },
+  {
+    name: "Blademaster Harass → Grunt / Raider",
+    race: "Orc",
+    heroes: ["Blademaster"],
+    vs: "Human / Undead",
+    difficulty: "Intermediate",
+    description: "BM harass into raiders.",
+    steps: [],
+  },
+  {
+    name: "Fast Rifle → Caster Push",
+    race: "Human",
+    heroes: ["Archmage"],
+    vs: "Undead / Orc",
+    difficulty: "Intermediate",
+    description: "Rifle + caster timing.",
+    steps: [],
+  },
+  {
+    name: "Paladin First → Footman / Defend",
+    race: "Human",
+    heroes: ["Paladin"],
+    vs: "Orc / NightElf",
+    difficulty: "Beginner",
+    description: "Paladin sustain opener.",
+    steps: [],
+  },
+  {
+    name: "Mountain King → Footman / Priest",
+    race: "Human",
+    heroes: ["Mountain King"],
+    vs: "Orc / Undead",
+    difficulty: "Beginner",
+    description: "MK control + sustain.",
+    steps: [],
+  },
+  {
+    name: "Blood Mage → Sorceress / Priest",
+    race: "Human",
+    heroes: ["Blood Mage"],
+    vs: "Night Elf",
+    difficulty: "Advanced",
+    description: "Spellcaster control build.",
+    steps: [],
+  },
+  {
+    name: "Warden → Huntress / Dryad Pressure",
+    race: "NightElf",
+    heroes: ["Warden"],
+    vs: "Human / Orc",
+    difficulty: "Intermediate",
+    description: "Warden harass into pressure.",
+    steps: [
+      {
+        order: 1,
+        time: "0:00",
+        instruction: "Rally 4 wisps to gold",
+        food: "5/10",
+      },
+      {
+        order: 2,
+        time: "0:01",
+        instruction: "5th wisp → build Altar of Elders",
+        food: "5/10",
+      },
+      {
+        order: 3,
+        time: "0:05",
+        instruction: "Build Moon Well with gold wisp",
+        food: "5/10",
+      },
+      {
+        order: 4,
+        time: "0:15",
+        instruction: "Train wisp → gold",
+        food: "5/10",
+      },
+      {
+        order: 5,
+        time: "0:35",
+        instruction: "Build Hunter's Hall",
+        food: "6/10",
+      },
+      {
+        order: 6,
+        time: "0:50",
+        instruction: "Train 2 wisps → lumber",
+        food: "6/10",
+      },
+      {
+        order: 7,
+        time: "1:15",
+        instruction: "Keeper spawns — summon treants to creep",
+        food: "8/10",
+      },
+      {
+        order: 8,
+        time: "1:30",
+        instruction: "Build Ancient of War",
+        food: "8/10",
+      },
+      {
+        order: 9,
+        time: "1:50",
+        instruction: "Train 2 huntresses",
+        food: "10/10",
+      },
+      {
+        order: 10,
+        time: "2:00",
+        instruction: "Build 2nd Moon Well",
+        food: "10/20",
+      },
+      {
+        order: 11,
+        time: "2:30",
+        instruction: "Upgrade to Tree of Ages",
+        food: "12/20",
+      },
+      {
+        order: 12,
+        time: "3:00",
+        instruction: "Train 2 more huntresses, build 3rd Moon Well",
+        food: "16/20",
+      },
+      {
+        order: 13,
+        time: "4:00",
+        instruction: "Push with Keeper + 4 huntresses, Entangle hero",
+        food: "20/30",
+      },
+    ],
+  },
+  {
+    name: "Demon Hunter → Mass Archer",
+    race: "NightElf",
+    heroes: ["Demon Hunter"],
+    vs: "Undead",
+    difficulty: "Beginner",
+    description: "Mass archer pressure.",
+    steps: [],
+  },
+  {
+    name: "Keeper of the Grove → Treant / Entangle",
+    race: "NightElf",
+    heroes: ["Keeper of the Grove"],
+    vs: "Orc / Human",
+    difficulty: "Intermediate",
+    description: "Treant + entangle control.",
+    steps: [],
+  },
+  {
+    name: "Priestess of the Moon → Hippo Rush",
+    race: "NightElf",
+    heroes: ["Priestess of the Moon"],
+    vs: "Undead",
+    difficulty: "Advanced",
+    description: "Air timing attack.",
+    steps: [],
+  },
+  {
+    name: "Standard DK → Fiend / Lich Push",
+    race: "Undead",
+    heroes: ["Death Knight", "Lich"],
+    vs: "all matchups",
+    difficulty: "Beginner",
+    description: "Standard UD opener with 2 heroes.",
+    steps: [],
+  },
+  {
+    name: "Lich First → Fiend / Necromancer",
+    race: "Undead",
+    heroes: ["Lich"],
+    vs: "Night Elf",
+    difficulty: "Intermediate",
+    description: "Lich opener into necros.",
+    steps: [],
+  },
+  {
+    name: "Crypt Lord → Crypt Fiend Web",
+    race: "Undead",
+    heroes: ["Crypt Lord"],
+    vs: "Human / Orc",
+    difficulty: "Intermediate",
+    description: "Impale + fiend control.",
+    steps: [],
+  },
+  {
+    name: "Fast Gargoyle Harass",
+    race: "Undead",
+    heroes: ["Death Knight"],
+    vs: "Human / Night Elf",
+    difficulty: "Advanced",
+    description: "Air harass opener.",
+    steps: [],
+  },
+  {
+    name: "Tauren Chieftain → Tauren Push",
+    race: "Orc",
+    heroes: ["Tauren Chieftain"],
+    vs: "Night Elf",
+    difficulty: "Intermediate",
+    description: "Heavy melee push.",
+    steps: [],
+  },
+];

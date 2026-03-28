@@ -1,0 +1,20 @@
+#pragma once
+
+#include <rts/assets/texture_loader.hpp>
+#include <vector>
+
+namespace rts {
+
+class BlpLoader : public ITextureLoader {
+public:
+    TextureData load(const std::string& path) override;
+
+private:
+    TextureData load_paletted(const std::vector<u8>& file_data, u32 width, u32 height,
+                               u32 mipmap_offset, u32 mipmap_size);
+    TextureData load_jpeg(const std::vector<u8>& file_data, u32 width, u32 height,
+                           u32 mipmap_offset, u32 mipmap_size,
+                           u32 jpeg_header_offset, u32 jpeg_header_size);
+};
+
+}  // namespace rts

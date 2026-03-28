@@ -1,0 +1,155 @@
+import { useEffect, useRef, useState } from "react";
+import { loadBlpDataUrl } from "../utils/glueButton";
+
+// Geometry constants copied from the loading bar in App.tsx
+const TRACK_LEFT = 5.859375;
+const TRACK_RIGHT = 6.4453125;
+const TRACK_TOP = 26.5625;
+const TRACK_BOTTOM = 26.5625;
+
+const GLOW_LEFT = 5.919;
+const GLOW_TOP = -19.58;
+const GLOW_BOTTOM = -19.49;
+const GLOW_SPAN = 93.631;
+const MIN_FILL = 1.23442;
+
+/** Duration of the progress animation in ms. */
+const DURATION_MS = 2400;
+/** Extra hold at 100% before fading out (ms). */
+const HOLD_MS = 300;
+/** Fade-out duration (ms). */
+const FADE_MS = 400;
+
+function easeInOut(t: number): number {
+  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+}
+
+interface Props {
+  onDone: () => void;
+}
+
+export default function LoadingScreen({ onDone }: Props) {
+  const [bgUrl, setBgUrl] = useState("");
+  const [fillUrl, setFillUrl] = useState("");
+  const [borderUrl, setBorderUrl] = useState("");
+  const [glassUrl, setGlassUrl] = useState("");
+  const [glowUrl, setGlowUrl] = useState("");
+
+  const [progress, setProgress] = useState(0);
+  const [fading, setFading] = useState(false);
+  const startRef = useRef<number | null>(null);
+  const rafRef = useRef<number>(0);
+  // Stable ref so the animation effect never needs to re-run due to a new onDone reference
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  });
+
+  // Load BLP assets
+  useEffect(() => {
+    void loadBlpDataUrl("/loading/Loading-BarBackground.blp").then(setBgUrl);
+    void loadBlpDataUrl("/loading/Loading-BarFill.blp").then(setFillUrl);
+    void loadBlpDataUrl("/loading/Loading-BarBorder.blp").then(setBorderUrl);
+    void loadBlpDataUrl("/loading/Loading-BarGlass.blp").then(setGlassUrl);
+    void loadBlpDataUrl("/loading/Loading-BarGlow.blp").then(setGlowUrl);
+  }, []);
+
+  // Progress animation — runs exactly once (empty deps)
+  useEffect(() => {
+    let done = false;
+
+    function tick(ts: number) {
+      if (done) return;
+      if (startRef.current === null) startRef.current = ts;
+      const elapsed = ts - startRef.current;
+      const t = Math.min(elapsed / DURATION_MS, 1);
+      const pct = easeInOut(t) * 100;
+      setProgress(pct);
+
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        // Hold at 100%, then fade out, then notify parent
+        setTimeout(() => {
+          if (done) return;
+          setFading(true);
+          setTimeout(() => {
+            if (!done) onDoneRef.current();
+          }, FADE_MS);
+        }, HOLD_MS);
+      }
+    }
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      done = true;
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  const fillPct = Math.max(MIN_FILL, progress);
+  const glowWidth = (fillPct / 100) * GLOW_SPAN;
+  // Simple glow alpha: ramps up in the middle of the animation
+  const glowAlpha =
+    progress < 5 ? 0 : progress > 95 ? 0 : Math.min((progress - 5) / 30, 1);
+
+  return (
+    <div className={`loading-screen${fading ? " loading-screen--fading" : ""}`}>
+      {/* TODO: replace with a WC3 loading screen background image */}
+      <div className="loading-screen-bg" />
+      <div className="loading-screen-content">
+        <img src="/logo.png" alt="WC3BUILDS" className="loading-screen-logo" />
+
+        <div className="loading-screen-bar-wrap">
+          <div className="loading-bar-composite">
+            <div
+              className="lb-track"
+              style={{
+                left: `${TRACK_LEFT}%`,
+                right: `${TRACK_RIGHT}%`,
+                top: `${TRACK_TOP}%`,
+                bottom: `${TRACK_BOTTOM}%`,
+              }}
+            >
+              <div
+                className="lb-bg"
+                style={{
+                  backgroundImage: bgUrl ? `url("${bgUrl}")` : undefined,
+                }}
+              />
+              <div
+                className="lb-fill"
+                style={{
+                  backgroundImage: fillUrl ? `url("${fillUrl}")` : undefined,
+                  width: `${fillPct}%`,
+                }}
+              />
+            </div>
+
+            <img className="lb-border" src={borderUrl} alt="" />
+            <img className="lb-glass" src={glassUrl} alt="" />
+
+            {glowUrl && (
+              <div
+                className="lb-glow"
+                style={{
+                  left: `${GLOW_LEFT}%`,
+                  top: `${GLOW_TOP}%`,
+                  bottom: `${GLOW_BOTTOM}%`,
+                  width: `${glowWidth}%`,
+                  opacity: glowAlpha,
+                  backgroundImage: `url("${glowUrl}")`,
+                  backgroundSize: "100% 100%",
+                }}
+              />
+            )}
+
+            <div className="lb-text">{Math.floor(progress)}%</div>
+          </div>
+        </div>
+
+        <p className="loading-screen-label">Loading…</p>
+      </div>
+    </div>
+  );
+}

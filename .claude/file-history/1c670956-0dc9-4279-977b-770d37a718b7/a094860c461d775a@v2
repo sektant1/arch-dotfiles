@@ -1,0 +1,173 @@
+#include <rts/assets/mdx_loader.hpp>
+#include <rts/core/logger.hpp>
+#include <fstream>
+#include <cstring>
+#include <stdexcept>
+
+namespace rts {
+
+namespace {
+
+class BinaryReader {
+public:
+    explicit BinaryReader(const std::vector<u8>& data) : m_data(data) {}
+
+    template <typename T>
+    T read() {
+        if (m_pos + sizeof(T) > m_data.size()) {
+            throw std::runtime_error("MDX: unexpected end of file");
+        }
+        T val;
+        std::memcpy(&val, m_data.data() + m_pos, sizeof(T));
+        m_pos += sizeof(T);
+        return val;
+    }
+
+    std::string read_tag() {
+        char tag[5] = {};
+        if (m_pos + 4 > m_data.size()) {
+            throw std::runtime_error("MDX: unexpected end of file reading tag");
+        }
+        std::memcpy(tag, m_data.data() + m_pos, 4);
+        m_pos += 4;
+        return std::string(tag, 4);
+    }
+
+    void   skip(size_t bytes) { m_pos += bytes; }
+    size_t pos()              const { return m_pos; }
+    size_t size()             const { return m_data.size(); }
+    bool   has_data()         const { return m_pos < m_data.size(); }
+    void   seek(size_t pos)   { m_pos = pos; }
+
+private:
+    const std::vector<u8>& m_data;
+    size_t m_pos = 0;
+};
+
+ModelData parse_geoset(BinaryReader& reader, size_t end_pos) {
+    ModelData model;
+
+    while (reader.pos() < end_pos) {
+        if (reader.pos() + 8 > end_pos) break;
+
+        std::string sub_tag = reader.read_tag();
+        u32         count   = reader.read<u32>();
+
+        if (sub_tag == "VRTX") {
+            model.vertices.resize(count);
+            for (u32 i = 0; i < count; ++i) {
+                model.vertices[i].position.x = reader.read<f32>();
+                model.vertices[i].position.y = reader.read<f32>();
+                model.vertices[i].position.z = reader.read<f32>();
+            }
+        } else if (sub_tag == "NRMS") {
+            for (u32 i = 0; i < count && i < static_cast<u32>(model.vertices.size()); ++i) {
+                model.vertices[i].normal.x = reader.read<f32>();
+                model.vertices[i].normal.y = reader.read<f32>();
+                model.vertices[i].normal.z = reader.read<f32>();
+            }
+        } else if (sub_tag == "UVBS") {
+            for (u32 i = 0; i < count && i < static_cast<u32>(model.vertices.size()); ++i) {
+                model.vertices[i].uv.x = reader.read<f32>();
+                model.vertices[i].uv.y = reader.read<f32>();
+            }
+        } else if (sub_tag == "PVTX") {
+            model.indices.resize(count);
+            for (u32 i = 0; i < count; ++i) {
+                model.indices[i] = reader.read<u16>();
+            }
+        } else if (sub_tag == "PTYP" || sub_tag == "PCNT") {
+            reader.skip(static_cast<size_t>(count) * 4);
+        } else {
+            // Sub-chunk desconhecido — interrompe parse do geoset
+            RTS_LOG_WARN("MDX: unknown geoset sub-chunk '{}', stopping", sub_tag);
+            break;
+        }
+    }
+
+    return model;
+}
+
+void parse_sequences(BinaryReader& reader, u32 chunk_size, Skeleton& skeleton) {
+    const size_t end = reader.pos() + chunk_size;
+
+    while (reader.pos() + 132 <= end) {
+        AnimationSequence seq;
+
+        char name[81] = {};
+        for (int i = 0; i < 80; ++i) name[i] = static_cast<char>(reader.read<u8>());
+        seq.name = std::string(name);
+
+        reader.read<u32>();  // interval start
+        u32 interval_end = reader.read<u32>();
+        seq.duration = static_cast<f32>(interval_end);
+
+        reader.read<f32>();  // moveSpeed
+        u32 non_looping = reader.read<u32>();
+        seq.looping = (non_looping == 0);
+        reader.read<f32>();  // rarity
+        reader.read<u32>();  // syncPoint
+        reader.read<f32>();  // boundsRadius
+        reader.skip(6 * 4); // min vec3 + max vec3
+
+        skeleton.animations.push_back(std::move(seq));
+    }
+}
+
+}  // anonymous namespace
+
+std::vector<ModelData> MdxLoader::load(const std::string& path) {
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open MDX file: " + path);
+    }
+
+    auto file_size = file.tellg();
+    file.seekg(0);
+    std::vector<u8> file_data(static_cast<size_t>(file_size));
+    file.read(reinterpret_cast<char*>(file_data.data()), file_size);
+
+    BinaryReader reader(file_data);
+
+    // Verificar magic
+    std::string magic = reader.read_tag();
+    if (magic != "MDLX") {
+        throw std::runtime_error("Invalid MDX magic: " + magic);
+    }
+
+    std::vector<ModelData> models;
+    Skeleton               skeleton;
+
+    while (reader.has_data() && reader.pos() + 8 <= reader.size()) {
+        std::string tag        = reader.read_tag();
+        u32         chunk_size = reader.read<u32>();
+        size_t      chunk_end  = reader.pos() + chunk_size;
+
+        if (tag == "VERS") {
+            u32 version = reader.read<u32>();
+            RTS_LOG_INFO("MDX version: {}", version);
+        } else if (tag == "GEOS") {
+            while (reader.pos() < chunk_end) {
+                u32    geoset_inclusive_size = reader.read<u32>();
+                size_t geoset_end = reader.pos() - 4 + geoset_inclusive_size;
+                auto   model      = parse_geoset(reader, geoset_end);
+                models.push_back(std::move(model));
+                reader.seek(geoset_end);
+            }
+        } else if (tag == "SEQS") {
+            parse_sequences(reader, chunk_size, skeleton);
+        } else {
+            reader.skip(chunk_size);
+        }
+    }
+
+    if (skeleton.has_bones()) {
+        for (auto& m : models) m.skeleton = skeleton;
+    }
+
+    RTS_LOG_INFO("MDX loaded: {} geoset(s), {} animation(s) from '{}'",
+                 models.size(), skeleton.animations.size(), path);
+    return models;
+}
+
+}  // namespace rts

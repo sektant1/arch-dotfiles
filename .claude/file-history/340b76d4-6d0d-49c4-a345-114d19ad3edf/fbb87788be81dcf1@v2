@@ -1,0 +1,345 @@
+import { useRef, useEffect } from 'react';
+import { ModelRenderer, decodeBLP, getBLPImageData, parseMDX } from 'war3-model';
+import { mat3, mat4, quat, vec3 } from 'gl-matrix';
+import type { Race } from '@wc3-ui/core';
+
+type ModelType = ReturnType<typeof parseMDX>;
+
+type WorkerSide = 'left' | 'right';
+
+interface WorkerUnitConfig {
+  modelPath: string;
+  textures: Record<string, string>;
+}
+
+const WORKER_UNIT_CONFIG: Record<Race, WorkerUnitConfig> = {
+  Human: {
+    modelPath: '/models/worker-units/Human/peasant.mdx',
+    textures: {
+      'textures/peasant.blp': '/models/worker-units/textures/Peasant.blp',
+      'textures/gutz.blp': '/models/worker-units/textures/gutz.blp',
+    },
+  },
+  Orc: {
+    modelPath: '/models/worker-units/Orc/peon.mdx',
+    textures: {
+      'units/orc/peon/peon.blp': '/models/worker-units/Orc/peon.blp',
+      'textures/gutz.blp': '/models/worker-units/textures/gutz.blp',
+    },
+  },
+  NightElf: {
+    modelPath: '/models/worker-units/NightElf/Archer.mdx',
+    textures: {
+      'textures/ranger.blp': '/models/worker-units/textures/Ranger.blp',
+      'textures/star2_32.blp': '/models/worker-units/textures/star2_32.blp',
+      'textures/gutz.blp': '/models/worker-units/textures/gutz.blp',
+    },
+  },
+  Undead: {
+    modelPath: '/models/worker-units/Undead/Acolyte.mdx',
+    textures: {
+      'textures/acolyte.blp': '/models/worker-units/textures/Acolyte.blp',
+      'textures/green_star.blp': '/models/worker-units/textures/Green_Star.blp',
+      'textures/demonrune3.blp': '/models/worker-units/textures/DemonRune3.blp',
+      'textures/gutz.blp': '/models/worker-units/textures/gutz.blp',
+    },
+  },
+};
+
+const modelCache = new Map<string, ModelType>();
+const blpCache = new Map<string, ImageData[]>();
+
+function normalizeTexturePath(textureImage: string): string {
+  return textureImage.replaceAll('\\', '/').toLowerCase();
+}
+
+function getTexturePath(textureImage: string, race: Race): string | null {
+  const normalized = normalizeTexturePath(textureImage);
+  if (!normalized) return null;
+  return WORKER_UNIT_CONFIG[race].textures[normalized] ?? null;
+}
+
+async function loadModel(path: string): Promise<ModelType> {
+  const cached = modelCache.get(path);
+  if (cached) return cached;
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`Failed to load worker unit model: ${path}`);
+  const ab = await res.arrayBuffer();
+  const model = parseMDX(ab);
+  modelCache.set(path, model);
+  return model;
+}
+
+async function loadBLPMips(path: string): Promise<ImageData[]> {
+  const cached = blpCache.get(path);
+  if (cached) return cached;
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`Failed to load worker unit texture: ${path}`);
+  const ab = await res.arrayBuffer();
+  const blp = decodeBLP(ab);
+  const mips: ImageData[] = [];
+  const maxLevels = Math.max(1, Math.floor(Math.log2(Math.max(blp.width, blp.height))) + 1);
+  for (let i = 0; i < maxLevels; i++) {
+    const w = blp.width >> i;
+    const h = blp.height >> i;
+    if (w <= 0 || h <= 0) break;
+    try {
+      const img = getBLPImageData(blp, i);
+      if (!img || !img.width || !img.height) break;
+      mips.push(new ImageData(img.data as unknown as Uint8ClampedArray<ArrayBuffer>, img.width, img.height));
+      if (img.width === 1 && img.height === 1) break;
+    } catch {
+      break;
+    }
+  }
+  if (mips.length === 0) throw new Error(`No mip levels decoded for worker unit texture: ${path}`);
+  blpCache.set(path, mips);
+  return mips;
+}
+
+function findIdleSequenceIndex(model: ModelType, race: Race): number {
+  const sequences = model.Sequences || [];
+  if (sequences.length === 0) return 0;
+  const sequenceNames = sequences.map((seq) => (seq.Name || '').toLowerCase());
+  const preferencesByRace: Record<Race, readonly string[]> = {
+    Human: ['stand work', 'stand lumber', 'stand ready', 'stand gold', 'stand - 3', 'stand -3', 'stand 2', 'stand - 2', 'stand'],
+    Orc: ['stand ready', 'stand - stretch', 'stand - itch head', 'stand - talk gesture', 'stand 2', 'stand - 2', 'stand'],
+    NightElf: ['stand ready', 'stand - 3', 'stand -3', 'stand 2', 'stand - 2', 'stand'],
+    Undead: ['stand work', 'stand 2', 'stand - 2', 'stand ready', 'stand'],
+  };
+  for (const pref of preferencesByRace[race]) {
+    const idx = sequenceNames.findIndex((name) => name.includes(pref));
+    if (idx >= 0) return idx;
+  }
+  const fallback = sequenceNames.findIndex(
+    (name) => name.includes('stand') && !name.includes('death') && !name.includes('decay'),
+  );
+  return fallback >= 0 ? fallback : 0;
+}
+
+function getSequenceInterval(model: ModelType, index: number): { start: number; length: number } {
+  const seq = model.Sequences?.[index];
+  const start = seq?.Interval?.[0] ?? 0;
+  const end = seq?.Interval?.[1] ?? (start + 1000);
+  return { start, length: Math.max(1, end - start) };
+}
+
+function getExtentsForSequence(model: ModelType, sequenceIndex: number): {
+  min: readonly [number, number, number] | null;
+  max: readonly [number, number, number] | null;
+} {
+  const seq = model.Sequences?.[sequenceIndex];
+  const seqMin = seq?.MinimumExtent;
+  const seqMax = seq?.MaximumExtent;
+  if (seqMin && seqMax) return { min: [seqMin[0], seqMin[1], seqMin[2]], max: [seqMax[0], seqMax[1], seqMax[2]] };
+  const modelMin = model.Info?.MinimumExtent;
+  const modelMax = model.Info?.MaximumExtent;
+  if (modelMin && modelMax) return { min: [modelMin[0], modelMin[1], modelMin[2]], max: [modelMax[0], modelMax[1], modelMax[2]] };
+  return { min: null, max: null };
+}
+
+interface WorkerUnitModelProps {
+  race: Race;
+  side: WorkerSide;
+}
+
+export default function WorkerUnitModel({ race, side }: WorkerUnitModelProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const glRef = useRef<WebGLRenderingContext | WebGL2RenderingContext | null>(null);
+  const modelRendererRef = useRef<ModelRenderer | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const rafIdRef = useRef(0);
+  const disposedRef = useRef(false);
+  const initVersionRef = useRef(0);
+
+  // Animation state
+  const sequenceIndexRef = useRef(0);
+  const sequenceStartRef = useRef(0);
+  const sequenceLengthRef = useRef(1000);
+  const animStartMsRef = useRef(0);
+
+  // Camera state
+  const mvMatrix = useRef(mat4.create());
+  const pMatrix = useRef(mat4.create());
+  const worldCameraMatrix = useRef(mat4.create());
+  const cameraPos = useRef(vec3.create());
+  const cameraTarget = useRef(vec3.create());
+  const cameraQuat = useRef(quat.create());
+  const cameraFovRef = useRef(0.78);
+  const cameraNearRef = useRef(8);
+  const cameraFarRef = useRef(2400);
+
+  const destroyRenderer = () => {
+    if (!modelRendererRef.current) return;
+    try { modelRendererRef.current.destroy(); } catch (err) { console.warn('worker unit renderer destroy failed', err); }
+    modelRendererRef.current = null;
+  };
+
+  const updateProjection = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const aspect = Math.max(1e-6, canvas.clientWidth / Math.max(1, canvas.clientHeight));
+    mat4.perspective(pMatrix.current, cameraFovRef.current, aspect, cameraNearRef.current, cameraFarRef.current);
+  };
+
+  const resizeCanvas = () => {
+    const canvas = canvasRef.current;
+    const gl = glRef.current;
+    if (!canvas || !gl) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
+    const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    gl.viewport(0, 0, w, h);
+    updateProjection();
+  };
+
+  const configureCamera = (model: ModelType, sequenceIdx: number) => {
+    const extents = getExtentsForSequence(model, sequenceIdx);
+    const extMin = extents.min;
+    const extMax = extents.max;
+
+    if (extMin && extMax) {
+      const cx = (extMin[0] + extMax[0]) * 0.5;
+      const cy = (extMin[1] + extMax[1]) * 0.5;
+      const cz = (extMin[2] + extMax[2]) * 0.5;
+      const dx = extMax[0] - extMin[0];
+      const dy = extMax[1] - extMin[1];
+      const dz = extMax[2] - extMin[2];
+      const rawRadius = Math.hypot(dx, dy, dz) * 0.5;
+      const radius = Math.min(190, Math.max(100, rawRadius));
+      const height = Math.min(220, Math.max(90, dz));
+      const lateralOffset = radius * 0.42;
+      const distanceMultiplier = 2.25;
+      const verticalMultiplier = 0.62;
+      vec3.set(cameraPos.current, cx + lateralOffset, cy - radius * distanceMultiplier, cz + height * verticalMultiplier);
+      vec3.set(cameraTarget.current, cx, cy, cz + height * 0.18);
+      cameraFovRef.current = 0.86;
+      cameraNearRef.current = Math.max(8, radius * 0.08);
+      cameraFarRef.current = Math.max(cameraNearRef.current + 300, radius * 11.5);
+    } else {
+      vec3.set(cameraPos.current, 48, -420, 180);
+      vec3.set(cameraTarget.current, 0, 0, 100);
+      cameraFovRef.current = 0.78;
+      cameraNearRef.current = 8;
+      cameraFarRef.current = 2200;
+    }
+
+    mat4.lookAt(mvMatrix.current, cameraPos.current, cameraTarget.current, vec3.fromValues(0, 0, 1));
+    if (mat4.invert(worldCameraMatrix.current, mvMatrix.current)) {
+      const rot = mat3.create();
+      mat3.fromMat4(rot, worldCameraMatrix.current);
+      quat.fromMat3(cameraQuat.current, rot);
+      quat.normalize(cameraQuat.current, cameraQuat.current);
+    } else {
+      quat.identity(cameraQuat.current);
+    }
+  };
+
+  const startRenderLoop = () => {
+    const speed = 0.8;
+    const tick = (now: number) => {
+      if (disposedRef.current) return;
+      rafIdRef.current = requestAnimationFrame(tick);
+      const gl = glRef.current;
+      const modelRenderer = modelRendererRef.current;
+      if (!gl || !modelRenderer) return;
+
+      resizeCanvas();
+      const elapsed = (now - animStartMsRef.current) * speed;
+      const frame = sequenceStartRef.current + (elapsed % sequenceLengthRef.current);
+      modelRenderer.setSequence(sequenceIndexRef.current);
+      modelRenderer.setFrame(frame);
+      modelRenderer.update(0);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      modelRenderer.render(mvMatrix.current, pMatrix.current, { env: false, wireframe: false });
+    };
+    rafIdRef.current = requestAnimationFrame(tick);
+  };
+
+  const initForRace = async (race: Race, _side: WorkerSide) => {
+    const version = ++initVersionRef.current;
+    const cfg = WORKER_UNIT_CONFIG[race];
+    const model = await loadModel(cfg.modelPath);
+    if (disposedRef.current || version !== initVersionRef.current || !glRef.current) return;
+
+    destroyRenderer();
+    modelRendererRef.current = new ModelRenderer(model);
+    modelRendererRef.current.initGL(glRef.current);
+    sequenceIndexRef.current = findIdleSequenceIndex(model, race);
+    const interval = getSequenceInterval(model, sequenceIndexRef.current);
+    sequenceStartRef.current = interval.start;
+    sequenceLengthRef.current = interval.length;
+    configureCamera(model, sequenceIndexRef.current);
+    modelRendererRef.current.setCamera(cameraPos.current, cameraQuat.current);
+    modelRendererRef.current.setLightPosition(cameraPos.current);
+    modelRendererRef.current.setLightColor(vec3.fromValues(1, 1, 1));
+    modelRendererRef.current.setSequence(sequenceIndexRef.current);
+    animStartMsRef.current = performance.now();
+
+    const texturePromises = (model.Textures || []).map(async (tex) => {
+      const texturePath = getTexturePath(tex.Image, race);
+      if (!texturePath) return;
+      try {
+        const mips = await loadBLPMips(texturePath);
+        if (!disposedRef.current && version === initVersionRef.current) {
+          modelRendererRef.current!.setTextureImageData(tex.Image, mips);
+        }
+      } catch (err) {
+        console.warn(`failed to load worker texture ${texturePath}`, err);
+      }
+    });
+    await Promise.all(texturePromises);
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current!;
+    let gl: WebGLRenderingContext | WebGL2RenderingContext | null = canvas.getContext('webgl2', {
+      alpha: true, premultipliedAlpha: false, antialias: true, depth: true, stencil: false,
+    }) as WebGL2RenderingContext | null;
+    if (!gl) {
+      gl = canvas.getContext('webgl', {
+        alpha: true, premultipliedAlpha: false, antialias: true, depth: true, stencil: false,
+      });
+    }
+    if (!gl) return;
+
+    glRef.current = gl;
+    resizeCanvas();
+    resizeObserverRef.current = new ResizeObserver(() => resizeCanvas());
+    resizeObserverRef.current.observe(canvas);
+    startRenderLoop();
+    void initForRace(race, side).catch((err) => console.error(err));
+
+    return () => {
+      disposedRef.current = true;
+      initVersionRef.current++;
+      cancelAnimationFrame(rafIdRef.current);
+      resizeObserverRef.current?.disconnect();
+      destroyRenderer();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!glRef.current) return;
+    void initForRace(race, side).catch((err) => console.error(err));
+  }, [race, side]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: 'absolute',
+        inset: '0',
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        pointerEvents: 'none',
+      }}
+    />
+  );
+}

@@ -1,0 +1,12 @@
+#pragma once
+
+#include <rts/assets/model_loader.hpp>
+
+namespace rts {
+
+class GltfLoader : public IModelLoader {
+public:
+    std::vector<ModelData> load(const std::string& path) override;
+};
+
+}  // namespace rts

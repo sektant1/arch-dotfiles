@@ -1,0 +1,85 @@
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { loadBlpImage } from "../utils/blp";
+import { EDITBOX_ASSETS, SCROLLBAR_ASSETS } from "../utils/assets";
+import { useBlpTexture } from "../hooks/useBlpTexture";
+
+export interface TextareaProps {
+  lines: string[];
+  /** Height in px */
+  height?: number;
+  className?: string;
+}
+
+/**
+ * ESC menu-styled multi-line text area with scrollbar.
+ */
+export function Textarea({
+  lines,
+  height = 150,
+  className,
+}: TextareaProps) {
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const scrollCanvasRef = useRef<HTMLCanvasElement>(null);
+  const knobUrl = useBlpTexture(SCROLLBAR_ASSETS.knob);
+
+  const lineHeight = 18;
+  const visibleLines = Math.floor((height - 22) / lineHeight);
+  const maxScroll = Math.max(0, lines.length - visibleLines);
+
+  const drawBox = useCallback(async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    try {
+      const [bg, border] = await Promise.all([
+        loadBlpImage(EDITBOX_ASSETS.escBackground),
+        loadBlpImage(EDITBOX_ASSETS.escBorder),
+      ]);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(bg, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(border, 0, 0, canvas.width, canvas.height);
+    } catch {}
+  }, []);
+
+  useEffect(() => { drawBox(); }, [drawBox]);
+
+  const scrollPercent = maxScroll > 0 ? (scrollOffset / maxScroll) * 100 : 0;
+  const visible = lines.slice(scrollOffset, scrollOffset + visibleLines);
+
+  return (
+    <div className={`esc-textarea-demo ${className ?? ""}`}>
+      <div className="esc-textarea-shell" style={{ height }}>
+        <canvas ref={canvasRef} className="esc-textarea-canvas" width={800} height={height * 2} />
+        <div className="esc-textarea-mask">
+          <div className="esc-textarea-content">
+            {visible.map((line, i) => (
+              <div key={scrollOffset + i}>{line}</div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="esc-textarea-scroll" style={{ height }}>
+        <canvas ref={scrollCanvasRef} className="esc-textarea-scroll-canvas" width={40} height={(height - 16) * 2} />
+        <div
+          className="esc-textarea-scroll-thumb"
+          style={{
+            top: `${scrollPercent}%`,
+            backgroundImage: knobUrl ? `url("${knobUrl}")` : undefined,
+          }}
+        />
+        <input
+          type="range"
+          min={0}
+          max={maxScroll}
+          value={scrollOffset}
+          onChange={(e) => setScrollOffset(Number(e.target.value))}
+          aria-label="Text area scroll position"
+          style={{ writingMode: "vertical-lr" as any }}
+        />
+      </div>
+    </div>
+  );
+}

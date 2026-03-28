@@ -1,0 +1,61 @@
+import { useEffect, useState } from "react";
+import type { SkillPick } from "../data/buildOrders";
+import {
+  loadBlpDataUrl,
+  loadDataUrlImage,
+  composeBorderImageFromAtlas,
+} from "../utils/glueButton";
+
+const BG_BLP = "/tooltips/human-tooltip-background.blp";
+const BORDER_BLP = "/tooltips/human-tooltip-border.blp";
+
+let cachedBgUrl = "";
+let cachedBorderImageUrl = "";
+let loadPromise: Promise<void> | null = null;
+
+function ensureLoaded(): Promise<void> {
+  if (cachedBgUrl && cachedBorderImageUrl) return Promise.resolve();
+  if (loadPromise) return loadPromise;
+  loadPromise = Promise.all([
+    loadBlpDataUrl(BG_BLP),
+    loadBlpDataUrl(BORDER_BLP).then(loadDataUrlImage),
+  ]).then(([bgUrl, borderAtlas]) => {
+    cachedBgUrl = bgUrl;
+    cachedBorderImageUrl = composeBorderImageFromAtlas(borderAtlas);
+  });
+  return loadPromise;
+}
+
+interface Props {
+  pick: SkillPick;
+}
+
+export default function SkillTooltip({ pick }: Props) {
+  const [bgUrl, setBgUrl] = useState(cachedBgUrl);
+  const [borderUrl, setBorderUrl] = useState(cachedBorderImageUrl);
+
+  useEffect(() => {
+    if (bgUrl && borderUrl) return;
+    let cancelled = false;
+    void ensureLoaded().then(() => {
+      if (cancelled) return;
+      setBgUrl(cachedBgUrl);
+      setBorderUrl(cachedBorderImageUrl);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const style = {
+    "--tooltip-bg": bgUrl ? `url("${bgUrl}")` : "",
+    "--tooltip-border": borderUrl ? `url("${borderUrl}")` : "",
+  } as React.CSSProperties;
+
+  return (
+    <article className="tooltip-preview skill-tooltip" style={style}>
+      <div className="tooltip-preview-head">
+        <h4>{pick.skill}</h4>
+        <span className="tooltip-hotkey">Lv {pick.level}</span>
+      </div>
+    </article>
+  );
+}

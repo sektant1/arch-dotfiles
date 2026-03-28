@@ -1,0 +1,65 @@
+interface Props {
+  getStartedPressed: boolean;
+  getStartedCanvasRef: (el: HTMLCanvasElement) => void;
+  installCanvasRef: (el: HTMLCanvasElement) => void;
+  onGetStartedMouseEnter: () => void;
+  onGetStartedMouseLeave: () => void;
+  onGetStartedMouseDown: () => void;
+  onGetStartedMouseUp: () => void;
+}
+
+export default function HeroSection(props: Props) {
+  const handleCopy = () => {
+    void navigator.clipboard.writeText('npm i wc3ui');
+  };
+
+  return (
+    <section class="hero-section">
+      <div class="hero-content">
+        <img src="/logo.avif" alt="WC3UI" class="hero-logo" />
+        <p class="hero-subtitle">Battle-tested components forged in Azeroth.</p>
+        <p class="hero-description">
+          A themeable, accessible component library inspired by the Warcraft III interface.<br />
+          Ships with four faction themes out of the box.<br />
+          <strong>1.2kb core</strong> · Zero dependencies · Framework-agnostic.
+        </p>
+        <div class="hero-cta-row hero-cta-row--components">
+          <button
+            type="button"
+            class="esc-option-preview hero-get-started-btn"
+            onMouseEnter={props.onGetStartedMouseEnter}
+            onMouseLeave={props.onGetStartedMouseLeave}
+            onMouseDown={props.onGetStartedMouseDown}
+            onMouseUp={props.onGetStartedMouseUp}
+          >
+            <canvas ref={props.getStartedCanvasRef} class="esc-option-canvas" />
+            <span
+              class="esc-option-label"
+              style={{
+                transform: props.getStartedPressed ? 'translate(2px, 2px)' : 'none',
+              }}
+            >
+              {'Get\u00A0'}<span class="button-hotkey">S</span>tarted
+            </span>
+          </button>
+
+          <label class="wc3-editbox wc3-editbox--esc hero-install-editbox" onClick={handleCopy}>
+            <canvas ref={props.installCanvasRef} class="wc3-editbox-canvas" />
+            <input
+              type="text"
+              value="npm i wc3ui"
+              readOnly
+              aria-label="Copy install command"
+              onFocus={(event) => event.currentTarget.select()}
+            />
+          </label>
+
+        </div>
+        <div class="hero-version-label">Patch 1.27b</div>
+        <p class="social-proof">
+          Used by 2,300+ developers · 11.4k GitHub stars · Compatible with React, Vue, Svelte, and vanilla JS
+        </p>
+      </div>
+    </section>
+  );
+}

@@ -1,0 +1,58 @@
+import React, { useRef, useEffect, useCallback } from "react";
+import { loadBlpImage } from "../utils/blp";
+
+export interface TokenSwatchProps {
+  /** BLP asset path for the swatch background */
+  assetUrl?: string;
+  /** Hex color to display on top */
+  hexColor?: string;
+  /** Text color for the hex label */
+  textColor?: string;
+  className?: string;
+}
+
+/**
+ * Design token color swatch showing a BLP texture with its hex color overlay.
+ */
+export function TokenSwatch({
+  assetUrl,
+  hexColor,
+  textColor = "#fff",
+  className,
+}: TokenSwatchProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const draw = useCallback(async () => {
+    if (!assetUrl) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    try {
+      const img = await loadBlpImage(assetUrl);
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, 0, 0);
+    } catch {}
+  }, [assetUrl]);
+
+  useEffect(() => { draw(); }, [draw]);
+
+  return (
+    <div className={`token-swatch ${className ?? ""}`}>
+      {assetUrl && (
+        <canvas ref={canvasRef} className="token-swatch-canvas" />
+      )}
+      {hexColor && (
+        <span
+          className="token-hex"
+          style={{ "--token-hex-color": textColor } as React.CSSProperties}
+        >
+          {hexColor}
+        </span>
+      )}
+    </div>
+  );
+}

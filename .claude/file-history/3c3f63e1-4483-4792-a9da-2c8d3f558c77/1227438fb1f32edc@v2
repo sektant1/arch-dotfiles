@@ -1,0 +1,35 @@
+import React from "react";
+
+export interface BuildProgressBarProps {
+  /** Build progress percentage 0–100 */
+  percent: number;
+  showText?: boolean;
+  /** Custom fill BLP path */
+  fillUrl?: string;
+  /** Custom border BLP path */
+  borderUrl?: string;
+  className?: string;
+}
+
+export function BuildProgressBar({
+  percent,
+  showText = true,
+  className,
+}: BuildProgressBarProps) {
+  const clamped = Math.min(100, Math.max(0, percent));
+
+  return (
+    <div className={`wc3-bar wc3-bar--compact wc3-bar--build ${className ?? ""}`}>
+      <div
+        className="wc3-bar-fill-wrap"
+        style={{ width: `${clamped}%` }}
+      >
+        <div className="wc3-bar-fill wc3-bar-fill--build" />
+        <div className="wc3-bar-highlight" />
+      </div>
+      {showText && (
+        <div className="wc3-bar-text">{Math.floor(clamped)}%</div>
+      )}
+    </div>
+  );
+}

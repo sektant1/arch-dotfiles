@@ -1,0 +1,52 @@
+import { useEffect, useState } from "react";
+import type { SkillPick } from "../data/buildOrders";
+import { loadBlpDataUrl } from "../utils/glueButton";
+
+const FALLBACK_ICON = "/buttons/command/BTNSkillz.blp";
+
+function SkillIcon({ pick }: { pick: SkillPick }) {
+  const [iconUrl, setIconUrl] = useState("");
+
+  useEffect(() => {
+    const path = pick.icon || FALLBACK_ICON;
+    void loadBlpDataUrl(path)
+      .then(setIconUrl)
+      .catch(() => {
+        // If custom icon fails, try fallback
+        if (pick.icon) void loadBlpDataUrl(FALLBACK_ICON).then(setIconUrl);
+      });
+  }, [pick.icon]);
+
+  return (
+    <div className="skill-pick">
+      <div className="skill-pick-level">{pick.level}</div>
+      <div className="skill-pick-icon-wrapper">
+        {iconUrl ? (
+          <img src={iconUrl} alt={pick.skill} className="skill-pick-icon" />
+        ) : (
+          <div className="skill-pick-icon skill-pick-icon--placeholder" />
+        )}
+      </div>
+      <div className="skill-pick-name">{pick.skill}</div>
+    </div>
+  );
+}
+
+interface Props {
+  skillOrder: SkillPick[];
+}
+
+export default function SkillOrderSection({ skillOrder }: Props) {
+  if (skillOrder.length === 0) return null;
+
+  return (
+    <section className="section-card skill-order-section">
+      <h4 className="skill-order-title">Skill Order</h4>
+      <div className="skill-order-row">
+        {skillOrder.map((pick, i) => (
+          <SkillIcon key={i} pick={pick} />
+        ))}
+      </div>
+    </section>
+  );
+}

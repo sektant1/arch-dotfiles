@@ -1,0 +1,104 @@
+import React, { useRef, useEffect, useState, useCallback } from "react";
+import { loadBlpImage } from "../utils/blp";
+import { GLUE_BUTTON_ASSETS, GLUE_BORDER_VARIANTS } from "../utils/assets";
+
+export interface MenuButtonProps {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  hotkey?: string;
+  /** Frame variant BLP path. Defaults to large border. */
+  frameUrl?: string;
+  className?: string;
+}
+
+/**
+ * Primary action button inside a decorative border frame,
+ * used for menu items like Single Player and Multiplayer.
+ */
+export function MenuButton({
+  children,
+  onClick,
+  disabled = false,
+  hotkey,
+  frameUrl = GLUE_BORDER_VARIANTS.largeBorder,
+  className,
+}: MenuButtonProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const [frameSrc, setFrameSrc] = useState("");
+  const imagesRef = useRef<Record<string, HTMLImageElement>>({});
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.imageSmoothingEnabled = false;
+
+    const imgs = imagesRef.current;
+    const bgKey = disabled ? "bgDisabled" : pressed ? "bgDown" : "bg";
+    const borderKey = disabled
+      ? "borderDisabled"
+      : pressed
+        ? "borderDown"
+        : "border";
+
+    if (imgs[bgKey]) ctx.drawImage(imgs[bgKey], 0, 0, w, h);
+    if (imgs[borderKey]) ctx.drawImage(imgs[borderKey], 0, 0, w, h);
+
+    if (hovered && !disabled && !pressed && imgs.highlight) {
+      ctx.globalCompositeOperation = "screen";
+      ctx.drawImage(imgs.highlight, 0, 0, w, h);
+      ctx.globalCompositeOperation = "source-over";
+    }
+  }, [hovered, pressed, disabled]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const assets = GLUE_BUTTON_ASSETS;
+    Promise.all([
+      ...Object.entries(assets).map(async ([key, url]) => {
+        try {
+          const img = await loadBlpImage(url);
+          if (!cancelled) imagesRef.current[key] = img;
+        } catch {}
+      }),
+      (async () => {
+        try {
+          const img = await loadBlpImage(frameUrl);
+          if (!cancelled) setFrameSrc(img.src);
+        } catch {}
+      })(),
+    ]).then(() => { if (!cancelled) draw(); });
+    return () => { cancelled = true; };
+  }, [frameUrl, draw]);
+
+  useEffect(() => { draw(); }, [draw]);
+
+  return (
+    <div className={`menu-button-shell ${className ?? ""}`}>
+      {frameSrc && <img alt="" className="menu-button-frame" src={frameSrc} />}
+      <button
+        type="button"
+        className="menu-button-inner"
+        onClick={onClick}
+        disabled={disabled}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => { setHovered(false); setPressed(false); }}
+        onMouseDown={() => setPressed(true)}
+        onMouseUp={() => setPressed(false)}
+      >
+        <canvas ref={canvasRef} className="menu-button-canvas" width={580} height={170} />
+        <span className="menu-button-label">
+          {hotkey && <span className="button-hotkey">{hotkey}</span>}
+          {children}
+        </span>
+      </button>
+    </div>
+  );
+}

@@ -1,0 +1,89 @@
+import { currentRace } from '../../state/race';
+
+export default function IconsSection() {
+  return (
+    <div class="tab-content">
+      <div class="section-card">
+        <h2>Resource Icons</h2>
+        <p class="section-desc">Feedback resources and race-specific supply icons.</p>
+        <div class="resource-icons-grid">
+          <div class="resource-icon-card"><img src="war3/Feedback/Resources/ResourceGold.png" alt="" /><div class="ri-label">Gold</div></div>
+          <div class="resource-icon-card"><img src="war3/Feedback/Resources/ResourceLumber.png" alt="" /><div class="ri-label">Lumber</div></div>
+          <div class="resource-icon-card"><img src="war3/Feedback/Resources/ResourceSupply.png" alt="" /><div class="ri-label">Supply</div></div>
+          <div class="resource-icon-card"><img src="war3/Feedback/Resources/ResourceUpkeep.png" alt="" /><div class="ri-label">Upkeep</div></div>
+          <div class="resource-icon-card"><img src="war3/Feedback/Resources/ResourceManaStone.png" alt="" /><div class="ri-label">Mana Stone</div></div>
+        </div>
+        <h3>Race-Specific Supply Icons</h3>
+        <div class="resource-icons-grid" style={{ 'margin-top': '10px' }}>
+          <div class="resource-icon-card"><img src="war3/Feedback/Resources/ResourceHuman.png" alt="" /><div class="ri-label">Human</div></div>
+          <div class="resource-icon-card"><img src="war3/Feedback/Resources/ResourceOrc.png" alt="" /><div class="ri-label">Orc</div></div>
+          <div class="resource-icon-card"><img src="war3/Feedback/Resources/ResourceNightElf.png" alt="" /><div class="ri-label">Night Elf</div></div>
+          <div class="resource-icon-card"><img src="war3/Feedback/Resources/ResourceUndead.png" alt="" /><div class="ri-label">Undead</div></div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h2>Infocards</h2>
+        <p class="section-desc">Armor types, attack types, hero attributes, and unit infocards from the in-game info panel.</p>
+        <div class="infocards-grid">
+          <div class="infocard-group-label">Armor Types</div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-armor-small.png" alt="" /><div class="ic-label">Small</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-armor-medium.png" alt="" /><div class="ic-label">Medium</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-armor-large.png" alt="" /><div class="ic-label">Large</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-armor-fortified.png" alt="" /><div class="ic-label">Fortified</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-armor-hero.png" alt="" /><div class="ic-label">Hero</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-armor-divine.png" alt="" /><div class="ic-label">Divine</div></div>
+          <div class="infocard"><img src="War3x/Widgets/Console/Human/infocard-armor-unarmored.png" alt="" /><div class="ic-label">Unarmored</div></div>
+
+          <div class="infocard-group-label">Attack Types</div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-attack-melee.png" alt="" /><div class="ic-label">Melee</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-attack-piercing.png" alt="" /><div class="ic-label">Piercing</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-attack-siege.png" alt="" /><div class="ic-label">Siege</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-attack-magic.png" alt="" /><div class="ic-label">Magic</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-attack-chaos.png" alt="" /><div class="ic-label">Chaos</div></div>
+          <div class="infocard"><img src="War3x/Widgets/Console/Human/infocard-attack-hero.png" alt="" /><div class="ic-label">Hero</div></div>
+
+          <div class="infocard-group-label">Hero Attributes</div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-heroattributes-str.png" alt="" /><div class="ic-label">Strength</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-heroattributes-agi.png" alt="" /><div class="ic-label">Agility</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-heroattributes-int.png" alt="" /><div class="ic-label">Intelligence</div></div>
+
+          <div class="infocard-group-label">Unit Infocards</div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-priest.png" alt="" /><div class="ic-label">Priest</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-sorceress.png" alt="" /><div class="ic-label">Sorceress</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-shaman.png" alt="" /><div class="ic-label">Shaman</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-witchdoctor.png" alt="" /><div class="ic-label">Witch Doctor</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-necromancer.png" alt="" /><div class="ic-label">Necromancer</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-banshee.png" alt="" /><div class="ic-label">Banshee</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-druidofclaw.png" alt="" /><div class="ic-label">Druid of Claw</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-druidoftalon.png" alt="" /><div class="ic-label">Druid of Talon</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-gold.png" alt="" /><div class="ic-label">Gold Mine</div></div>
+          <div class="infocard"><img src="war3/Widgets/Console/Human/infocard-supply.png" alt="" /><div class="ic-label">Supply</div></div>
+          <div class="infocard"><img src="War3x/Widgets/Console/Human/infocard-siren.png" alt="" /><div class="ic-label">Siren</div></div>
+          <div class="infocard"><img src="War3x/Widgets/Console/Human/infocard-spiritwalker.png" alt="" /><div class="ic-label">Spirit Walker</div></div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h2>Dialog Icons</h2>
+        <p class="section-desc">Error, message, and question dialog box icons.</p>
+        <div class="dialog-icons">
+          <div class="dialog-icon-card"><img src="war3/Widgets/Glues/dialogbox-error.png" alt="Error" /><div class="icon-label">Error</div></div>
+          <div class="dialog-icon-card"><img src="war3/Widgets/Glues/dialogbox-message.png" alt="Message" /><div class="icon-label">Message</div></div>
+          <div class="dialog-icon-card"><img src="war3/Widgets/Glues/dialogbox-question.png" alt="Question" /><div class="icon-label">Question</div></div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h2>Cursors</h2>
+        <p class="section-desc">Race-specific mouse cursors (256x128 sprite sheets — first frame shown). The active race cursor follows your mouse.</p>
+        <div class="cursors-row">
+          <div class="cursor-card"><img src="war3/Cursor/HumanCursor.png" alt="" /><div class="cursor-label">Human</div></div>
+          <div class="cursor-card"><img src="war3/Cursor/OrcCursor.png" alt="" /><div class="cursor-label">Orc</div></div>
+          <div class="cursor-card"><img src="war3/Cursor/NightElfCursor.png" alt="" /><div class="cursor-label">Night Elf</div></div>
+          <div class="cursor-card"><img src="war3/Cursor/UndeadCursor.png" alt="" /><div class="cursor-label">Undead</div></div>
+        </div>
+      </div>
+    </div>
+  );
+}

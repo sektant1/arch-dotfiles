@@ -1,0 +1,50 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+Warcraft III UI Component Library — a showcase/demo site that recreates WC3's in-game and menu UI elements as web components. Built with **SolidJS** + **TypeScript** + **Vite**. The app renders race-themed (Human, Orc, NightElf, Undead) UI elements including HUD bars, buttons, panels, tooltips, borders, and 3D model portraits.
+
+## Commands
+
+- `npm run dev` — start dev server on port 3000
+- `npm run build` — production build (target: esnext)
+- `npm run preview` — preview production build
+
+No test runner or linter is configured.
+
+## Architecture
+
+### Rendering Pipeline
+
+The app uses a **dual rendering approach**:
+
+1. **CSS/DOM rendering** — Standard SolidJS components for most UI (buttons, bars, tooltips, panels). Styling is primarily in `src/global.css` (~45KB) using CSS custom properties for race theming.
+2. **WebGL overlay** — A full-viewport `<canvas>` composited over the DOM for elements that need GPU rendering:
+   - `src/renderer/` — Custom WebGL2 rendering engine with texture atlas support, nine-slice border drawing, quad batching, and blend mode management.
+   - `src/components/TopHudWebGL.tsx` — Separate WebGL1 canvas for the top console HUD tiles.
+   - 3D model components (`HeroPortraitModel`, `WorkerUnitModel`, `TimeIndicatorModel`) use the `war3-model` library to render MDX models.
+
+The main `Renderer` (`src/renderer/Renderer.ts`) operates as an element registry pattern: DOM components register themselves (checkboxes, sliders, radio buttons, edit boxes, glue buttons, menu frames) and the renderer draws WebGL decorations positioned relative to those DOM elements each frame.
+
+### State Management
+
+Simple SolidJS signals in `src/state/`:
+- `race.ts` — Current race selection (drives all race-themed visuals)
+- `resources.ts` — Gold/lumber counters with animated interpolation and WC3 cheat codes (greedisgood, keysersoze, leafittome)
+- `ui.ts` — Animated bar percentages and loading bar state
+
+### Texture Handling
+
+WC3 assets are served from `public/` in BLP format (Blizzard's texture format). The `war3-model` library's `decodeBLP`/`getBLPImageData` functions convert BLP textures to ImageData for WebGL upload. PNG textures are used for some elements (console tiles, tooltips).
+
+### Key Types
+
+`src/lib/types.ts` defines `Race` (`'Human' | 'Orc' | 'NightElf' | 'Undead'`) and `RacePrefix` which maps each race to its various naming conventions used in asset paths.
+
+### Component Organization
+
+- `src/components/` — Reusable UI primitives (StatBar, Checkbox, Slider, RadioButton, EditBox, MenuButton, MenuPanel, Tooltip, LoadingBar, etc.)
+- `src/components/sections/` — Page sections that compose primitives into the showcase layout
+- `src/App.tsx` — Main app shell; orchestrates race switching, resource animation ticks, WebGL renderer lifecycle, and section layout

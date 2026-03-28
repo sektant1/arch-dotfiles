@@ -1,0 +1,18 @@
+import { useRef, type ReactNode } from 'react';
+import { useRendererRegistration } from '../hooks/useRendererRegistration';
+
+interface Props {
+  children: ReactNode;
+}
+
+export default function Tooltip({ children }: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useRendererRegistration('tooltips', () => ({ ref: () => ref.current! }));
+
+  return (
+    <div ref={ref} className="wc3-tooltip">
+      <div className="tt-content">{children}</div>
+    </div>
+  );
+}

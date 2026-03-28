@@ -1,0 +1,6 @@
+import { createSignal } from 'solid-js';
+import type { Race } from '@wc3-ui/core';
+
+export { RACE_PREFIXES, RACES } from '@wc3-ui/core';
+
+export const [currentRace, setCurrentRace] = createSignal<Race>('Human');

@@ -1,0 +1,234 @@
+import type { Race } from "../types";
+
+/** Faction-specific ESC menu button assets */
+export function getEscButtonAssets(race: Race) {
+  if (race === "Human") {
+    return {
+      bg: "/assets/esc/human/human-options-menu-background.png",
+      borderUp: "/assets/esc/human/human-options-button-border-up.png",
+      borderDown: "/assets/esc/human/human-options-button-border-down.png",
+      highlight: "/assets/esc/human/human-options-button-highlight.png",
+      disabledBg:
+        "/assets/esc/human/human-options-button-background-disabled.png",
+    };
+  }
+  if (race === "Orc") {
+    return {
+      bg: "/assets/esc/orc/orc-options-button-background.png",
+      borderUp: "/assets/esc/human/human-options-button-border-up.png",
+      borderDown: "/assets/esc/orc/orc-options-button-background-down.png",
+      highlight: "/assets/esc/orc/orc-options-button-highlight.png",
+      disabledBg:
+        "/assets/esc/human/human-options-button-background-disabled.png",
+    };
+  }
+  if (race === "NightElf") {
+    return {
+      bg: "/assets/esc/nightelf/nightelf-options-button-background.png",
+      borderUp: "/assets/esc/human/human-options-button-border-up.png",
+      borderDown:
+        "/assets/esc/nightelf/nightelf-options-button-background-down.png",
+      highlight: "/assets/esc/nightelf/nightelf-options-button-highlight.png",
+      disabledBg:
+        "/assets/esc/human/human-options-button-background-disabled.png",
+    };
+  }
+  // Undead
+  return {
+    bg: "/assets/esc/undead/undead-options-button-background.png",
+    borderUp: "/assets/esc/human/human-options-button-border-up.png",
+    borderDown: "/assets/esc/undead/undead-options-button-background-down.png",
+    highlight: "/assets/esc/undead/undead-options-button-highlight.png",
+    disabledBg:
+      "/assets/esc/undead/undead-options-button-background-disabled.png",
+  };
+}
+
+/** Faction-specific ESC menu border */
+export function getEscMenuBorder(race: Race): string {
+  if (race === "Orc") return "/assets/esc/orc/orc-options-menu-border.png";
+  if (race === "NightElf")
+    return "/assets/esc/nightelf/nightelf-options-menu-border.png";
+  if (race === "Undead")
+    return "/assets/esc/undead/undead-options-menu-border.png";
+  return "/assets/esc/human/human-options-menu-border.png";
+}
+
+/** Faction-specific checkbox depressed texture */
+export function getCheckboxDepressed(race: Race): string {
+  if (race === "Orc") return "/assets/checkbox/orc-checkbox-depressed.png";
+  if (race === "NightElf")
+    return "/assets/checkbox/nightelf-checkbox-depressed.png";
+  if (race === "Undead")
+    return "/assets/checkbox/undead-checkbox-depressed.png";
+  return "/assets/checkbox/checkbox-depressed.png";
+}
+
+/** Faction-specific slider knob */
+export function getSliderKnob(race: Race): string {
+  if (race === "Orc") return "/assets/slider/orc-slider-knob.png";
+  if (race === "NightElf") return "/assets/slider/nightelf-slider-knob.png";
+  if (race === "Undead") return "/assets/slider/undead-slider-knob.png";
+  return "/assets/slider/slider-knob.png";
+}
+
+/** Faction-specific worker unit icon */
+export function getWorkerIcon(race: Race): string {
+  if (race === "Human") return "/assets/command/BTNPeasant.png";
+  if (race === "NightElf") return "/assets/command/BTNWisp.png";
+  if (race === "Undead") return "/assets/command/BTNAcolyte.png";
+  return "/assets/command/BTNPeon.png";
+}
+
+/** Cinematic border per race */
+export function getCinematicBorder(race: Race): string {
+  if (race === "Orc") return "/assets/borders/orc-cinematic-border.png";
+  if (race === "NightElf") return "/assets/borders/nightelf-cinematic-border.png";
+  if (race === "Undead") return "/assets/borders/undead-cinematic-border.png";
+  return "/assets/borders/human-cinematic-border.png";
+}
+
+/** Bar asset paths (Human defaults) */
+export const BAR_ASSETS = {
+  healthFill: "/assets/bars/human-healthbar-fill.png",
+  manaFill: "/assets/bars/human-manabar-fill.png",
+  statbarColor: "/assets/bars/human-statbar-color.png",
+  statbarColor2: "/assets/bars/human-statbar-color2.png",
+  statbarEdge: "/assets/bars/human-statbar-edge.png",
+  statbarHighlight: "/assets/bars/human-statbar-highlight.png",
+  xpBorder: "/assets/bars/human-xpbar-border.png",
+  bigbarFill: "/assets/bars/human-bigbar-fill.png",
+  buildFill: "/assets/bars/human-buildprogressbar-fill.png",
+  buildBorder: "/assets/bars/human-buildprogressbar-border.png",
+};
+
+/** Loading bar asset paths */
+export const LOADING_BAR_ASSETS = {
+  background: "/assets/loading/Loading-BarBackground.png",
+  fill: "/assets/loading/Loading-BarFill.png",
+  border: "/assets/loading/Loading-BarBorder.png",
+  glass: "/assets/loading/Loading-BarGlass.png",
+  glow: "/assets/loading/Loading-BarGlow.png",
+};
+
+/** Glue button assets (login/menu screen) */
+export const GLUE_BUTTON_ASSETS = {
+  bg: "/assets/glue/GlueScreen-Button1-BackdropBackground.png",
+  bgDisabled:
+    "/assets/glue/GlueScreen-Button1-BackdropBackground-Disabled.png",
+  bgDown: "/assets/glue/GlueScreen-Button1-BackdropBackground-Down.png",
+  border: "/assets/glue/GlueScreen-Button1-BackdropBorder.png",
+  borderDisabled:
+    "/assets/glue/GlueScreen-Button1-BackdropBorder-Disabled.png",
+  borderDown: "/assets/glue/GlueScreen-Button1-BackdropBorder-Down.png",
+  decorBorder: "/assets/glue/GlueScreen-Button1-Border.png",
+  borderedBorder: "/assets/glue/GlueScreen-Button1-BorderedBackdropBorder.png",
+  borderedBorderDisabled:
+    "/assets/glue/GlueScreen-Button1-BorderedBackdropBorder-Disabled.png",
+  borderedBorderDown:
+    "/assets/glue/GlueScreen-Button1-BorderedBackdropBorder-Down.png",
+  highlight: "/assets/glue/bnet-button01-highlight-mouse.png",
+};
+
+/** Campaign button assets */
+export const CAMPAIGN_BUTTON_ASSETS = {
+  bg: "/assets/campaign/GlueScreen-CampaignButton-BackdropBackground.png",
+  bgDisabled:
+    "/assets/campaign/GlueScreen-CampaignButton-BackdropBackground-Disabled.png",
+  bgDown:
+    "/assets/campaign/GlueScreen-CampaignButton-BackdropBackground-Down.png",
+  border: "/assets/campaign/GlueScreen-CampaignButton-BackdropBorder.png",
+  borderDisabled:
+    "/assets/campaign/GlueScreen-CampaignButton-BackdropBorder-Disabled.png",
+  borderDown:
+    "/assets/campaign/GlueScreen-CampaignButton-BackdropBorder-Down.png",
+};
+
+/** Tooltip assets */
+export const TOOLTIP_ASSETS = {
+  background: "/assets/tooltips/human-tooltip-background.png",
+  border: "/assets/tooltips/human-tooltip-border.png",
+  goldIcon: "/assets/tooltips/ToolTipGoldIcon.png",
+  lumberIcon: "/assets/tooltips/ToolTipLumberIcon.png",
+  supplyIcon: "/assets/tooltips/ToolTipSupplyIcon.png",
+};
+
+/** Resource icons */
+export const RESOURCE_ICONS = {
+  gold: "/assets/resources/ResourceGold.png",
+  lumber: "/assets/resources/ResourceLumber.png",
+  supply: "/assets/resources/ResourceSupply.png",
+};
+
+/** Editbox assets */
+export const EDITBOX_ASSETS = {
+  bnetBack: "/assets/editbox/bnet-inputbox-back.png",
+  bnetBorder: "/assets/editbox/bnet-inputbox-border.png",
+  escBackground: "/assets/borders/editbox-background.png",
+  escBorder: "/assets/borders/editbox-border.png",
+};
+
+/** Scrollbar assets */
+export const SCROLLBAR_ASSETS = {
+  bg: "/assets/scrollbar/GlueScreen-Scrollbar-BackdropBackground.png",
+  border: "/assets/scrollbar/GlueScreen-Scrollbar-BackdropBorder.png",
+  upArrow: "/assets/scrollbar/GlueScreen-Scrollbar-UpArrow.png",
+  downArrow: "/assets/scrollbar/GlueScreen-Scrollbar-DownArrow.png",
+  knob: "/assets/scrollbar/SinglePlayerSkirmish-ScrollBarKnob.png",
+  knobDisabled:
+    "/assets/scrollbar/SinglePlayerSkirmish-ScrollBarKnobDisabled.png",
+};
+
+/** Slider assets */
+export const SLIDER_ASSETS = {
+  bg: "/assets/slider/slider-background.png",
+  border: "/assets/slider/slider-border.png",
+  borderDisabled: "/assets/slider/slider-borderdisabled.png",
+  knob: "/assets/slider/slider-knob.png",
+  knobDisabled: "/assets/slider/slider-knobdisabled.png",
+};
+
+/** Checkbox assets */
+export const CHECKBOX_ASSETS = {
+  bg: "/assets/checkbox/checkbox-background.png",
+  bgDisabled: "/assets/checkbox/checkbox-background-disabled.png",
+  check: "/assets/checkbox/checkbox-check.png",
+  depressed: "/assets/checkbox/checkbox-depressed.png",
+};
+
+/** Radio button assets */
+export const RADIO_ASSETS = {
+  bg: "/assets/radio/radiobutton-background.png",
+  bgDisabled: "/assets/radio/radiobutton-background-disabled.png",
+  button: "/assets/radio/radiobutton-button.png",
+  buttonDisabled: "/assets/radio/radiobutton-buttondisabled.png",
+};
+
+/** Popup/dropdown assets */
+export const POPUP_ASSETS = {
+  bg: "/assets/popup/GlueScreen-Pulldown-BackdropBackground.png",
+  arrow: "/assets/popup/GlueScreen-Pulldown-Arrow.png",
+};
+
+/** Command button assets */
+export const COMMAND_BUTTON_ASSETS = {
+  backdrop: "/assets/command/human-subgroup-background.png",
+  frame: "/assets/command/human-activebutton.png",
+  highlight: "/assets/command/border.png",
+  selectionBorder: "/assets/command/human-multipleselection-border.png",
+  levelOverlay: "/assets/command/human-button-lvls-overlay.png",
+};
+
+/** Unit queue border */
+export const UNIT_QUEUE_BORDER = "/assets/borders/human-unitqueue-border.png";
+
+/** Glue border frame variants */
+export const GLUE_BORDER_VARIANTS = {
+  border: "/assets/glue/GlueScreen-Button1-BorderSingle.png",
+  largeBorder: "/assets/glue/GlueScreen-Button1-LargeBorder.png",
+  largeBorderSingle: "/assets/glue/GlueScreen-Button1-LargeBorderSingle.png",
+  multiplayerBorder: "/assets/glue/GlueScreen-Button1-MultiplayerBorder.png",
+  smallBorder: "/assets/glue/GlueScreen-Button1-SmallBorder.png",
+  smallBorderSingle: "/assets/glue/GlueScreen-Button1-SmallBorderSingle.png",
+  tinyBorder: "/assets/glue/GlueScreen-Button1-TinyBorder.png",
+};

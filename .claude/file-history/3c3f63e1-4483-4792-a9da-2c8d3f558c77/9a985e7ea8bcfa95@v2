@@ -1,0 +1,43 @@
+import React from "react";
+import { useBlpTexture } from "../hooks/useBlpTexture";
+import { RADIO_ASSETS } from "../utils/assets";
+
+export interface RadioButtonProps {
+  selected: boolean;
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+}
+
+/**
+ * Mutually exclusive option selector.
+ * The selected dot glows over a stone background, shared across all races.
+ */
+export function RadioButton({
+  selected,
+  onClick,
+  disabled = false,
+  className,
+}: RadioButtonProps) {
+  const bgUrl = useBlpTexture(
+    disabled ? RADIO_ASSETS.bgDisabled : RADIO_ASSETS.bg,
+  );
+  const dotUrl = useBlpTexture(
+    disabled ? RADIO_ASSETS.buttonDisabled : RADIO_ASSETS.button,
+  );
+
+  return (
+    <button
+      type="button"
+      className={`esc-radio ${className ?? ""}`}
+      role="radio"
+      aria-checked={selected}
+      onClick={() => !disabled && onClick?.()}
+      disabled={disabled}
+      style={disabled ? { cursor: "default" } : undefined}
+    >
+      {bgUrl && <img src={bgUrl} alt="" />}
+      {selected && dotUrl && <img src={dotUrl} alt="" />}
+    </button>
+  );
+}

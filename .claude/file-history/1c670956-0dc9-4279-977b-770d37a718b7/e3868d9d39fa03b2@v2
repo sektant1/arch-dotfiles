@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Gera documentação com Doxygen + Sphinx/Breathe
+# Uso: ./scripts/docs.sh
+set -e
+
+cd "$(dirname "$0")/.."
+
+echo "==> Gerando XML com Doxygen..."
+doxygen docs/Doxyfile
+
+echo "==> Gerando HTML com Sphinx..."
+sphinx-build -b html docs docs/_build/html
+
+echo "==> Documentação gerada em docs/_build/html/"

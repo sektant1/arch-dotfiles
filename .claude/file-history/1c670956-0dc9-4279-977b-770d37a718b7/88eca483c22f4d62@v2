@@ -1,0 +1,51 @@
+#include <rts/platform/input.hpp>
+#include <GLFW/glfw3.h>
+
+namespace rts {
+
+Input::Input(GLFWwindow* window) : m_window(window) {
+    double mx, my;
+    glfwGetCursorPos(m_window, &mx, &my);
+    m_last_mouse_pos = {static_cast<f32>(mx), static_cast<f32>(my)};
+
+    glfwSetWindowUserPointer(m_window, this);
+    glfwSetScrollCallback(m_window, scroll_callback);
+}
+
+bool Input::is_key_pressed(int key) const {
+    return glfwGetKey(m_window, key) == GLFW_PRESS;
+}
+
+bool Input::is_mouse_button_pressed(int button) const {
+    return glfwGetMouseButton(m_window, button) == GLFW_PRESS;
+}
+
+Vec2 Input::mouse_position() const {
+    double mx, my;
+    glfwGetCursorPos(m_window, &mx, &my);
+    return {static_cast<f32>(mx), static_cast<f32>(my)};
+}
+
+Vec2 Input::mouse_delta() const {
+    return m_mouse_delta;
+}
+
+f32 Input::scroll_delta() const {
+    return m_scroll_delta;
+}
+
+void Input::update() {
+    Vec2 current = mouse_position();
+    m_mouse_delta = current - m_last_mouse_pos;
+    m_last_mouse_pos = current;
+
+    m_scroll_delta = m_scroll_accumulator;
+    m_scroll_accumulator = 0.0f;
+}
+
+void Input::scroll_callback(GLFWwindow* window, double /*xoffset*/, double yoffset) {
+    auto* self = static_cast<Input*>(glfwGetWindowUserPointer(window));
+    self->m_scroll_accumulator += static_cast<f32>(yoffset);
+}
+
+}  // namespace rts

@@ -1,0 +1,11 @@
+PROJECT_NAME           = "RTS Engine"
+PROJECT_NUMBER         = 0.1.0
+INPUT                  = ../engine
+RECURSIVE              = YES
+GENERATE_XML           = YES
+XML_OUTPUT             = xml
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+EXTRACT_ALL            = YES
+FILE_PATTERNS          = *.hpp *.cpp
+QUIET                  = YES
